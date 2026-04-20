@@ -71,16 +71,97 @@
 
 ---
 
-## Phase 6 — Pending / Upcoming
-> Planned improvements
+## Phase 6 — Leave & Balance Engine
+> Give employees visibility into their leave entitlements
 
-- [ ] Password hashing (bcrypt) — currently plain text
+- [ ] `LeavePolicy` model — annual quotas (casual, sick, earned leaves)
+- [ ] `LeaveBalance` model — consumed vs available per employee per year
+- [ ] Auto-calculate leave consumption from attendance data
+- [ ] Employee dashboard card: "8 CL · 10 SL · 6 EL remaining"
+- [ ] Year-end carry-forward rules
+- [ ] Admin can configure and override leave balances
+
+---
+
+## Phase 7 — Leave Application Flow
+> Replace manual absence tracking with a proper request system
+
+- [ ] Employee submits leave request (type, dates, reason)
+- [ ] Admin approval / rejection workflow
+- [ ] Approved leaves auto-update attendance and deduct from balance
+- [ ] Leave status visible to employee: Pending / Approved / Rejected
+- [ ] Leave history log per employee
+
+---
+
+## Phase 8 — Employee Self-Service Dashboard
+> Make the portal genuinely useful for staff
+
+- [ ] Live leave balance summary card
+- [ ] Month-wise attendance summary (present %, late count, deductions)
+- [ ] Upcoming company holidays list
+- [ ] Download own attendance report as PDF
+- [ ] Regularization requests — employee raises correction for missed punch
+
+---
+
+## Phase 9 — Automated Alerts & Notifications
+> Remove manual monitoring burden from admin
+
+- [ ] Email alert to admin when employee crosses 3 absences in a month
+- [ ] Email alert to employee when late mark or HD deduction is applied
+- [ ] Monthly attendance report auto-emailed to each employee
+- [ ] Low leave balance warning notification
+- [ ] Email provider integration (Resend / SendGrid)
+
+---
+
+## Phase 10 — Holiday Calendar Management
+> Centralized holiday control instead of relying on biometric file
+
+- [ ] Admin defines company holiday calendar for the year
+- [ ] System auto-marks holidays across all employees
+- [ ] Optional: department or region-specific holidays
+- [ ] Holidays reflected in leave balance calculations
+
+---
+
+## Phase 11 — Shift & Policy Configuration
+> Make HR rules configurable instead of hardcoded
+
+- [ ] Admin configures shift timings, grace period, minimum hours from UI
+- [ ] Different policies per department or employee type
+- [ ] Policy changes apply from a specific effective date
+- [ ] Currently hardcoded: 10:00 AM start, 9 hrs min, 3 lates = 1 HD
+
+---
+
+## Phase 12 — Payroll Summary Export
+> Close the loop from attendance to salary
+
+- [ ] Admin inputs basic salary per employee
+- [ ] System calculates deductions (HD deductions × daily rate)
+- [ ] Monthly payroll-ready CSV / Excel export
+- [ ] Deduction breakdown per employee
+
+---
+
+## Phase 13 — Audit Log & Security
+> Traceability and hardened auth
+
+- [ ] Every override, approval, and edit logged with timestamp and user
+- [ ] Admin can view full change history per employee
+- [ ] Password hashing with bcrypt (currently plain text)
+- [ ] "Change Password" option for all users
+
+---
+
+## Phase 14 — Infrastructure & Polish
+> Long-term stability and UX
+
 - [ ] Migrate existing SQLite data to Neon
-- [ ] Employee self-service — view payslip summary
-- [ ] Admin: edit/delete individual month records
-- [ ] Admin: manually add/remove employees
-- [ ] Notifications — alert admin on high absences
-- [ ] Audit log — track who changed what and when
-- [ ] Multi-company / department support
+- [ ] Admin: edit / delete individual month records
+- [ ] Admin: manually add / remove employees
+- [ ] Multi-department support
 - [ ] Mobile responsive improvements
 - [ ] Dark mode toggle
