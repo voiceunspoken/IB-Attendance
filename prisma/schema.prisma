@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Notice that the new Prisma 6 standard uses Prisma configs or standard URLs.
+// We will point it to a local SQLite file.
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  username     String    @unique
+  password     String    // plain text for simplicity (same pattern as existing admin123)
+  role         String    @default("employee") // "admin" | "employee"
+  employeeCode String?   // links to Employee.code if role = employee
+  createdAt    DateTime  @default(now())
+}
+
+model Employee {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  records   MonthRecord[]
+  dailyLogs DailyLog[]
+  overrides Override[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MonthRecord {
+  id         String   @id @default(cuid())
+  monthYear  String   // e.g "3_2026"
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  
+  present    Int      @default(0)
+  absent     Int      @default(0)
+  halfDay    Int      @default(0)
+  late       Int      @default(0)
+  lateHD     Int      @default(0)
+  shortShift Int      @default(0)
+  ssHD       Int      @default(0)
+  shortLeave Int      @default(0)
+  rl         Int      @default(0)
+  holi       Int      @default(0)
+  
+  numDays    Int      @default(31)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([employeeId, monthYear])
+}
+
+model DailyLog {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  
+  monthYear  String   // e.g. "3_2026"
+  day        Int      // 1 to 31
+  
+  type       String   // "present", "absent", "half", "holiday", "wo", "rl"
+  raw        String   @default("")
+  
+  inT        Int?
+  outT       Int?
+  
+  isLate     Boolean  @default(false)
+  isSS       Boolean  @default(false)
+  isSL       Boolean  @default(false)
+
+  @@unique([employeeId, monthYear, day])
+}
+
+model Override {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  
+  monthYear  String
+  day        Int
+  
+  type       String   // "wfm", "wfm-hd", "wfh"
+
+  @@unique([employeeId, monthYear, day])
+}
