@@ -4,18 +4,23 @@ import { prisma } from '../lib/prisma';
 
 // Returns { user: { id, username, role, employeeCode } } or { error: string }
 export async function loginUser(username, password) {
-  const user = await prisma.user.findUnique({ where: { username } });
-  if (!user || user.password !== password) {
-    return { error: 'Invalid username or password.' };
-  }
-  return {
-    user: {
-      id: user.id,
-      username: user.username,
-      role: user.role,
-      employeeCode: user.employeeCode ?? null,
+  try {
+    const user = await prisma.user.findUnique({ where: { username } });
+    if (!user || user.password !== password) {
+      return { error: 'Invalid username or password.' };
     }
-  };
+    return {
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        employeeCode: user.employeeCode ?? null,
+      }
+    };
+  } catch (e) {
+    console.error('[loginUser error]', e.message);
+    return { error: 'Server error: ' + e.message };
+  }
 }
 
 // Admin: create a new user account
@@ -68,10 +73,14 @@ export async function updateUser(userId, fields) {
 
 // Seed default admin if none exists
 export async function ensureAdminExists() {
-  const count = await prisma.user.count({ where: { role: 'admin' } });
-  if (count === 0) {
-    await prisma.user.create({
-      data: { username: 'admin', password: 'admin123', role: 'admin' }
-    });
+  try {
+    const count = await prisma.user.count({ where: { role: 'admin' } });
+    if (count === 0) {
+      await prisma.user.create({
+        data: { username: 'admin', password: 'admin123', role: 'admin' }
+      });
+    }
+  } catch (e) {
+    console.error('[ensureAdminExists error]', e.message);
   }
 }
