@@ -73,12 +73,14 @@ export default function DashboardHome() {
     const q = searchQuery.toLowerCase();
     const filtered = allResults.filter(r => {
       const matchSearch = !q || r.name.toLowerCase().includes(q) || String(r.code).includes(q);
-      let wfm = 0, wfmhd = 0, wfh = 0;
+      let wfm = 0, wfmhd = 0, wfh = 0, wos = 0, woshd = 0;
       Object.keys(overrides).forEach(k => {
         if (k.startsWith(r.code + '_')) {
           if (overrides[k] === 'wfm') wfm++;
           else if (overrides[k] === 'wfm-hd') wfmhd++;
           else if (overrides[k] === 'wfh') wfh++;
+          else if (overrides[k] === 'wos') wos++;
+          else if (overrides[k] === 'wos-hd') woshd++;
         }
       });
       let matchFilter = true;
@@ -87,6 +89,7 @@ export default function DashboardHome() {
       if (currentFilter === 'deduction') matchFilter = r.lateHD > 0 || r.ssHD > 0;
       if (currentFilter === 'wfm') matchFilter = wfm > 0 || wfmhd > 0;
       if (currentFilter === 'wfh') matchFilter = wfh > 0;
+      if (currentFilter === 'wos') matchFilter = wos > 0 || woshd > 0;
       return matchSearch && matchFilter;
     });
     setFilteredResults(filtered);
@@ -149,7 +152,9 @@ export default function DashboardHome() {
       { label: 'Late Marks', value: allResults.reduce((s, x) => s + x.late, 0), sub: 'After 10:15 AM', color: '#ff9f0a', icon: '⏰' },
       { label: 'Short Shifts', value: allResults.reduce((s, x) => s + x.shortShift, 0), sub: 'Under 9 hrs', color: '#ff6b35', icon: '⚡' },
       { label: 'WFM Days', value: totalWFM + totalWFMHD, sub: `Full: ${totalWFM} · Half: ${totalWFMHD}`, color: '#34c759', icon: '🏛️' },
-      { label: 'HD Deductions', value: allResults.reduce((s, x) => s + x.lateHD + x.ssHD, 0), sub: 'Late + short shifts', color: '#af52de', icon: '📋' },
+      { label: 'WFH Days', value: totalWFH, sub: 'Work from home', color: '#af52de', icon: '🏠' },
+      { label: 'WOS Days', value: Object.values(overrides).filter(v => v === 'wos').length + Object.values(overrides).filter(v => v === 'wos-hd').length, sub: 'Work on site', color: '#30b0c7', icon: '🏢' },
+      { label: 'HD Deductions', value: allResults.reduce((s, x) => s + x.lateHD + x.ssHD, 0), sub: 'Late + short shifts', color: '#ff3b30', icon: '📋' },
     ];
   };
 
@@ -165,6 +170,7 @@ export default function DashboardHome() {
     { key: 'deduction', label: 'HD Deduction' },
     { key: 'wfm', label: 'WFM' },
     { key: 'wfh', label: 'WFH' },
+    { key: 'wos', label: 'WOS' },
   ];
 
   if (authLoading || !isAuthenticated) return null;

@@ -96,6 +96,8 @@ export async function fetchDashboardData(monthYear) {
   return records.map(record => ({
     code: record.employee.code,
     name: record.employee.name,
+    birthday: record.employee.birthday ?? null,
+    workAnniversary: record.employee.workAnniversary ?? null,
     present: record.present,
     absent: record.absent,
     halfDay: record.halfDay,

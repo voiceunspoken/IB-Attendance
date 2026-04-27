@@ -11,24 +11,36 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  username     String    @unique
-  password     String    // plain text for simplicity (same pattern as existing admin123)
-  role         String    @default("employee") // "admin" | "employee"
-  employeeCode String?   // links to Employee.code if role = employee
-  createdAt    DateTime  @default(now())
+  id             String    @id @default(cuid())
+  username       String    @unique
+  password       String
+  role           String    @default("employee") // "super_admin" | "admin" | "employee"
+  employeeCode   String?
+  createdAt      DateTime  @default(now())
 }
 
 model Employee {
-  id        String   @id @default(cuid())
-  code      String   @unique
-  name      String
-  records   MonthRecord[]
-  dailyLogs DailyLog[]
-  overrides Override[]
+  id              String   @id @default(cuid())
+  code            String   @unique
+  name            String
+  birthday        DateTime?
+  workAnniversary DateTime?
+  records         MonthRecord[]
+  dailyLogs       DailyLog[]
+  overrides       Override[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model PendingChange {
+  id           String   @id @default(cuid())
+  requestedBy  String   // username of admin who made the change
+  action       String   // "toggleOverride" | "clearOverrides" | "uploadMonth" | "deleteMonth"
+  payload      String   // JSON stringified payload
+  status       String   @default("pending") // "pending" | "approved" | "rejected"
+  reviewedBy   String?  // super_admin username who reviewed
+  reviewedAt   DateTime?
+  createdAt    DateTime @default(now())
 }
 
 model MonthRecord {

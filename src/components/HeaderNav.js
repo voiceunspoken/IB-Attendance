@@ -4,7 +4,7 @@ import { useAuth } from './AuthProvider';
 import { useRouter } from 'next/navigation';
 
 export default function HeaderNav() {
-  const { user, isAdmin, isAuthenticated, logout } = useAuth();
+  const { user, isAdmin, isSuperAdmin, isAuthenticated, logout } = useAuth();
   const router = useRouter();
 
   return (
@@ -30,10 +30,10 @@ export default function HeaderNav() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{
               width: '28px', height: '28px', borderRadius: '50%',
-              background: isAdmin ? 'rgba(0,113,227,0.12)' : 'rgba(52,199,89,0.12)',
+              background: isSuperAdmin ? 'rgba(255,59,48,0.1)' : isAdmin ? 'rgba(0,113,227,0.12)' : 'rgba(52,199,89,0.12)',
               display: 'grid', placeItems: 'center',
               fontSize: '12px', fontWeight: 700,
-              color: isAdmin ? 'var(--blue)' : '#1a7f37'
+              color: isSuperAdmin ? '#c0392b' : isAdmin ? 'var(--blue)' : '#1a7f37'
             }}>
               {user?.username?.charAt(0).toUpperCase()}
             </div>
@@ -41,8 +41,8 @@ export default function HeaderNav() {
               <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text)', letterSpacing: '-0.01em' }}>
                 {user?.username}
               </div>
-              <div style={{ fontSize: '10px', color: 'var(--text2)', textTransform: 'capitalize', letterSpacing: '0.02em' }}>
-                {user?.role}
+              <div style={{ fontSize: '10px', color: 'var(--text2)', letterSpacing: '0.02em' }}>
+                {isSuperAdmin ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'Employee'}
               </div>
             </div>
           </div>

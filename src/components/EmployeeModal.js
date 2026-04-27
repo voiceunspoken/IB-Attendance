@@ -12,16 +12,18 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
   if (!employee) return null;
 
   const empOverrideCounts = () => {
-    let wfm = 0, wfmhd = 0, wfh = 0;
+    let wfm = 0, wfmhd = 0, wfh = 0, wos = 0, woshd = 0;
     Object.keys(overrides).forEach(k => {
       if (k.startsWith(employee.code + '_')) {
         const v = overrides[k];
         if (v === 'wfm') wfm++;
         else if (v === 'wfm-hd') wfmhd++;
         else if (v === 'wfh') wfh++;
+        else if (v === 'wos') wos++;
+        else if (v === 'wos-hd') woshd++;
       }
     });
-    return { wfm, wfmhd, wfh };
+    return { wfm, wfmhd, wfh, wos, woshd };
   };
 
   const ovCounts = empOverrideCounts();
@@ -32,6 +34,7 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
     { val: employee.shortShift, label: 'Short Shifts', color: 'var(--orange)' },
     { val: ovCounts.wfm + ovCounts.wfmhd, label: 'WFM', color: 'var(--green)' },
     { val: ovCounts.wfh, label: 'WFH', color: 'var(--purple)' },
+    { val: ovCounts.wos + ovCounts.woshd, label: 'WOS', color: 'var(--teal)' },
   ];
 
   const handleApply = () => {
@@ -90,9 +93,16 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
       let label = '';
 
       if (ovVal) {
-        label = ovVal === 'wfm' ? 'WFM' : ovVal === 'wfm-hd' ? 'WFM½' : 'WFH';
-        bg = ovVal === 'wfm' ? 'rgba(52,199,89,0.12)' : ovVal === 'wfm-hd' ? 'rgba(52,199,89,0.08)' : 'rgba(175,82,222,0.1)';
-        border = ovVal === 'wfm' ? '1.5px solid rgba(52,199,89,0.4)' : ovVal === 'wfm-hd' ? '1.5px solid rgba(52,199,89,0.3)' : '1.5px solid rgba(175,82,222,0.35)';
+        label = ovVal === 'wfm' ? 'WFM' : ovVal === 'wfm-hd' ? 'WFM½' : ovVal === 'wfh' ? 'WFH' : ovVal === 'wos' ? 'WOS' : 'WOS½';
+        bg = ovVal === 'wfm' ? 'rgba(52,199,89,0.12)'
+           : ovVal === 'wfm-hd' ? 'rgba(52,199,89,0.08)'
+           : ovVal === 'wfh' ? 'rgba(175,82,222,0.1)'
+           : ovVal === 'wos' ? 'rgba(48,176,199,0.12)'
+           : 'rgba(48,176,199,0.08)';
+        border = ovVal === 'wfm' ? '1.5px solid rgba(52,199,89,0.4)'
+               : ovVal === 'wfm-hd' ? '1.5px solid rgba(52,199,89,0.3)'
+               : ovVal === 'wfh' ? '1.5px solid rgba(175,82,222,0.35)'
+               : '1.5px solid rgba(48,176,199,0.4)';
       } else {
         if (info.type === 'wo') { opacity = 0.4; cursor = 'default'; label = 'WO'; }
         else if (info.type === 'present') { bg = 'rgba(52,199,89,0.08)'; border = '1px solid rgba(52,199,89,0.25)'; label = 'P'; }
@@ -122,7 +132,10 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
             <div style={{
               position: 'absolute', top: '3px', right: '3px', width: '5px', height: '5px',
               borderRadius: '50%',
-              background: ovVal === 'wfm' ? 'var(--green)' : ovVal === 'wfm-hd' ? 'var(--wfmhd)' : 'var(--purple)'
+              background: ovVal === 'wfm' ? 'var(--green)'
+                        : ovVal === 'wfm-hd' ? 'var(--wfmhd)'
+                        : ovVal === 'wfh' ? 'var(--purple)'
+                        : 'var(--teal)'
             }} />
           )}
           <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--text)' }}>{d}</span>
@@ -202,6 +215,8 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
                   <option value="wfm">🏛️ Work From Ministry — Full Day</option>
                   <option value="wfm-hd">🏛️ Work From Ministry — Half Day</option>
                   <option value="wfh">🏠 Work From Home</option>
+                  <option value="wos">🏢 Work On Site — Full Day</option>
+                  <option value="wos-hd">🏢 Work On Site — Half Day</option>
                 </select>
               </div>
               <button className="btn btn-primary" style={{ padding: '8px 18px' }} onClick={handleApply}>Apply</button>
@@ -250,6 +265,8 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
               { label: '🏛️ WFM — Full Day', type: 'wfm', bg: 'rgba(52,199,89,0.08)', color: '#1a7f37', border: 'rgba(52,199,89,0.25)' },
               { label: '🏛️ WFM — Half Day', type: 'wfm-hd', bg: 'rgba(52,199,89,0.06)', color: '#1a7f37', border: 'rgba(52,199,89,0.2)' },
               { label: '🏠 Work From Home', type: 'wfh', bg: 'rgba(175,82,222,0.08)', color: '#7b2d8b', border: 'rgba(175,82,222,0.25)' },
+              { label: '🏢 Work On Site — Full Day', type: 'wos', bg: 'rgba(48,176,199,0.08)', color: '#1a6e7a', border: 'rgba(48,176,199,0.25)' },
+              { label: '🏢 Work On Site — Half Day', type: 'wos-hd', bg: 'rgba(48,176,199,0.06)', color: '#1a6e7a', border: 'rgba(48,176,199,0.2)' },
             ].map(item => (
               <button key={item.type} onClick={() => { onApplyOverride(employee.code, popupDay, item.type); setPopupDay(null); }}
                 style={{

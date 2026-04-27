@@ -7,21 +7,24 @@ export default function EmployeeTable({ results, onOpenDetail, currentPage, setC
   const totalPages = Math.ceil(results.length / pageSize);
 
   const empOverrideCounts = (code) => {
-    let wfm = 0, wfmhd = 0, wfh = 0;
+    let wfm = 0, wfmhd = 0, wfh = 0, wos = 0, woshd = 0;
     Object.keys(overrides).forEach(k => {
       if (k.startsWith(code + '_')) {
         const v = overrides[k];
         if (v === 'wfm') wfm++;
         else if (v === 'wfm-hd') wfmhd++;
         else if (v === 'wfh') wfh++;
+        else if (v === 'wos') wos++;
+        else if (v === 'wos-hd') woshd++;
       }
     });
-    return { wfm, wfmhd, wfh };
+    return { wfm, wfmhd, wfh, wos, woshd };
   };
 
   const StatusBadge = ({ r, ov }) => {
     if (ov.wfm > 0 || ov.wfmhd > 0) return <span style={badge('rgba(52,199,89,0.12)', '#1a7f37')}>WFM</span>;
     if (ov.wfh > 0) return <span style={badge('rgba(175,82,222,0.12)', '#7b2d8b')}>WFH</span>;
+    if (ov.wos > 0 || ov.woshd > 0) return <span style={badge('rgba(48,176,199,0.12)', '#1a6e7a')}>WOS</span>;
     if (r.absent >= 8) return <span style={badge('rgba(255,59,48,0.1)', '#c0392b')}>High Absent</span>;
     if (r.lateHD + r.ssHD > 1) return <span style={badge('rgba(255,159,10,0.12)', '#b36200')}>HD Ded.</span>;
     if (r.absent === 0 && r.lateHD === 0) return <span style={badge('rgba(52,199,89,0.1)', '#1a7f37')}>Clean</span>;
@@ -49,6 +52,8 @@ export default function EmployeeTable({ results, onOpenDetail, currentPage, setC
               <th style={th} title="Work From Ministry Full">WFM</th>
               <th style={th} title="Work From Ministry Half">WFM½</th>
               <th style={th} title="Work From Home">WFH</th>
+              <th style={th} title="Work On Site Full">WOS</th>
+              <th style={th} title="Work On Site Half">WOS½</th>
               <th style={th}>Status</th>
               <th style={th}></th>
             </tr>
@@ -79,6 +84,8 @@ export default function EmployeeTable({ results, onOpenDetail, currentPage, setC
                   <td style={{ ...td, color: ov.wfm > 0 ? 'var(--green)' : 'var(--text2)', fontWeight: ov.wfm > 0 ? 600 : 400 }}>{ov.wfm || '—'}</td>
                   <td style={{ ...td, color: ov.wfmhd > 0 ? 'var(--green)' : 'var(--text2)' }}>{ov.wfmhd || '—'}</td>
                   <td style={{ ...td, color: ov.wfh > 0 ? 'var(--purple)' : 'var(--text2)' }}>{ov.wfh || '—'}</td>
+                  <td style={{ ...td, color: ov.wos > 0 ? 'var(--teal)' : 'var(--text2)' }}>{ov.wos || '—'}</td>
+                  <td style={{ ...td, color: ov.woshd > 0 ? 'var(--teal)' : 'var(--text2)' }}>{ov.woshd || '—'}</td>
                   <td style={td}><StatusBadge r={r} ov={ov} /></td>
                   <td style={td}>
                     <span style={{ color: 'var(--blue)', fontSize: '13px', fontWeight: 500 }}>View →</span>
