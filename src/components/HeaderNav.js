@@ -27,6 +27,15 @@ export default function HeaderNav() {
               Manage Users
             </button>
           )}
+          {isAdmin && (
+            <button
+              onClick={() => router.push('/leaves')}
+              className="btn btn-secondary"
+              style={{ padding: '5px 14px', fontSize: '13px' }}
+            >
+              Leaves
+            </button>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{
               width: '28px', height: '28px', borderRadius: '50%',

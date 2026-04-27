@@ -28,6 +28,9 @@ model Employee {
   records         MonthRecord[]
   dailyLogs       DailyLog[]
   overrides       Override[]
+  leaveBalances   LeaveBalance[]
+  leaveRequests   LeaveRequest[]
+  regularizations RegularizationRequest[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -97,7 +100,71 @@ model Override {
   monthYear  String
   day        Int
   
-  type       String   // "wfm", "wfm-hd", "wfh"
+  type       String   // "wfm", "wfm-hd", "wfh", "wos", "wos-hd"
 
   @@unique([employeeId, monthYear, day])
+}
+
+// Leave quota policy — one per year (global, applies to all employees)
+model LeavePolicy {
+  id        String @id @default(cuid())
+  year      Int    @unique
+  cl        Int    @default(12)  // Casual Leave
+  sl        Int    @default(6)   // Sick Leave
+  el        Int    @default(15)  // Earned Leave
+  rl        Int    @default(2)   // Restricted Leave
+  createdAt DateTime @default(now())
+}
+
+// Per-employee leave balance for a given year
+model LeaveBalance {
+  id           String   @id @default(cuid())
+  employeeId   String
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  year         Int
+  clTotal      Int      @default(12)
+  slTotal      Int      @default(6)
+  elTotal      Int      @default(15)
+  rlTotal      Int      @default(2)
+  clUsed       Int      @default(0)
+  slUsed       Int      @default(0)
+  elUsed       Int      @default(0)
+  rlUsed       Int      @default(0)
+  clCarry      Int      @default(0)  // carried forward from previous year
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+
+  @@unique([employeeId, year])
+}
+
+// Leave requests submitted by employees
+model LeaveRequest {
+  id           String   @id @default(cuid())
+  employeeId   String
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType    String   // "cl" | "sl" | "el" | "rl"
+  fromDate     DateTime
+  toDate       DateTime
+  days         Float    // 0.5 for half day, 1+ for full days
+  reason       String
+  status       String   @default("pending") // "pending" | "approved" | "rejected"
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  reviewNote   String?
+  createdAt    DateTime @default(now())
+}
+
+// Regularization requests — employee requests correction for missed punch
+model RegularizationRequest {
+  id           String   @id @default(cuid())
+  employeeId   String
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date         DateTime
+  requestedIn  String?  // HH:MM
+  requestedOut String?  // HH:MM
+  reason       String
+  status       String   @default("pending") // "pending" | "approved" | "rejected"
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  createdAt    DateTime @default(now())
 }
