@@ -19,21 +19,18 @@ export default function HeaderNav() {
       {isAuthenticated && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {isAdmin && (
-            <button
-              onClick={() => router.push('/users')}
-              className="btn btn-secondary"
-              style={{ padding: '5px 14px', fontSize: '13px' }}
-            >
+            <button onClick={() => router.push('/users')} className="btn btn-secondary" style={{ padding: '5px 14px', fontSize: '13px' }}>
               Manage Users
             </button>
           )}
           {isAdmin && (
-            <button
-              onClick={() => router.push('/leaves')}
-              className="btn btn-secondary"
-              style={{ padding: '5px 14px', fontSize: '13px' }}
-            >
+            <button onClick={() => router.push('/leaves')} className="btn btn-secondary" style={{ padding: '5px 14px', fontSize: '13px' }}>
               Leaves
+            </button>
+          )}
+          {isAdmin && (
+            <button onClick={() => router.push('/settings')} className="btn btn-secondary" style={{ padding: '5px 14px', fontSize: '13px' }}>
+              Settings
             </button>
           )}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

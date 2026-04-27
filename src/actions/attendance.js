@@ -2,6 +2,7 @@
 
 import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { logAction } from './audit';
 
 export async function getMonths() {
   const records = await prisma.monthRecord.findMany({
@@ -126,34 +127,30 @@ export async function fetchDashboardData(monthYear) {
   }));
 }
 
-export async function toggleOverride(employeeCode, monthYear, day, type) {
+export async function toggleOverride(employeeCode, monthYear, day, type, performedBy = 'admin') {
   const emp = await prisma.employee.findUnique({ where: { code: employeeCode } });
   if (!emp) return { error: "Employee not found" };
 
   if (type === 'clear') {
-    await prisma.override.deleteMany({
-      where: { employeeId: emp.id, monthYear, day }
-    });
+    await prisma.override.deleteMany({ where: { employeeId: emp.id, monthYear, day } });
+    await logAction(performedBy, 'override_cleared', 'employee', emp.id, `Cleared override for ${employeeCode} day ${day} ${monthYear}`);
   } else {
     await prisma.override.upsert({
       where: { employeeId_monthYear_day: { employeeId: emp.id, monthYear, day } },
       update: { type },
       create: { employeeId: emp.id, monthYear, day, type }
     });
+    await logAction(performedBy, 'override_applied', 'employee', emp.id, `Applied ${type} override for ${employeeCode} day ${day} ${monthYear}`);
   }
-  
   revalidatePath('/');
   return { success: true };
 }
 
-export async function clearAllOverrides(employeeCode, monthYear) {
+export async function clearAllOverrides(employeeCode, monthYear, performedBy = 'admin') {
   const emp = await prisma.employee.findUnique({ where: { code: employeeCode } });
   if (!emp) return { error: "Employee not found" };
-
-  await prisma.override.deleteMany({
-    where: { employeeId: emp.id, monthYear }
-  });
-  
+  await prisma.override.deleteMany({ where: { employeeId: emp.id, monthYear } });
+  await logAction(performedBy, 'overrides_cleared_all', 'employee', emp.id, `Cleared all overrides for ${employeeCode} ${monthYear}`);
   revalidatePath('/');
   return { success: true };
 }
@@ -168,4 +165,44 @@ export async function getEmployeeHistory(code) {
     }
   });
   return emp;
+}
+
+// Phase 13 — Admin: manually add employee
+export async function addEmployee(code, name, performedBy = 'admin') {
+  const existing = await prisma.employee.findUnique({ where: { code } });
+  if (existing) return { error: `Employee code "${code}" already exists.` };
+  const emp = await prisma.employee.create({ data: { code, name } });
+  await logAction(performedBy, 'employee_added', 'employee', emp.id, `Manually added employee ${name} (${code})`);
+  revalidatePath('/');
+  return { employee: emp };
+}
+
+// Phase 13 — Admin: delete employee and all their data
+export async function deleteEmployee(code, performedBy = 'admin') {
+  const emp = await prisma.employee.findUnique({ where: { code } });
+  if (!emp) return { error: 'Employee not found.' };
+  await prisma.employee.delete({ where: { code } });
+  await logAction(performedBy, 'employee_deleted', 'employee', emp.id, `Deleted employee ${emp.name} (${code})`);
+  revalidatePath('/');
+  return { success: true };
+}
+
+// Phase 13 — Admin: delete a specific month record
+export async function deleteMonthRecord(employeeCode, monthYear, performedBy = 'admin') {
+  const emp = await prisma.employee.findUnique({ where: { code: employeeCode } });
+  if (!emp) return { error: 'Employee not found.' };
+  await prisma.monthRecord.deleteMany({ where: { employeeId: emp.id, monthYear } });
+  await prisma.dailyLog.deleteMany({ where: { employeeId: emp.id, monthYear } });
+  await prisma.override.deleteMany({ where: { employeeId: emp.id, monthYear } });
+  await logAction(performedBy, 'month_deleted', 'employee', emp.id, `Deleted ${monthYear} record for ${employeeCode}`);
+  revalidatePath('/');
+  return { success: true };
+}
+
+// Phase 13 — Get all employees (for admin management)
+export async function getAllEmployees() {
+  return prisma.employee.findMany({
+    select: { id: true, code: true, name: true, birthday: true, workAnniversary: true, createdAt: true },
+    orderBy: { name: 'asc' }
+  });
 }

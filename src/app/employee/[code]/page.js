@@ -8,6 +8,7 @@ import {
   getLeaveBalance, getLeaveRequests, submitLeaveRequest,
   getRegularizations, submitRegularization
 } from '../../../actions/leave';
+import { getUpcomingHolidays } from '../../../actions/holidays';
 import EmployeeModal from '../../../components/EmployeeModal';
 
 const LEAVE_LABELS = { cl: 'Casual Leave', sl: 'Sick Leave', el: 'Earned Leave', rl: 'Restricted Leave' };
@@ -30,6 +31,7 @@ export default function EmployeeDashboard({ params }) {
   const [leaveBalance, setLeaveBalance] = useState(null);
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [regularizations, setRegularizations] = useState([]);
+  const [upcomingHolidays, setUpcomingHolidays] = useState([]);
 
   // Leave form
   const [leaveForm, setLeaveForm] = useState({ leaveType: 'cl', fromDate: '', toDate: '', days: 1, reason: '' });
@@ -57,11 +59,12 @@ export default function EmployeeDashboard({ params }) {
   const loadAll = async () => {
     setLoading(true);
     const year = new Date().getFullYear();
-    const [data, balance, requests, regs] = await Promise.all([
+    const [data, balance, requests, regs, holidays] = await Promise.all([
       getEmployeeHistory(code),
       getLeaveBalance(code, year),
       getLeaveRequests(code),
-      getRegularizations(code)
+      getRegularizations(code),
+      getUpcomingHolidays()
     ]);
     if (data) {
       setEmp(data);
@@ -72,6 +75,7 @@ export default function EmployeeDashboard({ params }) {
     setLeaveBalance(balance);
     setLeaveRequests(requests);
     setRegularizations(regs);
+    setUpcomingHolidays(holidays);
     setLoading(false);
   };
 
@@ -231,6 +235,20 @@ export default function EmployeeDashboard({ params }) {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Upcoming holidays */}
+        {upcomingHolidays.length > 0 && (
+          <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>Upcoming Holidays</div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {upcomingHolidays.map(h => (
+                <span key={h.id} style={{ fontSize: '12px', background: 'rgba(255,159,10,0.1)', color: '#b36200', padding: '4px 10px', borderRadius: '980px', fontWeight: 500 }}>
+                  🎉 {h.name} — {new Date(h.year, h.month - 1, h.day).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                </span>
+              ))}
+            </div>
           </div>
         )}
       </div>

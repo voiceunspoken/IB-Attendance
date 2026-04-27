@@ -168,3 +168,42 @@ model RegularizationRequest {
   reviewedAt   DateTime?
   createdAt    DateTime @default(now())
 }
+
+// Phase 10 — Company holiday calendar
+model Holiday {
+  id        String   @id @default(cuid())
+  year      Int
+  month     Int
+  day       Int
+  name      String
+  type      String   @default("national") // "national" | "optional"
+  createdAt DateTime @default(now())
+
+  @@unique([year, month, day])
+}
+
+// Phase 11 — Shift & HR policy configuration
+model ShiftPolicy {
+  id              String   @id @default(cuid())
+  name            String   @default("Default")
+  shiftStartH     Int      @default(10)  // 10:00 AM
+  shiftStartM     Int      @default(0)
+  graceMinutes    Int      @default(15)  // late after 10:15
+  minHours        Float    @default(9)   // minimum working hours
+  latesPerHD      Int      @default(3)   // 3 lates = 1 HD
+  ssPerHD         Int      @default(3)   // 3 short shifts = 1 HD
+  effectiveFrom   DateTime @default(now())
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+}
+
+// Phase 12 — Audit log
+model AuditLog {
+  id          String   @id @default(cuid())
+  performedBy String   // username
+  action      String   // e.g. "override_applied", "leave_approved", "user_created"
+  entity      String   // e.g. "employee", "leave_request", "user"
+  entityId    String?  // id of the affected record
+  detail      String   // human-readable description
+  createdAt   DateTime @default(now())
+}
