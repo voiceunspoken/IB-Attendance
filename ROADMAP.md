@@ -114,58 +114,67 @@
  
 ---
  
-## Phase 9 — Automated Alerts & Notifications
+## Phase 9 — Automated Alerts & Notifications ✅
 > Remove manual monitoring burden from admin
- 
-- [ ] Email alert to admin when employee crosses 3 absences in a month
-- [ ] Email alert to employee when late mark or HD deduction is applied
-- [ ] Monthly attendance report auto-emailed to each employee
-- [ ] Low leave balance warning notification
-- [ ] Email provider integration (Resend / SendGrid)
- 
+
+- ✅ Email infrastructure via Resend SDK integrated
+- ✅ High absence alert email to admin (triggered when employee crosses threshold)
+- ✅ Leave request status notification to employee (approved/rejected)
+- ✅ Monthly attendance report email to all employees (bulk send from Settings)
+- ✅ Deduction notification email to employee
+- ✅ Email config guide in Settings → Notifications tab
+- ⏳ Requires `RESEND_API_KEY`, `ADMIN_EMAIL`, `EMAIL_FROM` env vars on Vercel to activate
+
 ---
- 
-## Phase 10 — Holiday Calendar Management
+
+## Phase 10 — Holiday Calendar Management ✅
 > Centralized holiday control instead of relying on biometric file
- 
-- [ ] Admin defines company holiday calendar for the year
-- [ ] System auto-marks holidays across all employees
-- [ ] Optional: department or region-specific holidays
-- [ ] Holidays reflected in leave balance calculations
- 
+
+- ✅ `Holiday` model — year, month, day, name, type (national/optional)
+- ✅ Admin adds/removes holidays from Settings → Holidays tab
+- ✅ Upcoming holidays shown on employee self-service dashboard
+- ⏳ Holidays not yet auto-applied to new attendance uploads (parser still reads from XLS)
+
 ---
- 
-## Phase 11 — Shift & Policy Configuration
+
+## Phase 11 — Shift & Policy Configuration ✅
 > Make HR rules configurable instead of hardcoded
- 
-- [ ] Admin configures shift timings, grace period, minimum hours from UI
-- [ ] Different policies per department or employee type
-- [ ] Policy changes apply from a specific effective date
-- [ ] Currently hardcoded: 10:00 AM start, 9 hrs min, 3 lates = 1 HD
- 
+
+- ✅ `ShiftPolicy` model with full history tracking
+- ✅ Admin configures: shift start time, grace period, min hours, lates/HD ratio, SS/HD ratio
+- ✅ Policy history visible with active indicator
+- ✅ Settings → Shift Policy tab
+- ⏳ Parser still uses hardcoded values — new policy applies to future uploads only
+
 ---
- 
-## Phase 12 — Audit Log & Security
+
+## Phase 12 — Audit Log & Security ✅
 > Traceability and hardened auth
- 
-- ⏳ `PendingChange` model exists — stores action, payload, status, reviewer (schema done)
-- ⏳ Super admin approval UI built — but admin actions not yet wired to create pending changes
-- [ ] Wire all admin write actions (overrides, upload, delete) through pending change flow
-- [ ] Super admin can view full change history (approved + rejected)
-- [ ] Password hashing with bcrypt (currently plain text)
-- [ ] "Change Password" option for all users
- 
+
+- ✅ `AuditLog` model — every action logged with performer, entity, detail, timestamp
+- ✅ Audit log on all: user create/update/delete, override apply/clear, employee add/delete, password change
+- ✅ Super admin can view full audit log in Settings → Audit Log tab
+- ✅ Password hashing with bcrypt (all new passwords hashed, legacy plain-text still accepted)
+- ✅ `changePassword` function with current password verification
+- ✅ Change Password tab in Settings for all users
+- ✅ `PendingChange` approval workflow wired — super admin approves/rejects admin changes
+
 ---
- 
-## Phase 13 — Infrastructure & Polish
+
+## Phase 13 — Infrastructure & Polish ✅
 > Long-term stability and UX
- 
-- [ ] Migrate existing SQLite data to Neon (script written, needs better-sqlite3 install)
-- [ ] Admin: edit / delete individual month records
-- [ ] Admin: manually add / remove employees
+
+- ✅ Admin: manually add employees from Settings → Employees tab
+- ✅ Admin: delete employees (cascades all data) from Settings → Employees tab
+- ✅ `deleteMonthRecord` action — delete specific month data per employee
+- ✅ Settings hub page at `/settings` covering all admin configuration
+- ✅ Header navigation updated: Manage Users · Leaves · Settings
+- [ ] Migrate existing SQLite data to Neon (script written, needs better-sqlite3)
+- [ ] Admin: edit individual month record values
 - [ ] Multi-department support
 - [ ] Mobile responsive improvements
 - [ ] Dark mode toggle
+- [ ] PDF attendance report download
 
 ---
 
