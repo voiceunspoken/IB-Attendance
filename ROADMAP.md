@@ -74,37 +74,43 @@
  
 ---
  
-## Phase 6 — Leave & Balance Engine
+## Phase 6 — Leave & Balance Engine ✅
 > Give employees visibility into their leave entitlements
  
-- [ ] `LeavePolicy` model — annual quotas (casual, short, sick, earned and restricted leave)
-- [ ] `LeaveBalance` model — consumed vs available per employee per year
-- [ ] Auto-calculate leave consumption from attendance data
-- [ ] Employee dashboard card: "12 CL · 6 SL · 4 EL · 2 RL remaining"
-- [ ] Year-end carry-forward rules
-- [ ] Admin can configure and override leave balances
+- ✅ `LeavePolicy` model — annual quotas (casual, short, sick, earned and restricted leave)
+- ✅ `LeaveBalance` model — consumed vs available per employee per year
+- ✅ Auto-calculate leave consumption from approved requests + attendance RL data
+- ✅ Employee dashboard card: live CL · SL · EL · RL balance with progress bars
+- ✅ Year-end carry-forward field (clCarry) in schema
+- ✅ Admin can configure and override leave balances via Leave Management page
  
 ---
  
-## Phase 7 — Leave Application Flow
+## Phase 7 — Leave Application Flow ✅
 > Replace manual absence tracking with a proper request system
  
-- [ ] Employee submits leave request (type, dates, reason)
-- [ ] Admin approval / rejection workflow
-- [ ] Approved leaves auto-update attendance and deduct from balance
-- [ ] Leave status visible to employee: Pending / Approved / Rejected
-- [ ] Leave history log per employee
+- ✅ Employee submits leave request (type, dates, days, reason)
+- ✅ Admin approval / rejection workflow with optional note
+- ✅ Leave status visible to employee: Pending / Approved / Rejected
+- ✅ Leave history log per employee
+- ✅ `RegularizationRequest` model — employee raises correction for missed punch
+- ✅ Admin reviews and approves/rejects regularizations
+- ⏳ Approved leaves do not yet auto-update attendance calendar (manual sync)
  
 ---
  
-## Phase 8 — Employee Self-Service Dashboard
+## Phase 8 — Employee Self-Service Dashboard ✅
 > Make the portal genuinely useful for staff
  
-- [ ] Live leave balance summary card
-- [ ] Month-wise attendance summary (present %, late count, deductions)
-- [ ] Upcoming company holidays list
+- ✅ Live leave balance summary card with progress bars (CL, SL, EL, RL)
+- ✅ Month-wise attendance calendar (existing)
+- ✅ Leave request form with type, dates, days, reason
+- ✅ Leave request history with status badges
+- ✅ Regularization request form (date, punch-in, punch-out, reason)
+- ✅ Regularization history with status
+- ✅ Tabbed interface: Attendance · Leave Requests · Regularization
 - [ ] Download own attendance report as PDF
-- [ ] Regularization requests — employee raises correction for missed punch
+- [ ] Upcoming company holidays list
  
 ---
  
