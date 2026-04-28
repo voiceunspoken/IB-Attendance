@@ -41,7 +41,7 @@
  
 ---
  
-## Phase 4 — Roles & Permissions ✅ (Partial)
+## Phase 4 — Roles & Permissions ✅
 > Multi-user access control
  
 - ✅ User model in database (username, password, role, employeeCode)
@@ -57,7 +57,7 @@
 - ✅ Link employee accounts to their attendance records
 - ✅ Permissions summary UI (3-column role breakdown)
 - ✅ Header shows logged-in user name and role with colour-coded avatar
-- ⏳ Admin changes do NOT yet trigger pending approval — overrides apply immediately (approval UI exists but not wired to actions)
+- ✅ `PendingChange` model + super admin approval UI (see Phase 12)
  
 ---
  
@@ -103,14 +103,14 @@
 > Make the portal genuinely useful for staff
  
 - ✅ Live leave balance summary card with progress bars (CL, SL, EL, RL)
-- ✅ Month-wise attendance calendar (existing)
+- ✅ Month-wise attendance calendar
 - ✅ Leave request form with type, dates, days, reason
 - ✅ Leave request history with status badges
 - ✅ Regularization request form (date, punch-in, punch-out, reason)
 - ✅ Regularization history with status
 - ✅ Tabbed interface: Attendance · Leave Requests · Regularization
+- ✅ Upcoming company holidays strip (from Phase 10 holiday calendar)
 - [ ] Download own attendance report as PDF
-- [ ] Upcoming company holidays list
  
 ---
  
