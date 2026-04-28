@@ -447,10 +447,10 @@ export default function EmployeeDashboard({ params }) {
               <div>
                 <label className="input-label">Leave Type</label>
                 <select className="input-field" value={leaveForm.leaveType} onChange={e => setLeaveForm(f => ({ ...f, leaveType: e.target.value }))}>
-                  <option value="cl">Casual Leave (CL)</option>
-                  <option value="sl">Sick Leave (SL)</option>
-                  <option value="el">Earned Leave (EL)</option>
-                  <option value="rl">Restricted Leave (RL)</option>
+                  <option value="cl">Casual Leave (CL) — 12 days/yr</option>
+                  <option value="sl">Sick Leave (SL) — 6 days/yr</option>
+                  <option value="el">Earned Leave (EL) — 4 days/yr</option>
+                  <option value="rl">Restricted Holiday (RH) — 2 days/yr</option>
                 </select>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>

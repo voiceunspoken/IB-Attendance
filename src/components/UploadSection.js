@@ -75,9 +75,9 @@ export default function UploadSection({ onFileSelected }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginTop: '24px' }}>
         {[
-          { icon: '⏰', title: 'Shift Timing', desc: '10:00 AM – 7:00 PM. Late after 10:15 AM. 3 lates = 1 HD deduction.' },
-          { icon: '⚡', title: 'Short Shift', desc: 'Min 9 hrs required. 3 short shifts = 1 HD. Not counted if already Late.' },
-          { icon: '🏢', title: 'WFM / WFH', desc: 'Mark any day as Work From Ministry or Work From Home on the calendar.' },
+          { icon: '⏰', title: 'Shift Timing', desc: '10:00 AM – 7:00 PM. 15-min grace window. Late after 10:15 AM. 3 lates = 1 HD deduction.' },
+          { icon: '⚡', title: 'Short Shift', desc: 'Min 9 hrs required. 3 short shifts = 1 HD. Not counted if already marked Late same day.' },
+          { icon: '🏢', title: 'WFM / WFH / WOS', desc: 'Mark any day as Work From Ministry, Work From Home, or Work On Site (full/half day).' },
         ].map((item) => (
           <div key={item.title} className="card" style={{ padding: '16px', textAlign: 'left' }}>
             <div style={{ fontSize: '18px', marginBottom: '8px' }}>{item.icon}</div>

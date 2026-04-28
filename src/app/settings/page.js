@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
-import { getHolidays, addHoliday, deleteHoliday } from '../../actions/holidays';
+import { getHolidays, addHoliday, deleteHoliday, seedIBHolidays } from '../../actions/holidays';
 import { getActiveShiftPolicy, saveShiftPolicy, getShiftPolicyHistory } from '../../actions/shiftPolicy';
 import { getAuditLog } from '../../actions/audit';
 import { getAllEmployees, addEmployee, deleteEmployee, deleteMonthRecord, updateMonthRecord, getMonths } from '../../actions/attendance';
@@ -97,6 +97,14 @@ export default function SettingsPage() {
     await deleteHoliday(id);
     const h = await getHolidays(year);
     setHolidays(h);
+  };
+
+  const handleSeedHolidays = async () => {
+    if (!confirm(`Seed all IB official holidays for ${year}? Existing entries will be updated.`)) return;
+    await seedIBHolidays(year);
+    const h = await getHolidays(year);
+    setHolidays(h);
+    setHMsg(`Seeded ${h.length} IB holidays for ${year}.`);
   };
 
   const handleSavePolicy = async (e) => {
@@ -231,6 +239,9 @@ export default function SettingsPage() {
               </div>
               {hMsg && <div style={{ fontSize: '13px', color: 'var(--green)' }}>{hMsg}</div>}
               <button type="submit" className="btn btn-primary">Add Holiday</button>
+              <button type="button" className="btn btn-secondary" onClick={handleSeedHolidays}>
+                Seed IB Holidays {year}
+              </button>
             </form>
           </div>
 

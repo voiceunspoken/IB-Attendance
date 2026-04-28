@@ -28,7 +28,8 @@ export async function getLeaveBalance(employeeCode, year) {
   });
 
   if (!balance) {
-    // Auto-create from policy or defaults
+    // Auto-create from policy or defaults — per IB HR Policy:
+    // CL: 12/yr, SL: 6/yr, EL: 4/yr (quarterly after 1yr), RL: 2/yr
     const policy = await prisma.leavePolicy.findUnique({ where: { year } });
     balance = await prisma.leaveBalance.create({
       data: {
@@ -36,7 +37,7 @@ export async function getLeaveBalance(employeeCode, year) {
         year,
         clTotal: policy?.cl ?? 12,
         slTotal: policy?.sl ?? 6,
-        elTotal: policy?.el ?? 15,
+        elTotal: policy?.el ?? 4,
         rlTotal: policy?.rl ?? 2,
       }
     });

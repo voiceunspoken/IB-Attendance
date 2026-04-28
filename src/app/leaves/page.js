@@ -20,7 +20,7 @@ export default function LeavesPage() {
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [regularizations, setRegularizations] = useState([]);
   const [balances, setBalances] = useState([]);
-  const [policy, setPolicy] = useState({ cl: 12, sl: 6, el: 15, rl: 2 });
+  const [policy, setPolicy] = useState({ cl: 12, sl: 6, el: 4, rl: 2 });
   const [loading, setLoading] = useState(true);
   const [reviewNote, setReviewNote] = useState('');
   const [reviewingId, setReviewingId] = useState(null);
@@ -231,20 +231,28 @@ export default function LeavesPage() {
       {!loading && tab === 'policy' && (
         <div className="card" style={{ padding: '24px', maxWidth: '480px' }}>
           <div style={{ fontSize: '15px', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '6px' }}>Leave Policy — {year}</div>
-          <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '20px' }}>Annual leave quotas applied to all employees.</div>
+          <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '20px' }}>Annual leave quotas per IB HR Policy. Applied to all confirmed employees.</div>
           <form onSubmit={handleSavePolicy} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {[
-              { key: 'cl', label: 'Casual Leave (CL)' },
-              { key: 'sl', label: 'Sick Leave (SL)' },
-              { key: 'el', label: 'Earned Leave (EL)' },
-              { key: 'rl', label: 'Restricted Leave (RL)' },
-            ].map(({ key, label }) => (
-              <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
-                <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text)' }}>{label}</label>
-                <input type="number" min={0} max={60} className="input-field" style={{ width: '80px', padding: '8px 12px', textAlign: 'center' }}
-                  value={policy[key]} onChange={e => setPolicy(p => ({ ...p, [key]: parseInt(e.target.value) || 0 }))} />
+              { key: 'cl', label: 'Casual Leave (CL)', hint: '12 days/yr · 1 per month · post confirmation' },
+              { key: 'sl', label: 'Sick Leave (SL)', hint: '6 days/yr · medical cert required >1 day' },
+              { key: 'el', label: 'Earned Leave (EL)', hint: '4 days/yr · quarterly after 1 yr service' },
+              { key: 'rl', label: 'Restricted Holiday (RH)', hint: '2 days/yr · 1 per month · 1 month advance notice' },
+            ].map(({ key, label, hint }) => (
+              <div key={key}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text)' }}>{label}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '2px' }}>{hint}</div>
+                  </div>
+                  <input type="number" min={0} max={60} className="input-field" style={{ width: '80px', padding: '8px 12px', textAlign: 'center' }}
+                    value={policy[key]} onChange={e => setPolicy(p => ({ ...p, [key]: parseInt(e.target.value) || 0 }))} />
+                </div>
               </div>
             ))}
+            <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '12px 14px', fontSize: '12px', color: 'var(--text2)', lineHeight: 1.6 }}>
+              <strong style={{ color: 'var(--text)' }}>Shift:</strong> 10:00 AM – 7:00 PM · Late after 10:15 AM · Min 9 hrs · 3 lates = 1 HD · 3 short shifts = 1 HD
+            </div>
             <button type="submit" className="btn btn-primary" style={{ marginTop: '8px' }}>Save Policy</button>
           </form>
         </div>

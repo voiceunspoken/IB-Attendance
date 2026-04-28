@@ -7,7 +7,7 @@ export async function getActiveShiftPolicy() {
     where: { isActive: true },
     orderBy: { effectiveFrom: 'desc' }
   });
-  // Return defaults if none configured
+  // Return defaults if none configured — per IB HR Policy Manual
   return policy ?? {
     shiftStartH: 10, shiftStartM: 0,
     graceMinutes: 15, minHours: 9,

@@ -1,4 +1,7 @@
-// Default policy constants (used as fallback if no DB policy passed in)
+// Default policy constants — per IB HR Policy Manual
+// Shift: 10:00 AM–7:00 PM, 15-min grace window, min 9 hrs
+// 2 lates per month = 1 HD deduction (3rd late onwards)
+// 2 short shifts per month = 1 HD deduction (3rd SS onwards)
 const DEFAULT_POLICY = { shiftStartH: 10, shiftStartM: 0, graceMinutes: 15, minHours: 9, latesPerHD: 3, ssPerHD: 3 };
 
 const SL_LATE_MAX_H = 12, SL_LATE_MAX_M = 5;
