@@ -6,7 +6,7 @@ import { useAuth } from '../../components/AuthProvider';
 import { getHolidays, addHoliday, deleteHoliday } from '../../actions/holidays';
 import { getActiveShiftPolicy, saveShiftPolicy, getShiftPolicyHistory } from '../../actions/shiftPolicy';
 import { getAuditLog } from '../../actions/audit';
-import { getAllEmployees, addEmployee, deleteEmployee, deleteMonthRecord, getMonths } from '../../actions/attendance';
+import { getAllEmployees, addEmployee, deleteEmployee, deleteMonthRecord, updateMonthRecord, getMonths } from '../../actions/attendance';
 import { changePassword } from '../../actions/auth';
 import { sendAllMonthlyReports } from '../../actions/notifications';
 
@@ -36,6 +36,10 @@ export default function SettingsPage() {
   const [empForm, setEmpForm] = useState({ code: '', name: '' });
   const [empMsg, setEmpMsg] = useState('');
   const [months, setMonths] = useState([]);
+
+  // Edit month record
+  const [editRecord, setEditRecord] = useState({ empCode: '', monthYear: '', present: '', absent: '', late: '', lateHD: '', shortShift: '', ssHD: '', rl: '', holi: '' });
+  const [editRecordMsg, setEditRecordMsg] = useState('');
 
   // Change password
   const [pwForm, setPwForm] = useState({ current: '', newPw: '', confirm: '' });
@@ -119,6 +123,21 @@ export default function SettingsPage() {
     await deleteEmployee(code, user.username);
     const emps = await getAllEmployees();
     setEmployees(emps);
+  };
+
+  const handleDeleteMonth = async (code, name, monthYear) => {
+    if (!confirm(`Delete ${name}'s data for ${monthYear}? This cannot be undone.`)) return;
+    await deleteMonthRecord(code, monthYear, user.username);
+    alert('Month record deleted.');
+  };
+
+  const handleEditRecord = async (e) => {
+    e.preventDefault();
+    setEditRecordMsg('');
+    if (!editRecord.empCode || !editRecord.monthYear) return setEditRecordMsg('Select employee and month.');
+    const result = await updateMonthRecord(editRecord.empCode, editRecord.monthYear, editRecord, user.username);
+    if (result.error) return setEditRecordMsg(result.error);
+    setEditRecordMsg('Record updated successfully.');
   };
 
   const handleChangePassword = async (e) => {
@@ -303,6 +322,77 @@ export default function SettingsPage() {
               </div>
               <button type="submit" className="btn btn-primary">Add Employee</button>
               {empMsg && <span style={{ fontSize: '13px', color: empMsg.includes('already') ? 'var(--red)' : 'var(--green)', alignSelf: 'center' }}>{empMsg}</span>}
+            </form>
+          </div>
+
+          <div className="card" style={{ padding: '22px 24px' }}>
+            <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '6px' }}>Delete Month Record</div>
+            <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '16px' }}>Remove a specific month's attendance data for an employee.</div>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div>
+                <label className="input-label">Employee</label>
+                <select className="input-field" id="del-emp-select" style={{ width: '220px' }}>
+                  <option value="">— Select employee —</option>
+                  {employees.map(e => <option key={e.code} value={e.code}>{e.name} ({e.code})</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="input-label">Month</label>
+                <select className="input-field" id="del-month-select" style={{ width: '180px' }}>
+                  <option value="">— Select month —</option>
+                  {months.map(m => <option key={m} value={m}>{formatMonth(m)}</option>)}
+                </select>
+              </div>
+              <button className="btn" style={{ padding: '9px 16px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, fontSize: '13px' }}
+                onClick={() => {
+                  const code = document.getElementById('del-emp-select').value;
+                  const monthYear = document.getElementById('del-month-select').value;
+                  const emp = employees.find(e => e.code === code);
+                  if (!code || !monthYear) return alert('Select both employee and month.');
+                  handleDeleteMonth(code, emp?.name, monthYear);
+                }}>
+                Delete Month
+              </button>
+            </div>
+          </div>
+
+          <div className="card" style={{ padding: '22px 24px' }}>
+            <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '6px' }}>Edit Month Record</div>
+            <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '16px' }}>Manually correct attendance counts for a specific employee and month.</div>
+            <form onSubmit={handleEditRecord} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label className="input-label">Employee</label>
+                  <select className="input-field" value={editRecord.empCode} onChange={e => setEditRecord(r => ({ ...r, empCode: e.target.value }))}>
+                    <option value="">— Select —</option>
+                    {employees.map(e => <option key={e.code} value={e.code}>{e.name} ({e.code})</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">Month</label>
+                  <select className="input-field" value={editRecord.monthYear} onChange={e => setEditRecord(r => ({ ...r, monthYear: e.target.value }))}>
+                    <option value="">— Select —</option>
+                    {months.map(m => <option key={m} value={m}>{formatMonth(m)}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                {[
+                  { key: 'present', label: 'Present' }, { key: 'absent', label: 'Absent' },
+                  { key: 'late', label: 'Late' }, { key: 'lateHD', label: 'HD(Late)' },
+                  { key: 'shortShift', label: 'Short Shift' }, { key: 'ssHD', label: 'HD(SS)' },
+                  { key: 'rl', label: 'RL' }, { key: 'holi', label: 'Holiday' },
+                ].map(({ key, label }) => (
+                  <div key={key}>
+                    <label className="input-label">{label}</label>
+                    <input type="number" min={0} className="input-field" style={{ padding: '7px 10px' }}
+                      placeholder="—" value={editRecord[key]}
+                      onChange={e => setEditRecord(r => ({ ...r, [key]: e.target.value }))} />
+                  </div>
+                ))}
+              </div>
+              {editRecordMsg && <div style={{ fontSize: '13px', color: editRecordMsg.includes('success') ? 'var(--green)' : 'var(--red)' }}>{editRecordMsg}</div>}
+              <button type="submit" className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>Save Changes</button>
             </form>
           </div>
 

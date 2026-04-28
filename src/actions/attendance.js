@@ -3,6 +3,9 @@
 import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
+import { sendHighAbsenceAlert } from './notifications';
+
+const ABSENCE_ALERT_THRESHOLD = 3;
 
 export async function getMonths() {
   const records = await prisma.monthRecord.findMany({
@@ -73,6 +76,20 @@ export async function uploadMonthData(monthYear, parsedResults, numDays) {
   });
   
   revalidatePath('/');
+
+  // Fire absence alerts for employees over threshold (non-blocking)
+  try {
+    const records = await prisma.monthRecord.findMany({
+      where: { monthYear },
+      include: { employee: true }
+    });
+    for (const r of records) {
+      if (r.absent >= ABSENCE_ALERT_THRESHOLD) {
+        sendHighAbsenceAlert(r.employee.name, r.employee.code, r.absent, monthYear).catch(() => {});
+      }
+    }
+  } catch (_) {}
+
   return { success: true };
 }
 
@@ -205,4 +222,17 @@ export async function getAllEmployees() {
     select: { id: true, code: true, name: true, birthday: true, workAnniversary: true, createdAt: true },
     orderBy: { name: 'asc' }
   });
+}
+
+// Phase 13 — Admin: edit individual month record values
+export async function updateMonthRecord(employeeCode, monthYear, fields, performedBy = 'admin') {
+  const emp = await prisma.employee.findUnique({ where: { code: employeeCode } });
+  if (!emp) return { error: 'Employee not found.' };
+  const allowed = ['present','absent','halfDay','late','lateHD','shortShift','ssHD','shortLeave','rl','holi'];
+  const data = {};
+  allowed.forEach(k => { if (fields[k] !== undefined) data[k] = parseInt(fields[k]) || 0; });
+  await prisma.monthRecord.updateMany({ where: { employeeId: emp.id, monthYear }, data });
+  await logAction(performedBy, 'month_edited', 'employee', emp.id, `Edited ${monthYear} record for ${employeeCode}`);
+  revalidatePath('/');
+  return { success: true };
 }

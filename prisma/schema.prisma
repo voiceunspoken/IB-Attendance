@@ -14,6 +14,7 @@ model User {
   id             String    @id @default(cuid())
   username       String    @unique
   password       String
+  email          String?   // for email notifications
   role           String    @default("employee") // "super_admin" | "admin" | "employee"
   employeeCode   String?
   createdAt      DateTime  @default(now())

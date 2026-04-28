@@ -18,7 +18,7 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
 
   // Create form
-  const [form, setForm] = useState({ username: '', password: '', role: 'employee', employeeCode: '' });
+  const [form, setForm] = useState({ username: '', password: '', role: 'employee', employeeCode: '', email: '' });
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);

@@ -252,3 +252,120 @@ header {
   font-weight: 600;
   letter-spacing: 0.01em;
 }
+
+/* ── DARK MODE ── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --bg2: #1c1c1e;
+    --surface: #1c1c1e;
+    --surface2: #2c2c2e;
+    --surface3: #3a3a3c;
+    --border: rgba(255, 255, 255, 0.1);
+    --border2: rgba(255, 255, 255, 0.15);
+
+    --text: #f5f5f7;
+    --text2: #98989d;
+    --text3: #636366;
+
+    --blue-light: rgba(10, 132, 255, 0.15);
+    --blue-mid: rgba(10, 132, 255, 0.25);
+    --blue: #0a84ff;
+    --blue-hover: #409cff;
+
+    --green: #30d158;
+    --red: #ff453a;
+    --yellow: #ffd60a;
+    --orange: #ff9f0a;
+    --purple: #bf5af2;
+    --teal: #5ac8fa;
+
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+    --shadow: 0 4px 16px rgba(0,0,0,0.4), 0 1px 4px rgba(0,0,0,0.2);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.3);
+  }
+
+  header {
+    background: rgba(28, 28, 30, 0.85);
+  }
+
+  .auth-card {
+    background: var(--surface);
+  }
+}
+
+/* ── MOBILE RESPONSIVE ── */
+@media (max-width: 768px) {
+  header {
+    padding: 0 16px;
+    height: 48px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  header .btn {
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+
+  /* Dashboard page */
+  div[style*="padding: '24px 28px'"] {
+    padding: 16px !important;
+  }
+
+  /* KPI strip — 2 columns on mobile */
+  div[style*="gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))'"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Employee table — horizontal scroll */
+  .card div[style*="overflowX: 'auto'"] {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Employee profile grid — stack on mobile */
+  div[style*="gridTemplateColumns: '200px 1fr'"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Leave balance — 2 cols on mobile */
+  div[style*="gridTemplateColumns: 'repeat(4, 1fr)'"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Settings/leaves 2-col grids — stack */
+  div[style*="gridTemplateColumns: '1fr 1fr'"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Auth card */
+  .auth-card {
+    padding: 28px 20px;
+  }
+
+  /* Toolbar buttons wrap */
+  div[style*="display: 'flex', gap: '8px'"] {
+    flex-wrap: wrap;
+  }
+
+  /* Filter segment control — scroll */
+  div[style*="background: 'var(--surface3)', borderRadius: '10px'"] {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 480px) {
+  /* KPI strip — 1 column on very small screens */
+  div[style*="gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))'"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .auth-card {
+    padding: 24px 16px;
+  }
+
+  .auth-title {
+    font-size: 22px;
+  }
+}

@@ -9,6 +9,8 @@ import EmployeeTable from '../components/EmployeeTable';
 import * as XLSX from 'xlsx';
 import { parseAndAnalyze } from '../utils/attendanceParser';
 import { getMonths, uploadMonthData, fetchDashboardData, toggleOverride, clearAllOverrides } from '../actions/attendance';
+import { getActiveShiftPolicy } from '../actions/shiftPolicy';
+import { getHolidays } from '../actions/holidays';
 
 export default function DashboardHome() {
   const { isAuthenticated, isAdmin, user, loading: authLoading, logout } = useAuth();
@@ -105,9 +107,23 @@ export default function DashboardHome() {
         const wb = XLSX.read(e.target.result, { type: 'array', cellText: true, raw: false });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
-        const { results, currentMonth: cm, numDays: nd } = parseAndAnalyze(rows);
+
+        // Load active shift policy and DB holidays before parsing
+        const [policy, allHolidays] = await Promise.all([
+          getActiveShiftPolicy(),
+          getHolidays(new Date().getFullYear())
+        ]);
+
+        const { results, currentMonth: cm, numDays: nd } = parseAndAnalyze(rows, policy, allHolidays);
         const monthYearStr = `${cm.month}_${cm.year}`;
-        await uploadMonthData(monthYearStr, results, nd);
+
+        // Also load holidays for the detected year if different
+        const yearHolidays = cm.year !== new Date().getFullYear()
+          ? await getHolidays(cm.year)
+          : allHolidays;
+        const { results: finalResults } = parseAndAnalyze(rows, policy, yearHolidays);
+
+        await uploadMonthData(monthYearStr, finalResults, nd);
         await loadMonthsList();
         setSelectedMonth(monthYearStr);
         await loadDashboardData(monthYearStr);
@@ -122,18 +138,20 @@ export default function DashboardHome() {
   };
 
   const exportCSV = () => {
-    const headers = ['Emp Code','Name','Present','Absent','Half Days','Late','HD(Late)','Short Shifts','HD(SS)','Short Leaves','RL','Holiday','WFM','WFM Half','WFH'];
+    const headers = ['Emp Code','Name','Present','Absent','Half Days','Late','HD(Late)','Short Shifts','HD(SS)','Short Leaves','RL','Holiday','WFM','WFM Half','WFH','WOS','WOS Half'];
     const rows = [headers.join(',')];
     filteredResults.forEach(r => {
-      let wfm = 0, wfmhd = 0, wfh = 0;
+      let wfm = 0, wfmhd = 0, wfh = 0, wos = 0, woshd = 0;
       Object.keys(overrides).forEach(k => {
         if (k.startsWith(r.code + '_')) {
           if (overrides[k] === 'wfm') wfm++;
           else if (overrides[k] === 'wfm-hd') wfmhd++;
           else if (overrides[k] === 'wfh') wfh++;
+          else if (overrides[k] === 'wos') wos++;
+          else if (overrides[k] === 'wos-hd') woshd++;
         }
       });
-      rows.push([r.code, `"${r.name}"`, r.present, r.absent, r.halfDay, r.late, r.lateHD, r.shortShift, r.ssHD, r.shortLeave, r.rl, r.holi, wfm, wfmhd, wfh].join(','));
+      rows.push([r.code, `"${r.name}"`, r.present, r.absent, r.halfDay, r.late, r.lateHD, r.shortShift, r.ssHD, r.shortLeave, r.rl, r.holi, wfm, wfmhd, wfh, wos, woshd].join(','));
     });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([rows.join('\n')], { type: 'text/csv' }));

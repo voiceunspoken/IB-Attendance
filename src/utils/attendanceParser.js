@@ -1,4 +1,6 @@
-const LATE_H = 10, LATE_M = 15, MIN_WH = 9;
+// Default policy constants (used as fallback if no DB policy passed in)
+const DEFAULT_POLICY = { shiftStartH: 10, shiftStartM: 0, graceMinutes: 15, minHours: 9, latesPerHD: 3, ssPerHD: 3 };
+
 const SL_LATE_MAX_H = 12, SL_LATE_MAX_M = 5;
 const SL_EARLY_MIN_H = 16, SL_EARLY_MIN_M = 55, SL_EARLY_MAX_H = 17, SL_EARLY_MAX_M = 5;
 
@@ -13,7 +15,13 @@ function parseT(str) {
   return null;
 }
 
-export function parseAndAnalyze(rows) {
+// policy: { shiftStartH, shiftStartM, graceMinutes, minHours, latesPerHD, ssPerHD }
+// dbHolidays: array of { month, day } from Holiday table for the detected year
+export function parseAndAnalyze(rows, policy = DEFAULT_POLICY, dbHolidays = []) {
+  const LATE_H = policy.shiftStartH;
+  const LATE_M = policy.shiftStartM + policy.graceMinutes;
+  const MIN_WH = policy.minHours;
+
   let headerRowIdx = -1, holidayRowIdx = -1, dataStartIdx = -1, numDays = 31;
   
   for (let i = 0; i < rows.length; i++) {
@@ -32,20 +40,15 @@ export function parseAndAnalyze(rows) {
     }
   }
 
-  if (headerRowIdx < 0) {
-    throw new Error('Could not detect attendance data. Please verify file format.');
-  }
+  if (headerRowIdx < 0) throw new Error('Could not detect attendance data. Please verify file format.');
 
   let detYear = new Date().getFullYear(), detMonth = new Date().getMonth() + 1;
   for (let i = 0; i < Math.min(headerRowIdx, 6); i++) {
     const txt = rows[i].join(' ');
     const m = txt.match(/(\w+)[- ]+(\d{4})/);
     if (m) {
-      const mi = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'].findIndex(x => m[1].toLowerCase().startsWith(x));
-      if (mi >= 0) {
-        detMonth = mi + 1;
-        detYear = parseInt(m[2]);
-      }
+      const mi = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'].findIndex(x => m[1].toLowerCase().startsWith(x));
+      if (mi >= 0) { detMonth = mi + 1; detYear = parseInt(m[2]); }
     }
   }
   const currentMonth = { year: detYear, month: detMonth };
@@ -57,18 +60,22 @@ export function parseAndAnalyze(rows) {
     if (dow === 0 || dow === 6) weekends.add(d);
   }
 
-  const gazHolidays = new Set(), rlDays = new Set();
+  // Build holiday set: prefer DB holidays, fall back to file header row
+  const gazHolidays = new Set();
+  const rlDays = new Set();
+
+  // DB holidays for this month
+  dbHolidays.filter(h => h.month === detMonth).forEach(h => gazHolidays.add(h.day));
+
+  // File header row (always parse for RL days; also use for holidays if DB has none)
   if (holidayRowIdx >= 0 && rows[holidayRowIdx]) {
     const hr = rows[holidayRowIdx];
     for (let j = 2; j < hr.length; j++) {
       const v = String(hr[j]).trim().toUpperCase(), day = j - 1;
-      if (v === 'HOLI' || v === 'HOLIDAY' || v === 'GH') gazHolidays.add(day);
+      if (gazHolidays.size === 0 && (v === 'HOLI' || v === 'HOLIDAY' || v === 'GH')) gazHolidays.add(day);
       if (v === 'RL' && !weekends.has(day)) rlDays.add(day);
     }
   }
-  // Hardcoded falbacks as per original
-  if (gazHolidays.size === 0 && detMonth === 3 && detYear === 2026) gazHolidays.add(4);
-  if (rlDays.size === 0 && detMonth === 3 && detYear === 2026) rlDays.add(26);
 
   const results = [];
   for (let i = dataStartIdx; i < rows.length; i++) {
@@ -76,13 +83,13 @@ export function parseAndAnalyze(rows) {
     if (!row[0] || !/^\d+$/.test(String(row[0]).trim())) continue;
     const code = String(row[0]).trim(), name = String(row[1]).trim();
     if (!name || name === 'NA') continue;
-    results.push(analyzeEmployee(code, name, row, numDays, weekends, gazHolidays, rlDays));
+    results.push(analyzeEmployee(code, name, row, numDays, weekends, gazHolidays, rlDays, LATE_H, LATE_M, MIN_WH, policy.latesPerHD, policy.ssPerHD));
   }
 
   return { results, currentMonth, numDays };
 }
 
-function analyzeEmployee(code, name, row, numDays, weekends, gazHolidays, rlDays) {
+function analyzeEmployee(code, name, row, numDays, weekends, gazHolidays, rlDays, LATE_H, LATE_M, MIN_WH, latesPerHD, ssPerHD) {
   const days = [];
   let present = 0, absent = 0, halfDay = 0, late = 0, shortShift = 0, shortLeave = 0, rl = 0, holi = 0;
   
@@ -102,7 +109,8 @@ function analyzeEmployee(code, name, row, numDays, weekends, gazHolidays, rlDays
     if (parts.length === 1 && inT !== null && inT >= 15 * 60) { outT = inT; inT = null; }
     
     let isLate = false, isSS = false, isSL = false, isHD = false;
-    if (inT !== null && inT > LATE_H * 60 + LATE_M) { isLate = true; late++; }
+    const lateThreshold = LATE_H * 60 + LATE_M;
+    if (inT !== null && inT > lateThreshold) { isLate = true; late++; }
     
     if (inT !== null && outT !== null) {
       const wh = (outT - inT) / 60;
@@ -118,8 +126,10 @@ function analyzeEmployee(code, name, row, numDays, weekends, gazHolidays, rlDays
     days.push({ d, type: isHD ? 'half' : 'present', raw, isLate, isSS, isSL, inT, outT });
   }
   
-  return { 
-    code, name, present, absent, halfDay, late, lateHD: Math.floor(late / 3),
-    shortShift, ssHD: Math.floor(shortShift / 3), shortLeave, rl, holi, days 
+  return {
+    code, name, present, absent, halfDay, late,
+    lateHD: Math.floor(late / latesPerHD),
+    shortShift, ssHD: Math.floor(shortShift / ssPerHD),
+    shortLeave, rl, holi, days
   };
 }

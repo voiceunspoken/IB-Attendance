@@ -154,6 +154,32 @@ export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = 
     },
     include: { employee: true }
   });
+
+  // Auto-update attendance: mark approved leave days in DailyLog
+  if (approve) {
+    const from = new Date(req.fromDate);
+    const to = new Date(req.toDate);
+    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+      const monthYear = `${d.getMonth() + 1}_${d.getFullYear()}`;
+      const day = d.getDate();
+      // Only update if day is currently absent
+      const existing = await prisma.dailyLog.findUnique({
+        where: { employeeId_monthYear_day: { employeeId: req.employeeId, monthYear, day } }
+      });
+      if (existing && existing.type === 'absent') {
+        await prisma.dailyLog.update({
+          where: { employeeId_monthYear_day: { employeeId: req.employeeId, monthYear, day } },
+          data: { type: req.leaveType === 'rl' ? 'rl' : 'present', raw: req.leaveType.toUpperCase() }
+        });
+        // Update MonthRecord counts
+        await prisma.monthRecord.updateMany({
+          where: { employeeId: req.employeeId, monthYear },
+          data: { absent: { decrement: 1 }, present: { increment: 1 } }
+        });
+      }
+    }
+  }
+
   revalidatePath('/');
   return { request: req };
 }

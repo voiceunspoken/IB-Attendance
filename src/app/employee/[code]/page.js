@@ -177,6 +177,116 @@ export default function EmployeeDashboard({ params }) {
 
   const avgAbsent = (emp.records.reduce((s, r) => s + r.absent, 0) / emp.records.length).toFixed(1);
 
+  const downloadPDF = async (record, empData, ovs) => {
+    const { jsPDF } = await import('jspdf');
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const [mo, yr] = record.monthYear.split('_');
+    const monthLabel = new Date(yr, parseInt(mo) - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+
+    // Header
+    doc.setFillColor(29, 29, 31);
+    doc.rect(0, 0, 210, 28, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16); doc.setFont('helvetica', 'bold');
+    doc.text('Interactive Bees', 14, 12);
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+    doc.text('Attendance Report', 14, 20);
+    doc.text(monthLabel, 196, 12, { align: 'right' });
+
+    // Employee info
+    doc.setTextColor(29, 29, 31);
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text(empData.name, 14, 40);
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(110, 110, 115);
+    doc.text(`Employee Code: ${empData.code}`, 14, 47);
+
+    // Stats grid
+    const stats = [
+      ['Present', record.present, '#34c759'],
+      ['Absent', record.absent, '#ff3b30'],
+      ['Late Marks', record.late, '#ff9f0a'],
+      ['Half Days', record.halfDay, '#ff9f0a'],
+      ['HD (Late)', record.lateHD, '#ff6b35'],
+      ['Short Shifts', record.shortShift, '#ff6b35'],
+      ['HD (SS)', record.ssHD, '#ff3b30'],
+      ['Short Leave', record.shortLeave, '#0071e3'],
+    ];
+
+    let x = 14, y = 58;
+    stats.forEach(([label, value], i) => {
+      if (i > 0 && i % 4 === 0) { x = 14; y += 22; }
+      const bx = x + (i % 4) * 48;
+      doc.setFillColor(245, 245, 247);
+      doc.roundedRect(bx, y, 44, 18, 3, 3, 'F');
+      doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+      doc.setTextColor(29, 29, 31);
+      doc.text(String(value), bx + 22, y + 9, { align: 'center' });
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+      doc.setTextColor(110, 110, 115);
+      doc.text(label.toUpperCase(), bx + 22, y + 15, { align: 'center' });
+    });
+
+    // Calendar
+    y += 30;
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(29, 29, 31);
+    doc.text('Daily Attendance', 14, y);
+    y += 6;
+
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const cellW = 26, cellH = 10;
+    dayNames.forEach((d, i) => {
+      doc.setFillColor(232, 232, 237);
+      doc.rect(14 + i * cellW, y, cellW, cellH, 'F');
+      doc.setFontSize(7); doc.setFont('helvetica', 'bold');
+      doc.setTextColor(110, 110, 115);
+      doc.text(d, 14 + i * cellW + cellW / 2, y + 7, { align: 'center' });
+    });
+    y += cellH;
+
+    const firstDow = new Date(parseInt(yr), parseInt(mo) - 1, 1).getDay();
+    const daysInMonth = new Date(parseInt(yr), parseInt(mo), 0).getDate();
+    const dayMap = {};
+    formattedEmployee.days.forEach(d => dayMap[d.d] = d);
+
+    let col = firstDow;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const info = dayMap[d];
+      const ov = ovs[`${empData.code}_${d}`];
+      const bx = 14 + col * cellW;
+
+      let bg = [245, 245, 247], textCol = [29, 29, 31], label = '';
+      if (ov) { bg = [52, 199, 89, 0.2]; bg = [220, 245, 225]; label = ov.toUpperCase(); }
+      else if (info?.type === 'absent') { bg = [255, 235, 234]; textCol = [200, 50, 40]; label = 'A'; }
+      else if (info?.type === 'present') { bg = [234, 248, 238]; label = 'P'; }
+      else if (info?.type === 'holiday') { bg = [255, 245, 220]; label = 'H'; }
+      else if (info?.type === 'wo') { bg = [240, 240, 240]; textCol = [180, 180, 180]; label = 'WO'; }
+      else if (info?.type === 'rl') { bg = [240, 230, 250]; label = 'RL'; }
+      else if (info?.type === 'half') { bg = [255, 245, 220]; label = 'HD'; }
+      if (info?.isLate) label = 'L';
+      if (info?.isSS) label = 'SS';
+
+      doc.setFillColor(...bg);
+      doc.rect(bx, y, cellW, cellH, 'F');
+      doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...textCol);
+      doc.text(String(d), bx + 4, y + 6);
+      doc.setFontSize(6); doc.setFont('helvetica', 'normal');
+      doc.setTextColor(110, 110, 115);
+      doc.text(label, bx + cellW - 3, y + 6, { align: 'right' });
+
+      col++;
+      if (col === 7) { col = 0; y += cellH; }
+    }
+
+    // Footer
+    doc.setFontSize(8); doc.setTextColor(180, 180, 180);
+    doc.text(`Generated on ${new Date().toLocaleDateString()} · IB Attendance Portal`, 105, 285, { align: 'center' });
+
+    doc.save(`Attendance_${empData.code}_${record.monthYear}.pdf`);
+  };
+
   return (
     <div style={{ padding: '24px 28px', maxWidth: '1200px', margin: '0 auto' }} className="animate-fade-in">
 
@@ -296,8 +406,17 @@ export default function EmployeeDashboard({ params }) {
           </div>
 
           <div className="card" style={{ padding: '24px', position: 'relative' }}>
-            <div style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.03em', marginBottom: '20px' }}>
-              {formatMonth(currentRecord.monthYear)}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.03em' }}>
+                {formatMonth(currentRecord.monthYear)}
+              </div>
+              <button
+                className="btn btn-secondary"
+                style={{ fontSize: '12px', padding: '6px 14px' }}
+                onClick={() => downloadPDF(currentRecord, emp, currentMonthOverrides)}
+              >
+                ↓ Download PDF
+              </button>
             </div>
             <div style={{ position: 'relative', height: '760px', overflow: 'hidden' }}>
               <style>{`.emp-inline > div { position: absolute !important; inset: 0 !important; background: transparent !important; backdrop-filter: none !important; } .emp-inline > div > div { width: 100% !important; max-width: 100% !important; height: 100% !important; border: none !important; background: transparent !important; box-shadow: none !important; border-radius: 0 !important; }`}</style>
