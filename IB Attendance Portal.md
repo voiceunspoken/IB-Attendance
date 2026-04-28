@@ -95,7 +95,7 @@
 - ✅ Leave history log per employee
 - ✅ `RegularizationRequest` model — employee raises correction for missed punch
 - ✅ Admin reviews and approves/rejects regularizations
-- ⏳ Approved leaves do not yet auto-update attendance calendar (manual sync)
+- ✅ Approved leaves auto-update DailyLog and MonthRecord (absent → present)
  
 ---
  
@@ -109,8 +109,8 @@
 - ✅ Regularization request form (date, punch-in, punch-out, reason)
 - ✅ Regularization history with status
 - ✅ Tabbed interface: Attendance · Leave Requests · Regularization
-- ✅ Upcoming company holidays strip (from Phase 10 holiday calendar)
-- [ ] Download own attendance report as PDF
+- ✅ Upcoming company holidays strip
+- ✅ Download own attendance report as PDF (jsPDF, includes calendar + stats)
  
 ---
  
@@ -133,7 +133,7 @@
 - ✅ `Holiday` model — year, month, day, name, type (national/optional)
 - ✅ Admin adds/removes holidays from Settings → Holidays tab
 - ✅ Upcoming holidays shown on employee self-service dashboard
-- ⏳ Holidays not yet auto-applied to new attendance uploads (parser still reads from XLS)
+- ✅ Parser reads holidays from DB for the detected month/year (falls back to XLS if none in DB)
 
 ---
 
@@ -144,7 +144,7 @@
 - ✅ Admin configures: shift start time, grace period, min hours, lates/HD ratio, SS/HD ratio
 - ✅ Policy history visible with active indicator
 - ✅ Settings → Shift Policy tab
-- ⏳ Parser still uses hardcoded values — new policy applies to future uploads only
+- ✅ Parser reads active shift policy from DB on every upload (no longer hardcoded)
 
 ---
 
@@ -166,15 +166,15 @@
 
 - ✅ Admin: manually add employees from Settings → Employees tab
 - ✅ Admin: delete employees (cascades all data) from Settings → Employees tab
-- ✅ `deleteMonthRecord` action — delete specific month data per employee
+- ✅ Admin: delete specific month record from Settings → Employees tab
+- ✅ Admin: edit individual month record values (present, absent, late, etc.) from Settings
 - ✅ Settings hub page at `/settings` covering all admin configuration
 - ✅ Header navigation updated: Manage Users · Leaves · Settings
+- ✅ Mobile responsive layout (2-col KPI, stacked grids, touch scrolling)
+- ✅ Dark mode (auto via `prefers-color-scheme`, full Apple dark palette)
+- ✅ CSV export includes WOS and WOS½ columns
+- ✅ High absence alert auto-fires after every upload
 - [ ] Migrate existing SQLite data to Neon (script written, needs better-sqlite3)
-- [ ] Admin: edit individual month record values
-- [ ] Multi-department support
-- [ ] Mobile responsive improvements
-- [ ] Dark mode toggle
-- [ ] PDF attendance report download
 
 ---
 
