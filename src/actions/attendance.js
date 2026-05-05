@@ -21,60 +21,61 @@ export async function getMonths() {
 }
 
 export async function uploadMonthData(monthYear, parsedResults, numDays) {
-  // We use a transaction to ensure all or nothing
-  await prisma.$transaction(async (tx) => {
-    for (const r of parsedResults) {
-      // Upsert Employee
-      const emp = await tx.employee.upsert({
-        where: { code: r.code },
-        update: { name: r.name },
-        create: { code: r.code, name: r.name },
-      });
+  // Process each employee independently (no single long transaction)
+  // This avoids Neon serverless connection timeouts on large uploads
+  for (const r of parsedResults) {
+    // Upsert Employee
+    const emp = await prisma.employee.upsert({
+      where: { code: r.code },
+      update: { name: r.name },
+      create: { code: r.code, name: r.name },
+    });
 
-      // Upsert MonthRecord
-      await tx.monthRecord.upsert({
-        where: { employeeId_monthYear: { employeeId: emp.id, monthYear } },
-        update: {
-          present: r.present, absent: r.absent, halfDay: r.halfDay,
-          late: r.late, lateHD: r.lateHD, shortShift: r.shortShift,
-          ssHD: r.ssHD, shortLeave: r.shortLeave, rl: r.rl, holi: r.holi, numDays
-        },
-        create: {
-          employeeId: emp.id, monthYear,
-          present: r.present, absent: r.absent, halfDay: r.halfDay,
-          late: r.late, lateHD: r.lateHD, shortShift: r.shortShift,
-          ssHD: r.ssHD, shortLeave: r.shortLeave, rl: r.rl, holi: r.holi, numDays
-        }
-      });
+    // Upsert MonthRecord
+    await prisma.monthRecord.upsert({
+      where: { employeeId_monthYear: { employeeId: emp.id, monthYear } },
+      update: {
+        present: r.present, absent: r.absent, halfDay: r.halfDay,
+        late: r.late, lateHD: r.lateHD, shortShift: r.shortShift,
+        ssHD: r.ssHD, shortLeave: r.shortLeave, rl: r.rl, holi: r.holi, numDays
+      },
+      create: {
+        employeeId: emp.id, monthYear,
+        present: r.present, absent: r.absent, halfDay: r.halfDay,
+        late: r.late, lateHD: r.lateHD, shortShift: r.shortShift,
+        ssHD: r.ssHD, shortLeave: r.shortLeave, rl: r.rl, holi: r.holi, numDays
+      }
+    });
 
-      // Delete existing daily logs to prevent duplication
-      await tx.dailyLog.deleteMany({
-        where: { employeeId: emp.id, monthYear }
-      });
+    // Delete existing daily logs to prevent duplication
+    await prisma.dailyLog.deleteMany({
+      where: { employeeId: emp.id, monthYear }
+    });
 
-      // Insert new daily logs
-      const dailyLogData = r.days.map(d => ({
-        employeeId: emp.id,
-        monthYear,
-        day: d.d,
-        type: d.type,
-        raw: d.raw || "",
-        inT: d.inT ?? null,
-        outT: d.outT ?? null,
-        isLate: d.isLate || false,
-        isSS: d.isSS || false,
-        isSL: d.isSL || false
-      }));
+    // Insert new daily logs in batches of 50 to avoid payload limits
+    const dailyLogData = r.days.map(d => ({
+      employeeId: emp.id,
+      monthYear,
+      day: d.d,
+      type: d.type,
+      raw: d.raw || "",
+      inT: d.inT ?? null,
+      outT: d.outT ?? null,
+      isLate: d.isLate || false,
+      isSS: d.isSS || false,
+      isSL: d.isSL || false
+    }));
 
-      if (dailyLogData.length > 0) {
-        await tx.dailyLog.createMany({ data: dailyLogData });
+    // Insert in chunks of 50
+    const chunkSize = 50;
+    for (let i = 0; i < dailyLogData.length; i += chunkSize) {
+      const chunk = dailyLogData.slice(i, i + chunkSize);
+      if (chunk.length > 0) {
+        await prisma.dailyLog.createMany({ data: chunk });
       }
     }
-  }, {
-    maxWait: 10000, 
-    timeout: 30000 
-  });
-  
+  }
+
   revalidatePath('/');
 
   // Fire absence alerts for employees over threshold (non-blocking)

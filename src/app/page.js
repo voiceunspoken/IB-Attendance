@@ -194,7 +194,7 @@ export default function DashboardHome() {
   if (authLoading || !isAuthenticated) return null;
 
   return (
-    <div style={{ padding: '24px 28px', maxWidth: '1400px', margin: '0 auto' }} className="animate-fade-in">
+    <div className="page-wrapper animate-fade-in">
 
       {/* Uploading state */}
       {uploading && (
@@ -237,25 +237,24 @@ export default function DashboardHome() {
           {/* Toolbar */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            marginBottom: '20px', gap: '12px', flexWrap: 'wrap'
+            marginBottom: 'calc(var(--gap) * 1.5)', gap: '12px', flexWrap: 'wrap'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <select
                 value={selectedMonth}
                 onChange={handleMonthChange}
                 className="input-field"
-                style={{ width: 'auto', minWidth: '170px', padding: '8px 12px', fontWeight: 500, fontSize: '14px' }}
+                style={{ width: 'auto', minWidth: '180px', padding: '8px 14px', fontWeight: 600, fontSize: 'var(--fs-base)' }}
               >
                 {months.map(m => <option key={m} value={m}>{formatMonth(m)}</option>)}
               </select>
-              <span style={{ fontSize: '13px', color: 'var(--text2)', letterSpacing: '-0.01em' }}>
+              <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text2)', letterSpacing: '-0.01em', fontWeight: 500 }}>
                 {allResults.length} employees
               </span>
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div className="toolbar-actions" style={{ display: 'flex', gap: '8px' }}>
               {isAdmin && <button className="btn btn-secondary" onClick={exportCSV}>Export CSV</button>}
               {isAdmin && <button className="btn btn-primary" onClick={() => setUploadView(true)}>Upload New</button>}
-              {isAdmin && <button className="btn btn-secondary" onClick={() => router.push('/users')}>Manage Users</button>}
               <button className="btn btn-outline" onClick={logout}>Sign Out</button>
             </div>
           </div>
@@ -265,32 +264,30 @@ export default function DashboardHome() {
           {/* Table header row */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            marginBottom: '14px', gap: '12px', flexWrap: 'wrap'
+            marginBottom: 'var(--gap)', gap: '12px', flexWrap: 'wrap'
           }}>
-            <div style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text)' }}>
-              Employee Breakdown
-            </div>
+            <div className="section-title">Employee Breakdown</div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
               <input
                 type="text"
                 className="input-field"
                 placeholder="Search employee…"
-                style={{ width: '190px', padding: '8px 12px' }}
+                style={{ width: '200px', padding: '8px 14px', fontSize: 'var(--fs-sm)' }}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
-              <div style={{ display: 'flex', gap: '4px', background: 'var(--surface3)', borderRadius: '10px', padding: '3px' }}>
+              <div className="filter-bar" style={{ display: 'flex', gap: '3px', background: 'var(--surface3)', borderRadius: '12px', padding: '3px' }}>
                 {filters.map(f => (
                   <button
                     key={f.key}
                     onClick={() => setCurrentFilter(f.key)}
                     style={{
-                      padding: '5px 12px', borderRadius: '7px', fontSize: '12px', fontWeight: 500,
+                      padding: '5px 13px', borderRadius: '9px', fontSize: 'var(--fs-xs)', fontWeight: 500,
                       border: 'none', cursor: 'pointer', letterSpacing: '-0.01em',
                       background: currentFilter === f.key ? 'var(--surface)' : 'transparent',
                       color: currentFilter === f.key ? 'var(--text)' : 'var(--text2)',
                       boxShadow: currentFilter === f.key ? 'var(--shadow-sm)' : 'none',
-                      transition: 'all 0.15s', fontFamily: 'inherit'
+                      transition: 'all 0.15s', fontFamily: 'inherit', whiteSpace: 'nowrap',
                     }}
                   >
                     {f.label}

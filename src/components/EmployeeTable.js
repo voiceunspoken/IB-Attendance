@@ -127,26 +127,26 @@ export default function EmployeeTable({ results, onOpenDetail, currentPage, setC
 const th = {
   background: 'var(--surface2)',
   color: 'var(--text2)',
-  padding: '10px 12px',
+  padding: 'clamp(8px, 1vw, 12px) clamp(10px, 1.2vw, 14px)',
   fontWeight: 600,
-  fontSize: '11px',
+  fontSize: 'clamp(10px, 1vw, 11px)',
   textTransform: 'uppercase',
-  letterSpacing: '0.04em',
+  letterSpacing: '0.05em',
   whiteSpace: 'nowrap',
   borderBottom: '1px solid var(--border)'
 };
-const td = { padding: '11px 12px', color: 'var(--text)', whiteSpace: 'nowrap' };
+const td = { padding: 'clamp(10px, 1vw, 13px) clamp(10px, 1.2vw, 14px)', color: 'var(--text)', whiteSpace: 'nowrap', fontSize: 'clamp(12px, 1.1vw, 13px)' };
 const badge = (bg, color) => ({
   display: 'inline-flex', alignItems: 'center',
-  padding: '3px 9px', borderRadius: '980px',
-  fontSize: '11px', fontWeight: 600, letterSpacing: '0.01em',
+  padding: '3px 10px', borderRadius: '980px',
+  fontSize: 'clamp(10px, 0.9vw, 11px)', fontWeight: 600, letterSpacing: '0.01em',
   background: bg, color
 });
 const pageBtn = (disabled) => ({
-  width: '28px', height: '28px', borderRadius: '7px',
+  width: '30px', height: '30px', borderRadius: '8px',
   border: '1px solid var(--border)', background: 'transparent',
   color: 'var(--text2)', cursor: disabled ? 'not-allowed' : 'pointer',
-  fontSize: '13px', display: 'grid', placeItems: 'center',
-  opacity: disabled ? 0.35 : 1, fontFamily: 'inherit'
+  fontSize: 'clamp(12px, 1.1vw, 14px)', display: 'grid', placeItems: 'center',
+  opacity: disabled ? 0.35 : 1, fontFamily: 'inherit', transition: 'all 0.15s',
 });
-const pageBtnActive = { background: 'var(--blue)', borderColor: 'var(--blue)', color: '#fff' };
+const pageBtnActive = { background: 'var(--blue)', border: '1px solid var(--blue)', color: '#fff' };
