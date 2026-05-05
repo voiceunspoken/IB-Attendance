@@ -86,6 +86,43 @@ export async function getAllLeaveBalances(year) {
   return employees.map((emp, i) => ({ ...emp, balance: balances[i] }));
 }
 
+export async function getLeaveBalancesForExport(year) {
+  const employees = await prisma.employee.findMany({
+    select: { id: true, code: true, name: true },
+    orderBy: { name: 'asc' }
+  });
+
+  const results = await Promise.all(
+    employees.map(async (emp) => {
+      const balance = await getLeaveBalance(emp.code, year);
+
+      // Get approved leave requests for the year grouped by month
+      const approved = await prisma.leaveRequest.findMany({
+        where: {
+          employeeId: emp.id,
+          status: 'approved',
+          fromDate: { gte: new Date(`${year}-01-01`), lte: new Date(`${year}-12-31`) }
+        },
+        orderBy: { fromDate: 'asc' }
+      });
+
+      // Summarise leave taken per type
+      const leaveDetail = approved.map(r => (
+        `${r.leaveType.toUpperCase()} ${r.days}d (${new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}${r.fromDate !== r.toDate ? '–' + new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''})`
+      )).join('; ') || '—';
+
+      return {
+        code: emp.code,
+        name: emp.name,
+        balance,
+        leaveDetail,
+      };
+    })
+  );
+
+  return results;
+}
+
 export async function adminUpdateLeaveBalance(employeeCode, year, fields) {
   const emp = await prisma.employee.findUnique({ where: { code: employeeCode } });
   if (!emp) return { error: 'Employee not found' };

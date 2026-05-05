@@ -6,7 +6,8 @@ import { useAuth } from '../../components/AuthProvider';
 import {
   getAllLeaveRequests, getAllPendingLeaveRequests, reviewLeaveRequest,
   getAllPendingRegularizations, reviewRegularization,
-  getAllLeaveBalances, upsertLeavePolicy, getLeavePolicy, adminUpdateLeaveBalance
+  getAllLeaveBalances, upsertLeavePolicy, getLeavePolicy, adminUpdateLeaveBalance,
+  getLeaveBalancesForExport
 } from '../../actions/leave';
 
 const LEAVE_LABELS = { cl: 'CL', sl: 'SL', el: 'EL', rl: 'RL' };
@@ -24,7 +25,52 @@ export default function LeavesPage() {
   const [loading, setLoading] = useState(true);
   const [reviewNote, setReviewNote] = useState('');
   const [reviewingId, setReviewingId] = useState(null);
+  const [exporting, setExporting] = useState(false);
   const year = new Date().getFullYear();
+
+  const exportLeaveBalances = async () => {
+    setExporting(true);
+    try {
+      const XLSX = await import('xlsx');
+      const data = await getLeaveBalancesForExport(year);
+
+      const rows = data.map(({ code, name, balance, leaveDetail }) => ({
+        'Emp Code': code,
+        'Employee Name': name,
+        'CL Total': balance?.clTotal ?? 0,
+        'CL Used': balance?.clUsed ?? 0,
+        'CL Remaining': balance?.clAvail ?? 0,
+        'SL Total': balance?.slTotal ?? 0,
+        'SL Used': balance?.slUsed ?? 0,
+        'SL Remaining': balance?.slAvail ?? 0,
+        'EL Total': balance?.elTotal ?? 0,
+        'EL Used': balance?.elUsed ?? 0,
+        'EL Remaining': balance?.elAvail ?? 0,
+        'RL Total': balance?.rlTotal ?? 0,
+        'RL Used': balance?.rlUsed ?? 0,
+        'RL Remaining': balance?.rlAvail ?? 0,
+        'Leave Details (Approved)': leaveDetail,
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws['!cols'] = [
+        { wch: 10 }, { wch: 24 },
+        { wch: 9 }, { wch: 9 }, { wch: 12 },
+        { wch: 9 }, { wch: 9 }, { wch: 12 },
+        { wch: 9 }, { wch: 9 }, { wch: 12 },
+        { wch: 9 }, { wch: 9 }, { wch: 12 },
+        { wch: 48 },
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, `Leave Balances ${year}`);
+      XLSX.writeFile(wb, `Leave_Balances_${year}.xlsx`);
+    } catch (err) {
+      alert('Export failed: ' + err.message);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
@@ -83,10 +129,8 @@ export default function LeavesPage() {
   };
 
   return (
-    <div style={{ padding: '24px 28px', maxWidth: '1100px', margin: '0 auto' }} className="animate-fade-in">
-      <button className="btn btn-secondary" style={{ marginBottom: '20px' }} onClick={() => router.push('/')}>← Dashboard</button>
-
-      <div style={{ marginBottom: '24px' }}>
+    <div className="page-wrapper animate-fade-in">
+      <div style={{ marginBottom: '20px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '-0.04em' }}>Leave Management</h1>
         <p style={{ color: 'var(--text2)', fontSize: '14px', marginTop: '4px' }}>Review requests, manage balances and configure policy.</p>
       </div>
@@ -193,8 +237,16 @@ export default function LeavesPage() {
       {/* ── LEAVE BALANCES ── */}
       {!loading && tab === 'balances' && (
         <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
-            Leave Balances — {year} ({balances.length} employees)
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+            <span>Leave Balances — {year} ({balances.length} employees)</span>
+            <button
+              className="btn btn-primary"
+              onClick={exportLeaveBalances}
+              disabled={exporting}
+              style={{ padding: '6px 16px', fontSize: '13px', opacity: exporting ? 0.7 : 1 }}
+            >
+              {exporting ? 'Exporting…' : '⬇ Export Excel'}
+            </button>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
