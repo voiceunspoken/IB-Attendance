@@ -28,43 +28,56 @@ export default function LeavesPage() {
   const [exporting, setExporting] = useState(false);
   const year = new Date().getFullYear();
 
+  // Export range state
+  const [exportYear, setExportYear] = useState(new Date().getFullYear());
+  const [exportFrom, setExportFrom] = useState(1);
+  const [exportTo, setExportTo] = useState(new Date().getMonth() + 1);
+
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const YEARS = Array.from({ length: 4 }, (_, i) => new Date().getFullYear() - i);
+
   const exportLeaveBalances = async () => {
+    if (exportFrom > exportTo) return alert('From month cannot be after To month.');
     setExporting(true);
     try {
       const XLSX = await import('xlsx');
-      const data = await getLeaveBalancesForExport(year);
+      const data = await getLeaveBalancesForExport(exportYear, exportFrom, exportTo);
 
-      const rows = data.map(({ code, name, balance, leaveDetail }) => ({
+      const rangeLabel = exportFrom === exportTo
+        ? `${MONTHS[exportFrom - 1]} ${exportYear}`
+        : `${MONTHS[exportFrom - 1]}–${MONTHS[exportTo - 1]} ${exportYear}`;
+
+      const rows = data.map(({ code, name, balance, rangeUsed, leaveDetail }) => ({
         'Emp Code': code,
         'Employee Name': name,
         'CL Total': balance?.clTotal ?? 0,
-        'CL Used': balance?.clUsed ?? 0,
+        'CL Used (Period)': rangeUsed.cl,
         'CL Remaining': balance?.clAvail ?? 0,
         'SL Total': balance?.slTotal ?? 0,
-        'SL Used': balance?.slUsed ?? 0,
+        'SL Used (Period)': rangeUsed.sl,
         'SL Remaining': balance?.slAvail ?? 0,
         'EL Total': balance?.elTotal ?? 0,
-        'EL Used': balance?.elUsed ?? 0,
+        'EL Used (Period)': rangeUsed.el,
         'EL Remaining': balance?.elAvail ?? 0,
         'RL Total': balance?.rlTotal ?? 0,
-        'RL Used': balance?.rlUsed ?? 0,
+        'RL Used (Period)': rangeUsed.rl,
         'RL Remaining': balance?.rlAvail ?? 0,
-        'Leave Details (Approved)': leaveDetail,
+        'Leave Details': leaveDetail,
       }));
 
       const ws = XLSX.utils.json_to_sheet(rows);
       ws['!cols'] = [
         { wch: 10 }, { wch: 24 },
-        { wch: 9 }, { wch: 9 }, { wch: 12 },
-        { wch: 9 }, { wch: 9 }, { wch: 12 },
-        { wch: 9 }, { wch: 9 }, { wch: 12 },
-        { wch: 9 }, { wch: 9 }, { wch: 12 },
-        { wch: 48 },
+        { wch: 9 }, { wch: 16 }, { wch: 13 },
+        { wch: 9 }, { wch: 16 }, { wch: 13 },
+        { wch: 9 }, { wch: 16 }, { wch: 13 },
+        { wch: 9 }, { wch: 16 }, { wch: 13 },
+        { wch: 52 },
       ];
 
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, `Leave Balances ${year}`);
-      XLSX.writeFile(wb, `Leave_Balances_${year}.xlsx`);
+      XLSX.utils.book_append_sheet(wb, ws, rangeLabel);
+      XLSX.writeFile(wb, `Leave_Balances_${rangeLabel.replace(/[–\s]/g, '_')}.xlsx`);
     } catch (err) {
       alert('Export failed: ' + err.message);
     } finally {
@@ -237,16 +250,41 @@ export default function LeavesPage() {
       {/* ── LEAVE BALANCES ── */}
       {!loading && tab === 'balances' && (
         <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-            <span>Leave Balances — {year} ({balances.length} employees)</span>
-            <button
-              className="btn btn-primary"
-              onClick={exportLeaveBalances}
-              disabled={exporting}
-              style={{ padding: '6px 16px', fontSize: '13px', opacity: exporting ? 0.7 : 1 }}
-            >
-              {exporting ? 'Exporting…' : '⬇ Export Excel'}
-            </button>
+
+          {/* Header with range picker */}
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 'var(--fs-md)', fontWeight: 700 }}>
+              Leave Balances
+              <span style={{ fontSize: 'var(--fs-xs)', fontWeight: 500, color: 'var(--text2)', marginLeft: '8px' }}>
+                {balances.length} employees
+              </span>
+            </div>
+
+            {/* Range picker + export */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text2)', fontWeight: 500 }}>Year</span>
+              <select className="input-field" value={exportYear} onChange={e => setExportYear(Number(e.target.value))}
+                style={{ width: '90px', padding: '6px 10px', fontSize: 'var(--fs-sm)' }}>
+                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+
+              <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text2)', fontWeight: 500 }}>From</span>
+              <select className="input-field" value={exportFrom} onChange={e => setExportFrom(Number(e.target.value))}
+                style={{ width: '90px', padding: '6px 10px', fontSize: 'var(--fs-sm)' }}>
+                {MONTHS.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
+              </select>
+
+              <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text2)', fontWeight: 500 }}>To</span>
+              <select className="input-field" value={exportTo} onChange={e => setExportTo(Number(e.target.value))}
+                style={{ width: '90px', padding: '6px 10px', fontSize: 'var(--fs-sm)' }}>
+                {MONTHS.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
+              </select>
+
+              <button className="btn btn-primary" onClick={exportLeaveBalances} disabled={exporting}
+                style={{ padding: '7px 18px', fontSize: 'var(--fs-sm)', opacity: exporting ? 0.7 : 1 }}>
+                {exporting ? 'Exporting…' : '⬇ Export Excel'}
+              </button>
+            </div>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>

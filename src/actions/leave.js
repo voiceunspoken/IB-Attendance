@@ -86,35 +86,46 @@ export async function getAllLeaveBalances(year) {
   return employees.map((emp, i) => ({ ...emp, balance: balances[i] }));
 }
 
-export async function getLeaveBalancesForExport(year) {
+export async function getLeaveBalancesForExport(year, fromMonth = 1, toMonth = 12) {
   const employees = await prisma.employee.findMany({
     select: { id: true, code: true, name: true },
     orderBy: { name: 'asc' }
   });
 
+  const fromDate = new Date(`${year}-${String(fromMonth).padStart(2, '0')}-01`);
+  // Last day of toMonth
+  const toDate = new Date(year, toMonth, 0); // day 0 of next month = last day of toMonth
+
   const results = await Promise.all(
     employees.map(async (emp) => {
       const balance = await getLeaveBalance(emp.code, year);
 
-      // Get approved leave requests for the year grouped by month
+      // Get approved leave requests within the selected range
       const approved = await prisma.leaveRequest.findMany({
         where: {
           employeeId: emp.id,
           status: 'approved',
-          fromDate: { gte: new Date(`${year}-01-01`), lte: new Date(`${year}-12-31`) }
+          fromDate: { gte: fromDate, lte: toDate }
         },
         orderBy: { fromDate: 'asc' }
       });
 
-      // Summarise leave taken per type
-      const leaveDetail = approved.map(r => (
-        `${r.leaveType.toUpperCase()} ${r.days}d (${new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}${r.fromDate !== r.toDate ? '–' + new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''})`
-      )).join('; ') || '—';
+      // Count used per type within range
+      const rangeUsed = { cl: 0, sl: 0, el: 0, rl: 0 };
+      approved.forEach(r => {
+        rangeUsed[r.leaveType] = (rangeUsed[r.leaveType] || 0) + Number(r.days);
+      });
+
+      // Summarise leave taken
+      const leaveDetail = approved.map(r =>
+        `${r.leaveType.toUpperCase()} ${r.days}d (${new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}${r.fromDate.toDateString() !== r.toDate.toDateString() ? '–' + new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''})`
+      ).join('; ') || '—';
 
       return {
         code: emp.code,
         name: emp.name,
         balance,
+        rangeUsed,
         leaveDetail,
       };
     })
