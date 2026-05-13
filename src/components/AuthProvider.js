@@ -2,34 +2,31 @@
 
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { loginUser, ensureAdminExists } from '../actions/auth';
+import { loginUser, logoutUser, ensureAdminExists } from '../actions/auth';
+import { getCurrentSession } from '../actions/session';
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);   // { id, username, role, employeeCode }
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    // Seed default admin on first load
     ensureAdminExists();
 
-    const stored = localStorage.getItem('ib_user');
-    if (stored) {
-      try { setUser(JSON.parse(stored)); } catch { localStorage.removeItem('ib_user'); }
-    }
-    setLoading(false);
+    getCurrentSession().then(session => {
+      if (session) setUser(session);
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, []);
 
   const login = async (username, password) => {
     const result = await loginUser(username, password);
     if (result.error) return { error: result.error };
 
-    localStorage.setItem('ib_user', JSON.stringify(result.user));
     setUser(result.user);
 
-    // Employees go straight to their own profile
     if (result.user.role === 'employee' && result.user.employeeCode) {
       router.push(`/employee/${result.user.employeeCode}`);
     } else {
@@ -38,8 +35,8 @@ export function AuthProvider({ children }) {
     return { success: true };
   };
 
-  const logout = () => {
-    localStorage.removeItem('ib_user');
+  const logout = async () => {
+    await logoutUser();
     setUser(null);
     router.push('/login');
   };

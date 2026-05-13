@@ -3,25 +3,25 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
+import StatusBadge from '../../components/StatusBadge';
+import LoadingSpinner from '../../components/LoadingSpinner';
 import {
-  getAllLeaveRequests, getAllPendingLeaveRequests, reviewLeaveRequest,
+  getAllLeaveRequests, reviewLeaveRequest,
   getAllPendingRegularizations, reviewRegularization,
-  getAllLeaveBalances, upsertLeavePolicy, getLeavePolicy, adminUpdateLeaveBalance,
+  getAllLeaveBalances, upsertLeavePolicy, getLeavePolicy,
   getLeaveBalancesForExport
 } from '../../actions/leave';
-
-const LEAVE_LABELS = { cl: 'CL', sl: 'SL', el: 'EL', rl: 'RL' };
-const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de' };
+import { LEAVE_LABELS, LEAVE_COLORS, DEFAULT_LEAVE_POLICY } from '../../utils/constants';
 
 export default function LeavesPage() {
-  const { isAdmin, isSuperAdmin, isAuthenticated, user, loading: authLoading } = useAuth();
+  const { isAdmin, isAuthenticated, user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [tab, setTab] = useState('requests');
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [regularizations, setRegularizations] = useState([]);
   const [balances, setBalances] = useState([]);
-  const [policy, setPolicy] = useState({ cl: 12, sl: 6, el: 4, rl: 2 });
+  const [policy, setPolicy] = useState(DEFAULT_LEAVE_POLICY);
   const [loading, setLoading] = useState(true);
   const [reviewNote, setReviewNote] = useState('');
   const [reviewingId, setReviewingId] = useState(null);
@@ -33,19 +33,19 @@ export default function LeavesPage() {
   const [exportFrom, setExportFrom] = useState(1);
   const [exportTo, setExportTo] = useState(new Date().getMonth() + 1);
 
-  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const YEARS = Array.from({ length: 4 }, (_, i) => new Date().getFullYear() - i);
 
   const exportLeaveBalances = async () => {
-    if (exportFrom > exportTo) return alert('From month cannot be after To month.');
+    if (exportFrom > exportTo) { setExporting(false); return; }
     setExporting(true);
     try {
       const XLSX = await import('xlsx');
       const data = await getLeaveBalancesForExport(exportYear, exportFrom, exportTo);
 
       const rangeLabel = exportFrom === exportTo
-        ? `${MONTHS[exportFrom - 1]} ${exportYear}`
-        : `${MONTHS[exportFrom - 1]}–${MONTHS[exportTo - 1]} ${exportYear}`;
+        ? `${MONTHS_SHORT[exportFrom - 1]} ${exportYear}`
+        : `${MONTHS_SHORT[exportFrom - 1]}–${MONTHS_SHORT[exportTo - 1]} ${exportYear}`;
 
       const rows = data.map(({ code, name, balance, rangeUsed, leaveDetail }) => ({
         'Emp Code': code,
@@ -79,20 +79,11 @@ export default function LeavesPage() {
       XLSX.utils.book_append_sheet(wb, ws, rangeLabel);
       XLSX.writeFile(wb, `Leave_Balances_${rangeLabel.replace(/[–\s]/g, '_')}.xlsx`);
     } catch (err) {
-      alert('Export failed: ' + err.message);
+      console.error('Export failed:', err.message);
     } finally {
       setExporting(false);
     }
   };
-
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) router.push('/login');
-    if (!authLoading && isAuthenticated && !isAdmin) router.push('/');
-  }, [isAuthenticated, isAdmin, authLoading, router]);
-
-  useEffect(() => {
-    if (isAdmin) loadAll();
-  }, [isAdmin]);
 
   const loadAll = async () => {
     setLoading(true);
@@ -109,6 +100,15 @@ export default function LeavesPage() {
     setLoading(false);
   };
 
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) router.push('/login');
+    if (!authLoading && isAuthenticated && !isAdmin) router.push('/');
+  }, [isAuthenticated, isAdmin, authLoading, router]);
+
+  useEffect(() => {
+    if (isAdmin) loadAll();
+  }, [isAdmin]);
+
   const handleReviewLeave = async (id, approve) => {
     await reviewLeaveRequest(id, user.username, approve, reviewNote);
     setReviewingId(null);
@@ -124,22 +124,14 @@ export default function LeavesPage() {
   const handleSavePolicy = async (e) => {
     e.preventDefault();
     await upsertLeavePolicy(year, policy);
-    alert('Policy saved for ' + year);
+    loadAll();
   };
 
   if (authLoading || !isAuthenticated || !isAdmin) return null;
 
   const pending = leaveRequests.filter(r => r.status === 'pending');
 
-  const statusBadge = (status) => {
-    const map = {
-      pending: { bg: 'rgba(255,159,10,0.1)', color: '#b36200' },
-      approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37' },
-      rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b' }
-    };
-    const s = map[status] || map.pending;
-    return <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: '980px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.color }}>{status}</span>;
-  };
+
 
   return (
     <div className="page-wrapper animate-fade-in">
@@ -166,7 +158,7 @@ export default function LeavesPage() {
         ))}
       </div>
 
-      {loading && <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text2)', fontSize: '14px' }}>Loading…</div>}
+      {loading && <LoadingSpinner />}
 
       {/* ── LEAVE REQUESTS ── */}
       {!loading && tab === 'requests' && (
@@ -184,11 +176,11 @@ export default function LeavesPage() {
                     <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.employee.code}</span>
                     <span style={{ fontSize: '12px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
                     <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
-                    {statusBadge(r.status)}
+                    <StatusBadge status={r.status} />
                   </div>
                   <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
                     {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                    {new Date(r.fromDate).toDateString() !== new Date(r.toDate).toDateString() && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
                     {' · '}{r.reason}
                   </div>
                   {r.reviewNote && <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '3px', fontStyle: 'italic' }}>Note: {r.reviewNote}</div>}
@@ -271,13 +263,13 @@ export default function LeavesPage() {
               <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text2)', fontWeight: 500 }}>From</span>
               <select className="input-field" value={exportFrom} onChange={e => setExportFrom(Number(e.target.value))}
                 style={{ width: '90px', padding: '6px 10px', fontSize: 'var(--fs-sm)' }}>
-                {MONTHS.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
+                {MONTHS_SHORT.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
               </select>
 
               <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text2)', fontWeight: 500 }}>To</span>
               <select className="input-field" value={exportTo} onChange={e => setExportTo(Number(e.target.value))}
                 style={{ width: '90px', padding: '6px 10px', fontSize: 'var(--fs-sm)' }}>
-                {MONTHS.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
+                {MONTHS_SHORT.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
               </select>
 
               <button className="btn btn-primary" onClick={exportLeaveBalances} disabled={exporting}

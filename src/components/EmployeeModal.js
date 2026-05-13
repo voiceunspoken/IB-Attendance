@@ -40,7 +40,7 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
   const handleApply = () => {
     const f = parseInt(fromDate);
     const t = parseInt(toDate) || f;
-    if (!f || isNaN(f)) return alert('Please enter a valid start date.');
+    if (!f || isNaN(f)) return;
     const dIM = new Date(currentMonth.year, currentMonth.month, 0).getDate();
     const start = Math.max(1, Math.min(f, dIM));
     const end = Math.max(start, Math.min(t, dIM));

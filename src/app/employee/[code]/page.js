@@ -10,9 +10,10 @@ import {
 } from '../../../actions/leave';
 import { getUpcomingHolidays } from '../../../actions/holidays';
 import EmployeeModal from '../../../components/EmployeeModal';
-
-const LEAVE_LABELS = { cl: 'Casual Leave', sl: 'Sick Leave', el: 'Earned Leave', rl: 'Restricted Leave' };
-const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de' };
+import StatusBadge from '../../../components/StatusBadge';
+import LoadingSpinner from '../../../components/LoadingSpinner';
+import { LEAVE_LABELS, LEAVE_COLORS } from '../../../utils/constants';
+import { formatMonth } from '../../../utils/formatters';
 
 export default function EmployeeDashboard({ params }) {
   const unwrappedParams = use(params);
@@ -45,17 +46,6 @@ export default function EmployeeDashboard({ params }) {
   const [regSuccess, setRegSuccess] = useState('');
   const [submittingReg, setSubmittingReg] = useState(false);
 
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) router.push('/login');
-    if (!authLoading && isAuthenticated && !isAdmin && user?.employeeCode && user.employeeCode !== code) {
-      router.push(`/employee/${user.employeeCode}`);
-    }
-  }, [isAuthenticated, isAdmin, user, authLoading, router, code]);
-
-  useEffect(() => {
-    if (isAuthenticated) loadAll();
-  }, [isAuthenticated, code]);
-
   const loadAll = async () => {
     setLoading(true);
     const year = new Date().getFullYear();
@@ -78,6 +68,17 @@ export default function EmployeeDashboard({ params }) {
     setUpcomingHolidays(holidays);
     setLoading(false);
   };
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) router.push('/login');
+    if (!authLoading && isAuthenticated && !isAdmin && user?.employeeCode && user.employeeCode !== code) {
+      router.push(`/employee/${user.employeeCode}`);
+    }
+  }, [isAuthenticated, isAdmin, user, authLoading, router, code]);
+
+  useEffect(() => {
+    if (isAuthenticated) loadAll();
+  }, [isAuthenticated, code]);
 
   const handleSubmitLeave = async (e) => {
     e.preventDefault();
@@ -112,7 +113,7 @@ export default function EmployeeDashboard({ params }) {
   };
 
   if (authLoading || !isAuthenticated) return null;
-  if (loading) return <div style={{ padding: '60px', textAlign: 'center', color: 'var(--text2)', fontSize: '14px' }}>Loading…</div>;
+  if (loading) return <LoadingSpinner message='Loading…' />;
   if (!emp || emp.records.length === 0) return <div style={{ padding: '60px', textAlign: 'center', color: 'var(--red)', fontSize: '14px' }}>Employee not found.</div>;
 
   const currentRecord = emp.records[selectedMonthIndex];
@@ -160,20 +161,7 @@ export default function EmployeeDashboard({ params }) {
     await clearAllOverrides(code, currentRecord.monthYear);
   };
 
-  const formatMonth = (my) => {
-    const [m, y] = my.split('_');
-    return new Date(y, parseInt(m) - 1).toLocaleString('default', { month: 'short', year: 'numeric' });
-  };
 
-  const statusBadge = (status) => {
-    const map = {
-      pending: { bg: 'rgba(255,159,10,0.1)', color: '#b36200' },
-      approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37' },
-      rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b' }
-    };
-    const s = map[status] || map.pending;
-    return <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: '980px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.color }}>{status}</span>;
-  };
 
   const avgAbsent = (emp.records.reduce((s, r) => s + r.absent, 0) / emp.records.length).toFixed(1);
 
@@ -498,11 +486,11 @@ export default function EmployeeDashboard({ params }) {
                         <span style={{ fontSize: '13px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{r.leaveType.toUpperCase()}</span>
                         <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
                       </div>
-                      {statusBadge(r.status)}
+                      <StatusBadge status={r.status} />
                     </div>
                     <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
                       {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                      {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
+                      {new Date(r.fromDate).toDateString() !== new Date(r.toDate).toDateString() && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
                     </div>
                     <div style={{ fontSize: '12px', color: 'var(--text2)', marginTop: '2px' }}>{r.reason}</div>
                     {r.reviewNote && <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '4px', fontStyle: 'italic' }}>Note: {r.reviewNote}</div>}
@@ -558,7 +546,7 @@ export default function EmployeeDashboard({ params }) {
                   <div key={r.id} style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                       <span style={{ fontSize: '13px', fontWeight: 600 }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                      {statusBadge(r.status)}
+                      <StatusBadge status={r.status} />
                     </div>
                     <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
                       {r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`}

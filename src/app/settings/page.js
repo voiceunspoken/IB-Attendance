@@ -9,8 +9,9 @@ import { getAuditLog } from '../../actions/audit';
 import { getAllEmployees, addEmployee, deleteEmployee, deleteMonthRecord, updateMonthRecord, getMonths } from '../../actions/attendance';
 import { changePassword } from '../../actions/auth';
 import { sendAllMonthlyReports } from '../../actions/notifications';
-
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+import ConfirmDialog from '../../components/ConfirmDialog';
+import { MONTHS } from '../../utils/constants';
+import { formatMonth } from '../../utils/formatters';
 
 export default function SettingsPage() {
   const { isAdmin, isSuperAdmin, isAuthenticated, user, loading: authLoading } = useAuth();
@@ -36,6 +37,8 @@ export default function SettingsPage() {
   const [empForm, setEmpForm] = useState({ code: '', name: '' });
   const [empMsg, setEmpMsg] = useState('');
   const [months, setMonths] = useState([]);
+  const [delEmpCode, setDelEmpCode] = useState('');
+  const [delMonthYear, setDelMonthYear] = useState('');
 
   // Edit month record
   const [editRecord, setEditRecord] = useState({ empCode: '', monthYear: '', present: '', absent: '', late: '', lateHD: '', shortShift: '', ssHD: '', rl: '', holi: '' });
@@ -51,15 +54,7 @@ export default function SettingsPage() {
   const [notifMsg, setNotifMsg] = useState('');
 
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) router.push('/login');
-    if (!authLoading && isAuthenticated && !isAdmin) router.push('/');
-  }, [isAuthenticated, isAdmin, authLoading, router]);
-
-  useEffect(() => {
-    if (isAdmin) loadAll();
-  }, [isAdmin]);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
 
   const loadAll = async () => {
     setLoading(true);
@@ -83,6 +78,15 @@ export default function SettingsPage() {
     setLoading(false);
   };
 
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) router.push('/login');
+    if (!authLoading && isAuthenticated && !isAdmin) router.push('/');
+  }, [isAuthenticated, isAdmin, authLoading, router]);
+
+  useEffect(() => {
+    if (isAdmin) loadAll(); // eslint-disable-line react-hooks/set-state-in-effect
+  }, [isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleAddHoliday = async (e) => {
     e.preventDefault();
     if (!hForm.name.trim()) return setHMsg('Please enter a holiday name.');
@@ -99,12 +103,18 @@ export default function SettingsPage() {
     setHolidays(h);
   };
 
-  const handleSeedHolidays = async () => {
-    if (!confirm(`Seed all IB official holidays for ${year}? Existing entries will be updated.`)) return;
-    await seedIBHolidays(year);
-    const h = await getHolidays(year);
-    setHolidays(h);
-    setHMsg(`Seeded ${h.length} IB holidays for ${year}.`);
+  const handleSeedHolidays = () => {
+    setConfirmDialog({
+      open: true, title: 'Seed Holidays',
+      message: `Seed all IB official holidays for ${year}? Existing entries will be updated.`,
+      onConfirm: async () => {
+        setConfirmDialog(d => ({ ...d, open: false }));
+        await seedIBHolidays(year);
+        const h = await getHolidays(year);
+        setHolidays(h);
+        setHMsg(`Seeded ${h.length} IB holidays for ${year}.`);
+      }
+    });
   };
 
   const handleSavePolicy = async (e) => {
@@ -118,7 +128,7 @@ export default function SettingsPage() {
   const handleAddEmployee = async (e) => {
     e.preventDefault();
     if (!empForm.code.trim() || !empForm.name.trim()) return setEmpMsg('Code and name are required.');
-    const result = await addEmployee(empForm.code.trim(), empForm.name.trim(), user.username);
+    const result = await addEmployee(empForm.code.trim(), empForm.name.trim());
     if (result.error) return setEmpMsg(result.error);
     setEmpMsg(`Added: ${empForm.name}`);
     setEmpForm({ code: '', name: '' });
@@ -126,24 +136,35 @@ export default function SettingsPage() {
     setEmployees(emps);
   };
 
-  const handleDeleteEmployee = async (code, name) => {
-    if (!confirm(`Delete ${name} and ALL their attendance data? This cannot be undone.`)) return;
-    await deleteEmployee(code, user.username);
-    const emps = await getAllEmployees();
-    setEmployees(emps);
+  const handleDeleteEmployee = (code, name) => {
+    setConfirmDialog({
+      open: true, title: 'Delete Employee',
+      message: `Delete ${name} and ALL their attendance data? This cannot be undone.`,
+      onConfirm: async () => {
+        setConfirmDialog(d => ({ ...d, open: false }));
+        await deleteEmployee(code);
+        const emps = await getAllEmployees();
+        setEmployees(emps);
+      }
+    });
   };
 
-  const handleDeleteMonth = async (code, name, monthYear) => {
-    if (!confirm(`Delete ${name}'s data for ${monthYear}? This cannot be undone.`)) return;
-    await deleteMonthRecord(code, monthYear, user.username);
-    alert('Month record deleted.');
+  const handleDeleteMonth = (code, name, monthYear) => {
+    setConfirmDialog({
+      open: true, title: 'Delete Month Record',
+      message: `Delete ${name}'s data for ${formatMonth(monthYear)}? This cannot be undone.`,
+      onConfirm: async () => {
+        setConfirmDialog(d => ({ ...d, open: false }));
+        await deleteMonthRecord(code, monthYear);
+      }
+    });
   };
 
   const handleEditRecord = async (e) => {
     e.preventDefault();
     setEditRecordMsg('');
     if (!editRecord.empCode || !editRecord.monthYear) return setEditRecordMsg('Select employee and month.');
-    const result = await updateMonthRecord(editRecord.empCode, editRecord.monthYear, editRecord, user.username);
+    const result = await updateMonthRecord(editRecord.empCode, editRecord.monthYear, editRecord);
     if (result.error) return setEditRecordMsg(result.error);
     setEditRecordMsg('Record updated successfully.');
   };
@@ -168,10 +189,7 @@ export default function SettingsPage() {
     setNotifMsg(`Done. Sent: ${sent}, Skipped (no email): ${skipped}`);
   };
 
-  const formatMonth = (m) => {
-    const [mo, yr] = m.split('_');
-    return new Date(yr, parseInt(mo) - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
-  };
+
 
   if (authLoading || !isAuthenticated || !isAdmin) return null;
 
@@ -338,29 +356,27 @@ export default function SettingsPage() {
 
           <div className="card" style={{ padding: '22px 24px' }}>
             <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '6px' }}>Delete Month Record</div>
-            <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '16px' }}>Remove a specific month's attendance data for an employee.</div>
+            <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '16px' }}>Remove a specific month&apos;s attendance data for an employee.</div>
             <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
               <div>
                 <label className="input-label">Employee</label>
-                <select className="input-field" id="del-emp-select" style={{ width: '220px' }}>
+                <select className="input-field" value={delEmpCode} onChange={e => setDelEmpCode(e.target.value)} style={{ width: '220px' }}>
                   <option value="">— Select employee —</option>
                   {employees.map(e => <option key={e.code} value={e.code}>{e.name} ({e.code})</option>)}
                 </select>
               </div>
               <div>
                 <label className="input-label">Month</label>
-                <select className="input-field" id="del-month-select" style={{ width: '180px' }}>
+                <select className="input-field" value={delMonthYear} onChange={e => setDelMonthYear(e.target.value)} style={{ width: '180px' }}>
                   <option value="">— Select month —</option>
                   {months.map(m => <option key={m} value={m}>{formatMonth(m)}</option>)}
                 </select>
               </div>
               <button className="btn" style={{ padding: '9px 16px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, fontSize: '13px' }}
                 onClick={() => {
-                  const code = document.getElementById('del-emp-select').value;
-                  const monthYear = document.getElementById('del-month-select').value;
-                  const emp = employees.find(e => e.code === code);
-                  if (!code || !monthYear) return alert('Select both employee and month.');
-                  handleDeleteMonth(code, emp?.name, monthYear);
+                  if (!delEmpCode || !delMonthYear) return;
+                  const emp = employees.find(e => e.code === delEmpCode);
+                  handleDeleteMonth(delEmpCode, emp?.name, delMonthYear);
                 }}>
                 Delete Month
               </button>
@@ -531,6 +547,7 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+      <ConfirmDialog {...confirmDialog} onCancel={() => setConfirmDialog(d => ({ ...d, open: false }))} />
     </div>
   );
 }
