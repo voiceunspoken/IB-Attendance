@@ -1,15 +1,19 @@
 "use server";
 
 import { prisma } from '../lib/prisma';
+import { requireAdmin } from '../lib/session';
 
 const FROM = process.env.EMAIL_FROM || 'IB Attendance <noreply@ibeesattendance.com>';
 
-// Lazy Resend client — only created when actually sending, avoids crash if key not set
-function getResend() {
+let _Resend = null;
+
+async function getResend() {
   if (!process.env.RESEND_API_KEY) return null;
-  // Dynamic require to avoid module-level instantiation
-  const { Resend } = require('resend');
-  return new Resend(process.env.RESEND_API_KEY);
+  if (!_Resend) {
+    const mod = await import('resend');
+    _Resend = mod.Resend;
+  }
+  return new _Resend(process.env.RESEND_API_KEY);
 }
 
 async function getEmployeeEmail(employeeCode) {
@@ -76,7 +80,7 @@ export async function sendLeaveStatusNotification(employeeCode, employeeName, le
   if (!email || !resend) return { skipped: true };
 
   const statusColor = status === 'approved' ? '#34c759' : '#ff3b30';
-  const statusLabel = status === 'approved' ? '✅ Approved' : '❌ Rejected';
+  const statusLabel = status === 'approved' ? 'Approved' : 'Rejected';
 
   await resend.emails.send({
     from: FROM,
@@ -139,17 +143,38 @@ export async function sendMonthlyReport(employeeCode, employeeName, monthYear, s
 }
 
 export async function sendAllMonthlyReports(monthYear) {
-  const users = await prisma.user.findMany({ where: { role: 'employee', employeeCode: { not: null } } });
-  const results = [];
-  for (const u of users) {
-    const record = await prisma.monthRecord.findFirst({
-      where: { employee: { code: u.employeeCode }, monthYear },
+  try {
+    await requireAdmin();
+
+    // Batch fetch all data instead of N+1 queries
+    const users = await prisma.user.findMany({
+      where: { role: 'employee', employeeCode: { not: null } }
+    });
+    const employeeCodes = users.map(u => u.employeeCode).filter(Boolean);
+
+    const records = await prisma.monthRecord.findMany({
+      where: {
+        monthYear,
+        employee: { code: { in: employeeCodes } }
+      },
       include: { employee: true }
     });
-    if (record) {
-      const r = await sendMonthlyReport(u.employeeCode, record.employee.name, monthYear, record);
-      results.push({ code: u.employeeCode, ...r });
+
+    const recordByCode = {};
+    records.forEach(r => { recordByCode[r.employee.code] = r; });
+
+    const results = [];
+    for (const u of users) {
+      const record = recordByCode[u.employeeCode];
+      if (record) {
+        const r = await sendMonthlyReport(u.employeeCode, record.employee.name, monthYear, record);
+        results.push({ code: u.employeeCode, ...r });
+      }
     }
+    return results;
+  } catch (e) {
+    if (e.message === 'Authentication required' || e.message === 'Admin access required') return { error: e.message };
+    console.error('[sendAllMonthlyReports error]', e.message);
+    return { error: 'Failed to send reports.' };
   }
-  return results;
 }
