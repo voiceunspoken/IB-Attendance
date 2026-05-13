@@ -18,6 +18,10 @@ model User {
   role           String    @default("employee") // "super_admin" | "admin" | "employee"
   employeeCode   String?
   createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([role])
+  @@index([employeeCode])
 }
 
 model Employee {
@@ -70,6 +74,7 @@ model MonthRecord {
   updatedAt  DateTime @updatedAt
 
   @@unique([employeeId, monthYear])
+  @@index([monthYear])
 }
 
 model DailyLog {
@@ -91,6 +96,7 @@ model DailyLog {
   isSL       Boolean  @default(false)
 
   @@unique([employeeId, monthYear, day])
+  @@index([employeeId, monthYear])
 }
 
 model Override {
@@ -102,8 +108,11 @@ model Override {
   day        Int
   
   type       String   // "wfm", "wfm-hd", "wfh", "wos", "wos-hd"
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@unique([employeeId, monthYear, day])
+  @@index([employeeId, monthYear])
 }
 
 // Leave quota policy — one per year (global, applies to all employees)
@@ -115,6 +124,7 @@ model LeavePolicy {
   el        Int    @default(15)  // Earned Leave
   rl        Int    @default(2)   // Restricted Leave
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Per-employee leave balance for a given year
@@ -153,6 +163,10 @@ model LeaveRequest {
   reviewedAt   DateTime?
   reviewNote   String?
   createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([employeeId, status])
+  @@index([status])
 }
 
 // Regularization requests — employee requests correction for missed punch
@@ -168,6 +182,10 @@ model RegularizationRequest {
   reviewedBy   String?
   reviewedAt   DateTime?
   createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([employeeId, status])
+  @@index([status])
 }
 
 // Phase 10 — Company holiday calendar
@@ -181,6 +199,8 @@ model Holiday {
   createdAt DateTime @default(now())
 
   @@unique([year, month, day])
+  @@unique([year, month, day, name])
+  @@index([year])
 }
 
 // Phase 11 — Shift & HR policy configuration
@@ -207,4 +227,7 @@ model AuditLog {
   entityId    String?  // id of the affected record
   detail      String   // human-readable description
   createdAt   DateTime @default(now())
+
+  @@index([performedBy])
+  @@index([entity])
 }

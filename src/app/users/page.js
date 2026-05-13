@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
 import { getUsers, createUser, deleteUser, updateUser, getPendingChanges, reviewPendingChange } from '../../actions/auth';
 import { fetchDashboardData, getMonths } from '../../actions/attendance';
-import { getEmployeeDetails, updateEmployeeDetails } from '../../actions/employees';
+import { updateEmployeeDetails } from '../../actions/employees';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 export default function UsersPage() {
   const { isAdmin, isSuperAdmin, isAuthenticated, user, loading: authLoading } = useAuth();
@@ -16,6 +17,7 @@ export default function UsersPage() {
   const [employees, setEmployees] = useState([]);
   const [pendingChanges, setPendingChanges] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
 
   const [form, setForm] = useState({ username: '', password: '', role: 'employee', employeeCode: '' });
   const [formError, setFormError] = useState('');
@@ -28,15 +30,6 @@ export default function UsersPage() {
 
   const [editEmp, setEditEmp] = useState(null);
   const [empFields, setEmpFields] = useState({ birthday: '', workAnniversary: '' });
-
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) router.push('/login');
-    if (!authLoading && isAuthenticated && !isAdmin) router.push('/');
-  }, [isAuthenticated, isAdmin, authLoading, router]);
-
-  useEffect(() => {
-    if (isAdmin) loadData();
-  }, [isAdmin]);
 
   const loadData = async () => {
     setLoading(true);
@@ -54,6 +47,15 @@ export default function UsersPage() {
     setLoading(false);
   };
 
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) router.push('/login');
+    if (!authLoading && isAuthenticated && !isAdmin) router.push('/');
+  }, [isAuthenticated, isAdmin, authLoading, router]);
+
+  useEffect(() => {
+    if (isAdmin) loadData(); // eslint-disable-line react-hooks/set-state-in-effect
+  }, [isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleCreate = async (e) => {
     e.preventDefault();
     setFormError(''); setFormSuccess('');
@@ -67,10 +69,16 @@ export default function UsersPage() {
     loadData();
   };
 
-  const handleDelete = async (u) => {
-    if (!confirm(`Delete user "${u.username}"?`)) return;
-    await deleteUser(u.id);
-    loadData();
+  const handleDelete = (u) => {
+    setConfirmDialog({
+      open: true, title: 'Delete User',
+      message: `Delete user "${u.username}"? This action cannot be undone.`,
+      onConfirm: async () => {
+        setConfirmDialog(d => ({ ...d, open: false }));
+        await deleteUser(u.id);
+        loadData();
+      }
+    });
   };
 
   const openEdit = (u) => {
@@ -459,6 +467,7 @@ export default function UsersPage() {
           </div>
         </div>
       )}
+      <ConfirmDialog {...confirmDialog} onCancel={() => setConfirmDialog(d => ({ ...d, open: false }))} />
     </div>
   );
 }

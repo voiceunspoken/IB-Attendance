@@ -8,7 +8,7 @@ import KPIStrip from '../components/KPIStrip';
 import EmployeeTable from '../components/EmployeeTable';
 import * as XLSX from 'xlsx';
 import { parseAndAnalyze } from '../utils/attendanceParser';
-import { getMonths, uploadMonthData, fetchDashboardData, toggleOverride, clearAllOverrides } from '../actions/attendance';
+import { getMonths, uploadMonthData, fetchDashboardData } from '../actions/attendance';
 import { getActiveShiftPolicy } from '../actions/shiftPolicy';
 import { getHolidays } from '../actions/holidays';
 
@@ -28,18 +28,6 @@ export default function DashboardHome() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) router.push('/login');
-    // Employees with a linked code go straight to their profile
-    if (!authLoading && isAuthenticated && !isAdmin && user?.employeeCode) {
-      router.push(`/employee/${user.employeeCode}`);
-    }
-  }, [isAuthenticated, isAdmin, user, authLoading, router]);
-
-  useEffect(() => {
-    if (isAuthenticated) loadMonthsList();
-  }, [isAuthenticated]);
-
   const loadMonthsList = async () => {
     setLoading(true);
     const m = await getMonths();
@@ -52,6 +40,17 @@ export default function DashboardHome() {
     }
     setLoading(false);
   };
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) router.push('/login');
+    if (!authLoading && isAuthenticated && !isAdmin && user?.employeeCode) {
+      router.push(`/employee/${user.employeeCode}`);
+    }
+  }, [isAuthenticated, isAdmin, user, authLoading, router]);
+
+  useEffect(() => {
+    if (isAuthenticated) loadMonthsList();
+  }, [isAuthenticated]);
 
   const loadDashboardData = async (monthYear) => {
     setLoading(true);
@@ -114,7 +113,7 @@ export default function DashboardHome() {
           getHolidays(new Date().getFullYear())
         ]);
 
-        const { results, currentMonth: cm, numDays: nd } = parseAndAnalyze(rows, policy, allHolidays);
+        const { currentMonth: cm, numDays: nd } = parseAndAnalyze(rows, policy, allHolidays);
         const monthYearStr = `${cm.month}_${cm.year}`;
 
         // Also load holidays for the detected year if different
@@ -128,7 +127,7 @@ export default function DashboardHome() {
         setSelectedMonth(monthYearStr);
         await loadDashboardData(monthYearStr);
       } catch (err) {
-        alert('Error reading file: ' + err.message);
+        console.error('Error reading file:', err.message);
         setUploadView(true);
       } finally {
         setUploading(false);
@@ -306,7 +305,7 @@ export default function DashboardHome() {
           />
 
           <div style={{ fontSize: '12px', color: 'var(--text3)', textAlign: 'right', marginTop: '8px', letterSpacing: '-0.01em' }}>
-            Click any row to open the employee's detailed dashboard.
+            Click any row to open the employee&apos;s detailed dashboard.
           </div>
         </>
       )}
