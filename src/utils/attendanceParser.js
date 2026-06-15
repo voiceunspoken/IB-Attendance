@@ -1,11 +1,13 @@
-// Default policy constants — per IB HR Policy Manual
-// Shift: 10:00 AM–7:00 PM, 15-min grace window, min 9 hrs
-// 2 lates per month = 1 HD deduction (3rd late onwards)
-// 2 short shifts per month = 1 HD deduction (3rd SS onwards)
-const DEFAULT_POLICY = { shiftStartH: 10, shiftStartM: 0, graceMinutes: 15, minHours: 9, latesPerHD: 3, ssPerHD: 3 };
-
-const SL_LATE_MAX_H = 12, SL_LATE_MAX_M = 5;
-const SL_EARLY_MIN_H = 16, SL_EARLY_MIN_M = 55, SL_EARLY_MAX_H = 17, SL_EARLY_MAX_M = 5;
+const DEFAULT_POLICY = {
+  shiftStartH: 10, shiftStartM: 0, shiftEndH: 19, shiftEndM: 0,
+  graceMinutes: 15, lateStartMin: 30,
+  shortLeaveStartMin: 60, shortLeaveEndMin: 120, halfDayAfterMin: 120,
+  morningHalfDayCutoffH: 14, morningHalfDayCutoffM: 30,
+  eveningHalfDayStartH: 14, eveningHalfDayStartM: 0,
+  eveningEarliestExitH: 17, eveningEarliestExitM: 0,
+  eveningShortLeaveWindowMin: 10,
+  minHours: 9, latesPerHD: 3, ssPerHD: 3
+};
 
 function parseT(str) {
   if (!str) return null;
@@ -18,15 +20,25 @@ function parseT(str) {
   return null;
 }
 
-// policy: { shiftStartH, shiftStartM, graceMinutes, minHours, latesPerHD, ssPerHD }
-// dbHolidays: array of { month, day } from Holiday table for the detected year
 export function parseAndAnalyze(rows, policy = DEFAULT_POLICY, dbHolidays = []) {
-  const LATE_H = policy.shiftStartH;
-  const LATE_M = policy.shiftStartM + policy.graceMinutes;
+  const LATE_THRESHOLD = policy.shiftStartH * 60 + policy.shiftStartM + policy.graceMinutes;
+  const SL_START = policy.shortLeaveStartMin !== undefined
+    ? policy.shiftStartH * 60 + policy.shortLeaveStartMin
+    : policy.shiftStartH * 60 + 60;
+  const SL_END = policy.shortLeaveEndMin !== undefined
+    ? policy.shiftStartH * 60 + policy.shortLeaveEndMin
+    : policy.shiftStartH * 60 + 120;
+  const HD_AFTER = policy.halfDayAfterMin !== undefined
+    ? policy.shiftStartH * 60 + policy.halfDayAfterMin
+    : policy.shiftStartH * 60 + 120;
+  const MORNING_HD_CUTOFF = policy.morningHalfDayCutoffH * 60 + policy.morningHalfDayCutoffM;
+  const EVENING_HD_START = policy.eveningHalfDayStartH * 60 + policy.eveningHalfDayStartM;
+  const EVENING_EXIT = policy.eveningEarliestExitH * 60 + policy.eveningEarliestExitM;
+  const EVENING_SL_WINDOW = policy.eveningShortLeaveWindowMin ?? 10;
   const MIN_WH = policy.minHours;
 
   let headerRowIdx = -1, holidayRowIdx = -1, dataStartIdx = -1, numDays = 31;
-  
+
   for (let i = 0; i < rows.length; i++) {
     const joined = rows[i].join(' ').toLowerCase();
     if (joined.includes('emp code') || joined.includes('emp name')) {
@@ -56,21 +68,31 @@ export function parseAndAnalyze(rows, policy = DEFAULT_POLICY, dbHolidays = []) 
   }
   const currentMonth = { year: detYear, month: detMonth };
 
-  const weekends = new Set();
   const daysInMon = new Date(detYear, detMonth, 0).getDate();
+
+  // Build weekends: all Sundays + Saturdays except 3rd Saturday
+  const weekends = new Set();
+  const saturdays = [];
   for (let d = 1; d <= daysInMon; d++) {
     const dow = new Date(detYear, detMonth - 1, d).getDay();
-    if (dow === 0 || dow === 6) weekends.add(d);
+    if (dow === 0) weekends.add(d); // all Sundays off
+    if (dow === 6) saturdays.push(d); // collect Saturdays
+  }
+  // Remove 3rd Saturday from weekends (it's a working day)
+  const thirdSaturday = saturdays[2];
+  if (thirdSaturday) {
+    saturdays.forEach(d => { if (d !== thirdSaturday) weekends.add(d); });
+  } else {
+    // Less than 3 Saturdays in month — all Saturdays are off
+    saturdays.forEach(d => weekends.add(d));
   }
 
   // Build holiday set: prefer DB holidays, fall back to file header row
   const gazHolidays = new Set();
   const rlDays = new Set();
 
-  // DB holidays for this month
   dbHolidays.filter(h => h.month === detMonth).forEach(h => gazHolidays.add(h.day));
 
-  // File header row (always parse for RL days; also use for holidays if DB has none)
   if (holidayRowIdx >= 0 && rows[holidayRowIdx]) {
     const hr = rows[holidayRowIdx];
     for (let j = 2; j < hr.length; j++) {
@@ -86,16 +108,21 @@ export function parseAndAnalyze(rows, policy = DEFAULT_POLICY, dbHolidays = []) 
     if (!row[0] || !/^\d+$/.test(String(row[0]).trim())) continue;
     const code = String(row[0]).trim(), name = String(row[1]).trim();
     if (!name || name === 'NA') continue;
-    results.push(analyzeEmployee(code, name, row, numDays, weekends, gazHolidays, rlDays, LATE_H, LATE_M, MIN_WH, policy.latesPerHD, policy.ssPerHD));
+    results.push(analyzeEmployee(code, name, row, numDays, weekends, gazHolidays, rlDays,
+      LATE_THRESHOLD, SL_START, SL_END, HD_AFTER, MORNING_HD_CUTOFF, EVENING_HD_START,
+      EVENING_EXIT, EVENING_SL_WINDOW, MIN_WH, policy.latesPerHD, policy.ssPerHD));
   }
 
   return { results, currentMonth, numDays };
 }
 
-function analyzeEmployee(code, name, row, numDays, weekends, gazHolidays, rlDays, LATE_H, LATE_M, MIN_WH, latesPerHD, ssPerHD) {
+function analyzeEmployee(code, name, row, numDays, weekends, gazHolidays, rlDays,
+  LATE_THRESHOLD, SL_START, SL_END, HD_AFTER, MORNING_HD_CUTOFF, EVENING_HD_START,
+  EVENING_EXIT, EVENING_SL_WINDOW, MIN_WH, latesPerHD, ssPerHD) {
+
   const days = [];
   let present = 0, absent = 0, halfDay = 0, late = 0, shortShift = 0, shortLeave = 0, rl = 0, holi = 0;
-  
+
   for (let d = 1; d <= numDays; d++) {
     const idx = d + 1, raw = String(row[idx] || '').trim();
     if (raw === 'WO-I' || raw === 'WO-II') { days.push({ d, type: 'wo', raw }); continue; }
@@ -106,29 +133,42 @@ function analyzeEmployee(code, name, row, numDays, weekends, gazHolidays, rlDays
       else { absent++; days.push({ d, type: 'absent', raw }); }
       continue;
     }
-    
+
     const parts = raw.split(/[\n\r]+/).map(x => x.trim()).filter(Boolean);
     let inT = parseT(parts[0]), outT = parseT(parts[1] || '');
     if (parts.length === 1 && inT !== null && inT >= 15 * 60) { outT = inT; inT = null; }
-    
+
     let isLate = false, isSS = false, isSL = false, isHD = false;
-    const lateThreshold = LATE_H * 60 + LATE_M;
-    if (inT !== null && inT > lateThreshold) { isLate = true; late++; }
-    
+
+    if (inT !== null && inT > LATE_THRESHOLD) { isLate = true; late++; }
+
     if (inT !== null && outT !== null) {
       const wh = (outT - inT) / 60;
-      if (outT <= 14 * 60 + 30) { isHD = true; halfDay++; }
-      else if (inT >= 14 * 60 + 30) { isHD = true; halfDay++; }
-      else if (outT >= SL_EARLY_MIN_H * 60 + SL_EARLY_MIN_M && outT <= SL_EARLY_MAX_H * 60 + SL_EARLY_MAX_M) { isSL = true; shortLeave++; }
+
+      // Evening half-day check: leave before evening exit time or within short leave window
+      const isEveningEarly = outT < EVENING_EXIT;
+      const isEveningSL = outT >= EVENING_EXIT && outT <= EVENING_EXIT + EVENING_SL_WINDOW;
+
+      // Morning half-day: out before morning half-day cutoff
+      if (outT <= MORNING_HD_CUTOFF) { isHD = true; halfDay++; }
+      // Afternoon half-day: in after afternoon half-day start
+      else if (inT >= EVENING_HD_START) { isHD = true; halfDay++; }
+      // Short leave evening: leaving within early exit + SL window
+      else if (isEveningSL && inT >= SL_START && inT <= SL_END) { isSL = true; shortLeave++; }
+      // Short leave morning: arriving within SL window
+      else if (inT >= SL_START && inT <= SL_END) { isSL = true; shortLeave++; }
+      // Short shift: under min hours
       else if (wh < MIN_WH && !isLate) { isSS = true; shortShift++; }
     } else if (inT !== null && outT === null) {
-      if (inT >= SL_LATE_MAX_H * 60 - 15 && inT <= SL_LATE_MAX_H * 60 + SL_LATE_MAX_M) { isSL = true; shortLeave++; }
+      // Only punch-in — check if it's a short leave (late arrival but within SL window)
+      if (inT >= SL_START && inT <= SL_END) { isSL = true; shortLeave++; }
+      else if (inT <= MORNING_HD_CUTOFF) { isHD = true; halfDay++; } // only in, out before cutoff = half
     }
-    
+
     if (!isHD) present++;
     days.push({ d, type: isHD ? 'half' : 'present', raw, isLate, isSS, isSL, inT, outT });
   }
-  
+
   return {
     code, name, present, absent, halfDay, late,
     lateHD: Math.floor(late / latesPerHD),

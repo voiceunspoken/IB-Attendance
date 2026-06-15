@@ -105,7 +105,9 @@ export async function fetchDashboardData(monthYear) {
           },
           dailyLogs: {
             where: { monthYear }
-          }
+          },
+          department: { select: { id: true, name: true } },
+          designation: { select: { id: true, name: true } }
         }
       }
     }
@@ -117,6 +119,7 @@ export async function fetchDashboardData(monthYear) {
     name: record.employee.name,
     birthday: record.employee.birthday ?? null,
     workAnniversary: record.employee.workAnniversary ?? null,
+    employeeType: record.employee.employeeType,
     present: record.present,
     absent: record.absent,
     halfDay: record.halfDay,
@@ -179,17 +182,38 @@ export async function getEmployeeHistory(code) {
     include: {
       records: { orderBy: { monthYear: 'desc' } },
       overrides: true,
-      dailyLogs: true
+      dailyLogs: true,
+      department: { select: { id: true, name: true } },
+      subDepartment: { select: { id: true, name: true } },
+      designation: { select: { id: true, name: true } },
+      managers: {
+        include: { manager: { select: { code: true, name: true } } },
+        orderBy: { priority: 'asc' }
+      }
     }
   });
+  if (emp) {
+    return {
+      ...emp,
+      managers: emp.managers.map(m => ({ code: m.manager.code, name: m.manager.name, priority: m.priority }))
+    };
+  }
   return emp;
 }
 
 // Phase 13 — Admin: manually add employee
-export async function addEmployee(code, name, performedBy = 'admin') {
+export async function addEmployee(code, name, performedBy = 'admin', extra = {}) {
   const existing = await prisma.employee.findUnique({ where: { code } });
   if (existing) return { error: `Employee code "${code}" already exists.` };
-  const emp = await prisma.employee.create({ data: { code, name } });
+  const emp = await prisma.employee.create({
+    data: {
+      code, name,
+      employeeType: extra.employeeType || 'regular',
+      departmentId: extra.departmentId || null,
+      subDepartmentId: extra.subDepartmentId || null,
+      designationId: extra.designationId || null
+    }
+  });
   await logAction(performedBy, 'employee_added', 'employee', emp.id, `Manually added employee ${name} (${code})`);
   revalidatePath('/');
   return { employee: emp };
@@ -220,7 +244,14 @@ export async function deleteMonthRecord(employeeCode, monthYear, performedBy = '
 // Phase 13 — Get all employees (for admin management)
 export async function getAllEmployees() {
   return prisma.employee.findMany({
-    select: { id: true, code: true, name: true, birthday: true, workAnniversary: true, createdAt: true },
+    select: {
+      id: true, code: true, name: true, birthday: true, workAnniversary: true,
+      employeeType: true,
+      department: { select: { id: true, name: true } },
+      subDepartment: { select: { id: true, name: true } },
+      designation: { select: { id: true, name: true } },
+      createdAt: true
+    },
     orderBy: { name: 'asc' }
   });
 }

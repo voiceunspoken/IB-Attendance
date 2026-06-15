@@ -2,8 +2,6 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Notice that the new Prisma 6 standard uses Prisma configs or standard URLs.
-// We will point it to a local SQLite file.
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
@@ -20,26 +18,94 @@ model User {
   createdAt      DateTime  @default(now())
 }
 
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  employees Employee[]
+  subDepartments SubDepartment[]
+  createdAt DateTime @default(now())
+}
+
+model SubDepartment {
+  id           String   @id @default(cuid())
+  name         String
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  employees    Employee[]
+  createdAt    DateTime @default(now())
+
+  @@unique([name, departmentId])
+}
+
+model Designation {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  employees Employee[]
+  createdAt DateTime @default(now())
+}
+
+model EmployeeManager {
+  id                 String   @id @default(cuid())
+  employeeId         String
+  managerEmployeeId  String
+  priority           Int      // 1 = primary manager, 2 = secondary, etc.
+  employee           Employee @relation("EmployeeManagers", fields: [employeeId], references: [id], onDelete: Cascade)
+  manager            Employee @relation("ManagerOf", fields: [managerEmployeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, managerEmployeeId])
+}
+
 model Employee {
-  id              String   @id @default(cuid())
-  code            String   @unique
+  id              String     @id @default(cuid())
+  code            String     @unique
   name            String
   birthday        DateTime?
   workAnniversary DateTime?
+
+  employeeType    String     @default("regular") // "regular" | "wfh" | "wfm"
+
+  departmentId    String?
+  department      Department?  @relation(fields: [departmentId], references: [id])
+  subDepartmentId String?
+  subDepartment   SubDepartment? @relation(fields: [subDepartmentId], references: [id])
+  designationId   String?
+  designation     Designation? @relation(fields: [designationId], references: [id])
+
+  managedEmployees EmployeeManager[] @relation("ManagerOf")
+  managers         EmployeeManager[] @relation("EmployeeManagers")
+
   records         MonthRecord[]
   dailyLogs       DailyLog[]
   overrides       Override[]
   leaveBalances   LeaveBalance[]
   leaveRequests   LeaveRequest[]
   regularizations RegularizationRequest[]
+  punchLogs       PunchLog[]
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+model PunchLog {
+  id         String    @id @default(cuid())
+  employeeId String
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date       DateTime
+  punchIn    DateTime?
+  punchOut   DateTime?
+  source     String    // "web" | "biometric"
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([employeeId, date])
 }
 
 model PendingChange {
   id           String   @id @default(cuid())
   requestedBy  String   // username of admin who made the change
-  action       String   // "toggleOverride" | "clearOverrides" | "uploadMonth" | "deleteMonth"
+  action       String   // "policy_update" | "toggleOverride" | "clearOverrides" | "uploadMonth" | "deleteMonth"
   payload      String   // JSON stringified payload
   status       String   @default("pending") // "pending" | "approved" | "rejected"
   reviewedBy   String?  // super_admin username who reviewed
@@ -110,10 +176,10 @@ model Override {
 model LeavePolicy {
   id        String @id @default(cuid())
   year      Int    @unique
-  cl        Int    @default(12)  // Casual Leave
-  sl        Int    @default(6)   // Sick Leave
-  el        Int    @default(15)  // Earned Leave
-  rl        Int    @default(2)   // Restricted Leave
+  cl        Int    @default(12)
+  sl        Int    @default(6)
+  el        Int    @default(15)
+  rl        Int    @default(2)
   createdAt DateTime @default(now())
 }
 
@@ -131,7 +197,7 @@ model LeaveBalance {
   slUsed       Int      @default(0)
   elUsed       Int      @default(0)
   rlUsed       Int      @default(0)
-  clCarry      Int      @default(0)  // carried forward from previous year
+  clCarry      Int      @default(0)
   updatedAt    DateTime @updatedAt
   createdAt    DateTime @default(now())
 
@@ -155,22 +221,29 @@ model LeaveRequest {
   createdAt    DateTime @default(now())
 }
 
-// Regularization requests — employee requests correction for missed punch
+// Regularization / Conflict requests — employee requests correction for missed punch or wrong marking
 model RegularizationRequest {
   id           String   @id @default(cuid())
   employeeId   String
   employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   date         DateTime
+  type         String   @default("missing_punch") // "missing_punch_in" | "missing_punch_out" | "wrong_mark" | "other"
   requestedIn  String?  // HH:MM
   requestedOut String?  // HH:MM
   reason       String
+  // Admin/HR review
   status       String   @default("pending") // "pending" | "approved" | "rejected"
   reviewedBy   String?
   reviewedAt   DateTime?
+  reviewNote   String?
+  // Super admin approval
+  superStatus  String   @default("pending") // "pending" | "approved" | "rejected"
+  superReviewedBy String?
+  superReviewedAt  DateTime?
   createdAt    DateTime @default(now())
 }
 
-// Phase 10 — Company holiday calendar
+// Company holiday calendar
 model Holiday {
   id        String   @id @default(cuid())
   year      Int
@@ -183,27 +256,59 @@ model Holiday {
   @@unique([year, month, day])
 }
 
-// Phase 11 — Shift & HR policy configuration
-model ShiftPolicy {
+// Enhanced Attendance & HR policy configuration — replaces ShiftPolicy
+// Admin creates/updates → status="pending" → super admin approves → status="active"
+model AttendancePolicy {
   id              String   @id @default(cuid())
   name            String   @default("Default")
-  shiftStartH     Int      @default(10)  // 10:00 AM
+
+  // Working hours
+  shiftStartH     Int      @default(10)
   shiftStartM     Int      @default(0)
-  graceMinutes    Int      @default(15)  // late after 10:15
+  shiftEndH       Int      @default(19)
+  shiftEndM       Int      @default(0)
+
+  // Grace & late rules
+  graceMinutes    Int      @default(15)  // late after shiftStart + grace
+  lateStartMin    Int      @default(30)  // late window start (min from shiftStart, e.g. 10:30)
+  shortLeaveStartMin Int   @default(60)  // short leave starts (e.g. 10:00 + 60 = 11:00)
+  shortLeaveEndMin   Int   @default(120) // short leave ends (e.g. 12:00)
+  halfDayAfterMin     Int   @default(120) // half day starts (e.g. 12:00)
+
+  // Half day thresholds
+  morningHalfDayCutoffH Int @default(14) // latest punch-in for morning half day (2:30 PM)
+  morningHalfDayCutoffM Int @default(30)
+  eveningHalfDayStartH   Int @default(14) // earliest punch-out for afternoon half day (2:00 PM)
+  eveningHalfDayStartM   Int @default(0)
+
+  // Evening rules
+  eveningEarliestExitH   Int @default(17)  // earliest time to leave (5:00 PM)
+  eveningEarliestExitM   Int @default(0)
+  eveningShortLeaveWindowMin Int @default(10) // window after earliest exit for short leave
+
+  // Deduction ratios
   minHours        Float    @default(9)   // minimum working hours
   latesPerHD      Int      @default(3)   // 3 lates = 1 HD
   ssPerHD         Int      @default(3)   // 3 short shifts = 1 HD
+
+  // Approval workflow
+  status          String   @default("pending") // "pending" | "active" | "rejected"
+  createdBy       String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  reviewNote      String?
+
   effectiveFrom   DateTime @default(now())
-  isActive        Boolean  @default(true)
+  isActive        Boolean  @default(false)
   createdAt       DateTime @default(now())
 }
 
-// Phase 12 — Audit log
+// Audit log
 model AuditLog {
   id          String   @id @default(cuid())
   performedBy String   // username
-  action      String   // e.g. "override_applied", "leave_approved", "user_created"
-  entity      String   // e.g. "employee", "leave_request", "user"
+  action      String   // e.g. "override_applied", "leave_approved", "user_created", "policy_created"
+  entity      String   // e.g. "employee", "leave_request", "user", "attendance_policy"
   entityId    String?  // id of the affected record
   detail      String   // human-readable description
   createdAt   DateTime @default(now())

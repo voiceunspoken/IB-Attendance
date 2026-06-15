@@ -233,9 +233,9 @@ export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = 
   return { request: req };
 }
 
-// ─── REGULARIZATION ──────────────────────────────────────────
+// ─── REGULARIZATION / CONFLICT ───────────────────────────────
 
-export async function submitRegularization(employeeCode, { date, requestedIn, requestedOut, reason }) {
+export async function submitRegularization(employeeCode, { date, requestedIn, requestedOut, reason, type }) {
   const emp = await prisma.employee.findUnique({ where: { code: employeeCode } });
   if (!emp) return { error: 'Employee not found' };
 
@@ -243,10 +243,12 @@ export async function submitRegularization(employeeCode, { date, requestedIn, re
     data: {
       employeeId: emp.id,
       date: new Date(date),
+      type: type || 'missing_punch',
       requestedIn: requestedIn || null,
       requestedOut: requestedOut || null,
       reason,
-      status: 'pending'
+      status: 'pending',
+      superStatus: 'pending'
     }
   });
   return { request: req };
@@ -269,14 +271,66 @@ export async function getAllPendingRegularizations() {
   });
 }
 
-export async function reviewRegularization(requestId, reviewedBy, approve) {
+// Admin review — sets status, then needs super admin approval
+export async function reviewRegularization(requestId, reviewedBy, approve, note = '') {
   const req = await prisma.regularizationRequest.update({
     where: { id: requestId },
     data: {
       status: approve ? 'approved' : 'rejected',
       reviewedBy,
-      reviewedAt: new Date()
+      reviewedAt: new Date(),
+      reviewNote: note || null
     }
   });
   return { request: req };
+}
+
+// Get regularizations pending super admin approval
+export async function getPendingSuperRegularizations() {
+  return prisma.regularizationRequest.findMany({
+    where: { status: 'approved', superStatus: 'pending' },
+    include: { employee: { select: { code: true, name: true } } },
+    orderBy: { createdAt: 'asc' }
+  });
+}
+
+// Super admin final approval
+export async function reviewRegularizationSuper(requestId, superReviewedBy, approve) {
+  const req = await prisma.regularizationRequest.update({
+    where: { id: requestId },
+    data: {
+      superStatus: approve ? 'approved' : 'rejected',
+      superReviewedBy,
+      superReviewedAt: new Date()
+    }
+  });
+
+  // If fully approved, update DailyLog
+  if (approve && req.status === 'approved') {
+    const date = new Date(req.date);
+    const monthYear = `${date.getMonth() + 1}_${date.getFullYear()}`;
+    const day = date.getDate();
+
+    const existing = await prisma.dailyLog.findUnique({
+      where: { employeeId_monthYear_day: { employeeId: req.employeeId, monthYear, day } }
+    });
+
+    if (existing && (existing.type === 'absent' || !existing.inT)) {
+      const inT = req.requestedIn ? parseTime(req.requestedIn) : existing.inT;
+      const outT = req.requestedOut ? parseTime(req.requestedOut) : existing.outT;
+      await prisma.dailyLog.update({
+        where: { employeeId_monthYear_day: { employeeId: req.employeeId, monthYear, day } },
+        data: { type: 'present', inT, outT }
+      });
+    }
+  }
+
+  return { request: req };
+}
+
+function parseTime(t) {
+  if (!t) return null;
+  const [h, m] = t.split(':').map(Number);
+  if (isNaN(h) || isNaN(m)) return null;
+  return h * 60 + m;
 }
