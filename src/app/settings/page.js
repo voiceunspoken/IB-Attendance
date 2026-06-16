@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
 import { getHolidays, addHoliday, deleteHoliday, seedIBHolidays } from '../../actions/holidays';
+import {
+  addHolidayPending, getPendingHolidays, approveHoliday, rejectHoliday,
+  deletePendingHoliday, uploadHolidayXlsx
+} from '../../actions/holidayAdmin';
 import { getActiveShiftPolicy, saveShiftPolicy, getShiftPolicyHistory, getPendingPolicies, reviewPolicy } from '../../actions/shiftPolicy';
 import { getAuditLog } from '../../actions/audit';
 import { getAllEmployees, addEmployee, deleteEmployee, deleteMonthRecord, updateMonthRecord, getMonths } from '../../actions/attendance';
@@ -20,8 +24,11 @@ export default function SettingsPage() {
   // Holidays
   const year = new Date().getFullYear();
   const [holidays, setHolidays] = useState([]);
-  const [hForm, setHForm] = useState({ month: 1, day: 1, name: '', type: 'national' });
+  const [hForm, setHForm] = useState({ month: 1, day: 1, name: '', isRestricted: false });
   const [hMsg, setHMsg] = useState('');
+  const [hSubTab, setHSubTab] = useState('gazette'); // gazette | restricted | pending
+  const [pendingHolidays, setPendingHolidays] = useState([]);
+  const [uploadFile, setUploadFile] = useState(null);
 
   // Shift policy
   const [policy, setPolicy] = useState({ shiftStartH: 10, shiftStartM: 0, graceMinutes: 15, minHours: 9, latesPerHD: 3, ssPerHD: 3 });
@@ -72,6 +79,10 @@ export default function SettingsPage() {
       getMonths()
     ]);
     setHolidays(h);
+    if (isSuperAdmin) {
+      const ph = await getPendingHolidays(year);
+      setPendingHolidays(ph);
+    }
     setPolicy({ shiftStartH: sp.shiftStartH, shiftStartM: sp.shiftStartM, graceMinutes: sp.graceMinutes, minHours: sp.minHours, latesPerHD: sp.latesPerHD, ssPerHD: sp.ssPerHD });
     setPolicyHistory(hist);
     setEmployees(emps);
@@ -89,25 +100,50 @@ export default function SettingsPage() {
   const handleAddHoliday = async (e) => {
     e.preventDefault();
     if (!hForm.name.trim()) return setHMsg('Please enter a holiday name.');
-    await addHoliday(year, hForm.month, hForm.day, hForm.name.trim(), hForm.type);
-    setHMsg(`Added: ${hForm.name}`);
+    const result = await addHolidayPending(year, hForm.month, hForm.day, hForm.name.trim(), hForm.isRestricted, user.username);
+    if (result.error) return setHMsg(result.error);
+    setHMsg(`Added pending: ${hForm.name}`);
     setHForm(f => ({ ...f, name: '' }));
-    const h = await getHolidays(year);
+    const [h, ph] = await Promise.all([getHolidays(year), getPendingHolidays(year)]);
     setHolidays(h);
+    setPendingHolidays(ph);
   };
 
   const handleDeleteHoliday = async (id) => {
-    await deleteHoliday(id);
-    const h = await getHolidays(year);
+    if (!confirm('Remove this holiday?')) return;
+    if (isSuperAdmin) {
+      await deletePendingHoliday(id, user.username);
+    } else {
+      await deleteHoliday(id);
+    }
+    const [h, ph] = await Promise.all([getHolidays(year), getPendingHolidays(year)]);
     setHolidays(h);
+    setPendingHolidays(ph);
   };
 
   const handleSeedHolidays = async () => {
     if (!confirm(`Seed all IB official holidays for ${year}? Existing entries will be updated.`)) return;
     await seedIBHolidays(year);
-    const h = await getHolidays(year);
+    const [h, ph] = await Promise.all([getHolidays(year), getPendingHolidays(year)]);
     setHolidays(h);
-    setHMsg(`Seeded ${h.length} IB holidays for ${year}.`);
+    setPendingHolidays(ph);
+    setHMsg(`Seeded IB holidays for ${year}.`);
+  };
+
+  const handleUploadHolidays = async () => {
+    if (!uploadFile) return setHMsg('Please select a file.');
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const text = e.target.result;
+      const rows = text.split('\n').filter(Boolean).map(line => line.split(','));
+      const result = await uploadHolidayXlsx(rows, year, user.username);
+      setHMsg(`Uploaded: ${result.added} added, ${result.skipped} skipped${result.errors.length ? `, ${result.errors.length} errors` : ''}`);
+      setUploadFile(null);
+      const [h, ph] = await Promise.all([getHolidays(year), getPendingHolidays(year)]);
+      setHolidays(h);
+      setPendingHolidays(ph);
+    };
+    reader.readAsText(uploadFile);
   };
 
   const handleSavePolicy = async (e) => {
@@ -213,61 +249,133 @@ export default function SettingsPage() {
 
       {/* ── HOLIDAYS ── */}
       {!loading && tab === 'holidays' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}>
-          <div className="card" style={{ padding: '22px 24px' }}>
-            <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px' }}>Add Holiday — {year}</div>
-            <form onSubmit={handleAddHoliday} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div>
-                  <label className="input-label">Month</label>
-                  <select className="input-field" value={hForm.month} onChange={e => setHForm(f => ({ ...f, month: parseInt(e.target.value) }))}>
-                    {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="input-label">Day</label>
-                  <input className="input-field" type="number" min={1} max={31} value={hForm.day} onChange={e => setHForm(f => ({ ...f, day: parseInt(e.target.value) }))} />
-                </div>
-              </div>
-              <div>
-                <label className="input-label">Holiday Name</label>
-                <input className="input-field" placeholder="e.g. Republic Day" value={hForm.name} onChange={e => setHForm(f => ({ ...f, name: e.target.value }))} />
-              </div>
-              <div>
-                <label className="input-label">Type</label>
-                <select className="input-field" value={hForm.type} onChange={e => setHForm(f => ({ ...f, type: e.target.value }))}>
-                  <option value="national">National Holiday</option>
-                  <option value="optional">Optional Holiday</option>
-                </select>
-              </div>
-              {hMsg && <div style={{ fontSize: '13px', color: 'var(--green)' }}>{hMsg}</div>}
-              <button type="submit" className="btn btn-primary">Add Holiday</button>
-              <button type="button" className="btn btn-secondary" onClick={handleSeedHolidays}>
-                Seed IB Holidays {year}
-              </button>
-            </form>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Sub-tabs */}
+          <div style={{ display: 'flex', gap: '4px', background: 'var(--surface3)', borderRadius: '10px', padding: '3px', width: 'fit-content' }}>
+            {[
+              { key: 'gazette', label: `Gazette (${holidays.filter(h => !h.isRestricted && h.type === 'national').length})` },
+              { key: 'restricted', label: `Restricted (${holidays.filter(h => h.isRestricted || h.type === 'optional').length})` },
+              ...(isSuperAdmin ? [{ key: 'pending', label: `Pending (${pendingHolidays.length})` }] : []),
+            ].map(t => (
+              <button key={t.key} onClick={() => setHSubTab(t.key)} style={{
+                padding: '6px 16px', borderRadius: '7px', fontSize: '13px', fontWeight: 500,
+                border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                background: hSubTab === t.key ? 'var(--surface)' : 'transparent',
+                color: hSubTab === t.key ? 'var(--text)' : 'var(--text2)',
+                boxShadow: hSubTab === t.key ? 'var(--shadow-sm)' : 'none', transition: 'all 0.15s'
+              }}>{t.label}</button>
+            ))}
           </div>
 
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
-              {year} Holidays ({holidays.length})
+          {/* Gazette / Restricted list */}
+          {(hSubTab === 'gazette' || hSubTab === 'restricted') && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}>
+              <div className="card" style={{ padding: '22px 24px' }}>
+                <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px' }}>Add {hSubTab === 'gazette' ? 'Gazette' : 'Restricted'} Holiday — {year}</div>
+                <form onSubmit={handleAddHoliday} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label className="input-label">Month</label>
+                      <select className="input-field" value={hForm.month} onChange={e => setHForm(f => ({ ...f, month: parseInt(e.target.value) }))}>
+                        {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="input-label">Day</label>
+                      <input className="input-field" type="number" min={1} max={31} value={hForm.day} onChange={e => setHForm(f => ({ ...f, day: parseInt(e.target.value) }))} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="input-label">Holiday Name</label>
+                    <input className="input-field" placeholder="e.g. Republic Day" value={hForm.name} onChange={e => setHForm(f => ({ ...f, name: e.target.value }))} />
+                  </div>
+                  {hSubTab === 'restricted' && (
+                    <div style={{ fontSize: '12px', color: 'var(--text2)', background: 'rgba(175,82,222,0.08)', borderRadius: '10px', padding: '10px 14px' }}>
+                      This will be added as a restricted holiday (RL-eligible, pending super admin approval).
+                    </div>
+                  )}
+                  {hMsg && <div style={{ fontSize: '13px', color: hMsg.startsWith('Added') ? 'var(--green)' : 'var(--red)' }}>{hMsg}</div>}
+                  <button type="submit" className="btn btn-primary">Submit for Approval</button>
+                  <button type="button" className="btn btn-secondary" onClick={handleSeedHolidays}>
+                    Seed IB Holidays {year}
+                  </button>
+                </form>
+
+                {/* CSV Upload */}
+                <div style={{ marginTop: '20px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>Bulk Upload (CSV)</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text2)', marginBottom: '10px' }}>
+                    Format: Date (DD/MM/YYYY), Name, Type (gazette/restricted). One per line.
+                  </div>
+                  <input type="file" accept=".csv,.xlsx" className="input-field" style={{ padding: '8px', fontSize: '12px' }}
+                    onChange={e => setUploadFile(e.target.files?.[0] || null)} />
+                  <button type="button" className="btn btn-secondary" style={{ marginTop: '8px', fontSize: '12px', padding: '6px 14px' }}
+                    onClick={handleUploadHolidays} disabled={!uploadFile}>
+                    Upload & Submit for Approval
+                  </button>
+                </div>
+              </div>
+
+              <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
+                  {hSubTab === 'gazette' ? 'Gazette' : 'Restricted'} Holidays ({holidays.filter(h => hSubTab === 'gazette' ? (!h.isRestricted || h.type === 'national') : (h.isRestricted || h.type === 'optional')).length})
+                </div>
+                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  {holidays.filter(h => hSubTab === 'gazette' ? (!h.isRestricted || h.type === 'national') : (h.isRestricted || h.type === 'optional')).length === 0
+                    ? <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text3)', fontSize: '13px' }}>No holidays added yet.</div>
+                    : holidays.filter(h => hSubTab === 'gazette' ? (!h.isRestricted || h.type === 'national') : (h.isRestricted || h.type === 'optional')).map(h => (
+                      <div key={h.id} style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span style={{ fontWeight: 500, fontSize: '13px' }}>{h.name}</span>
+                          <span style={{ fontSize: '12px', color: 'var(--text2)', marginLeft: '8px' }}>{MONTHS[h.month - 1]} {h.day}</span>
+                          {h.status === 'pending' && <span style={{ fontSize: '10px', background: 'rgba(255,159,10,0.1)', color: '#b36200', padding: '1px 6px', borderRadius: '980px', marginLeft: '6px' }}>Pending</span>}
+                        </div>
+                        <button onClick={() => handleDeleteHoliday(h.id)} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>
+                      </div>
+                    ))
+                  }
+                </div>
+              </div>
             </div>
-            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-              {holidays.length === 0
-                ? <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text3)', fontSize: '13px' }}>No holidays added yet.</div>
-                : holidays.map(h => (
-                  <div key={h.id} style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          )}
+
+          {/* Pending Holidays — super admin approval */}
+          {hSubTab === 'pending' && isSuperAdmin && (
+            <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
+              <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
+                Pending Holiday Approvals ({pendingHolidays.length})
+              </div>
+              {pendingHolidays.length === 0
+                ? <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text3)', fontSize: '13px' }}>No pending holidays.</div>
+                : pendingHolidays.map(h => (
+                  <div key={h.id} style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
                     <div>
                       <span style={{ fontWeight: 500, fontSize: '13px' }}>{h.name}</span>
                       <span style={{ fontSize: '12px', color: 'var(--text2)', marginLeft: '8px' }}>{MONTHS[h.month - 1]} {h.day}</span>
-                      <span style={{ fontSize: '11px', color: h.type === 'national' ? 'var(--blue)' : 'var(--orange)', marginLeft: '8px', fontWeight: 500 }}>{h.type}</span>
+                      <span style={{ fontSize: '11px', color: h.isRestricted ? 'var(--purple)' : 'var(--blue)', marginLeft: '6px', fontWeight: 500 }}>
+                        {h.isRestricted ? 'Restricted' : 'Gazette'}
+                      </span>
+                      <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '2px' }}>By {h.createdBy || 'admin'} · {new Date(h.createdAt).toLocaleString()}</div>
                     </div>
-                    <button onClick={() => handleDeleteHoliday(h.id)} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: '12px', background: 'var(--green)' }}
+                        onClick={async () => {
+                          await approveHoliday(h.id, user.username);
+                          const [hd, ph] = await Promise.all([getHolidays(year), getPendingHolidays(year)]);
+                          setHolidays(hd); setPendingHolidays(ph);
+                        }}>Approve</button>
+                      <button style={{ padding: '6px 14px', fontSize: '12px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
+                        onClick={async () => {
+                          await rejectHoliday(h.id, user.username);
+                          const [hd, ph] = await Promise.all([getHolidays(year), getPendingHolidays(year)]);
+                          setHolidays(hd); setPendingHolidays(ph);
+                        }}>Reject</button>
+                    </div>
                   </div>
                 ))
               }
             </div>
-          </div>
+          )}
         </div>
       )}
 

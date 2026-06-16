@@ -8,7 +8,7 @@ import {
   getLeaveBalance, getLeaveRequests, submitLeaveRequest,
   getRegularizations, submitRegularization
 } from '../../../actions/leave';
-import { getUpcomingHolidays } from '../../../actions/holidays';
+import { getUpcomingHolidays, getHolidays } from '../../../actions/holidays';
 import { requestAttendanceCorrection } from '../../../actions/attendanceChanges';
 import EmployeeModal from '../../../components/EmployeeModal';
 
@@ -39,6 +39,10 @@ export default function EmployeeDashboard({ params }) {
   const [leaveError, setLeaveError] = useState('');
   const [leaveSuccess, setLeaveSuccess] = useState('');
   const [submittingLeave, setSubmittingLeave] = useState(false);
+  const [prescriptionFile, setPrescriptionFile] = useState(null);
+  const [sandwichWarning, setSandwichWarning] = useState('');
+  const [rlHolidays, setRlHolidays] = useState([]);
+  const [leaveBalanceDetail, setLeaveBalanceDetail] = useState(null);
 
   // Regularization form
   const [regForm, setRegForm] = useState({ date: '', requestedIn: '', requestedOut: '', reason: '' });
@@ -61,25 +65,50 @@ export default function EmployeeDashboard({ params }) {
   const loadAll = async () => {
     setLoading(true);
     const year = new Date().getFullYear();
-    const [data, balance, requests, regs, holidays] = await Promise.all([
+    const [data, balance, requests, regs, holidays, allHolidays] = await Promise.all([
       getEmployeeHistory(code),
       getLeaveBalance(code, year),
       getLeaveRequests(code),
       getRegularizations(code),
-      getUpcomingHolidays()
+      getUpcomingHolidays(),
+      getHolidays(year)
     ]);
     if (data) {
       setEmp(data);
       let ov = {};
       data.overrides.forEach(o => { ov[`${data.code}_${o.day}`] = o.type; });
       setOverrides(ov);
+      // RL-eligible dates: restricted holidays + birthday
+      const restricted = allHolidays.filter(h => h.isRestricted || h.type === 'optional');
+      const empBirthday = data.birthday ? { month: new Date(data.birthday).getMonth() + 1, day: new Date(data.birthday).getDate() } : null;
+      setRlHolidays(restricted.map(h => ({ ...h, isBirthday: false })).concat(
+        empBirthday ? [{ month: empBirthday.month, day: empBirthday.day, name: '🎂 Birthday', type: 'optional', isBirthday: true }] : []
+      ));
     }
     setLeaveBalance(balance);
+    setLeaveBalanceDetail(balance);
     setLeaveRequests(requests);
     setRegularizations(regs);
     setUpcomingHolidays(holidays);
     setLoading(false);
   };
+
+  // Detect Fri+Mon span for sandwich warning
+  useEffect(() => {
+    if (!leaveForm.fromDate) return setSandwichWarning('');
+    const from = new Date(leaveForm.fromDate);
+    const to = leaveForm.toDate ? new Date(leaveForm.toDate) : from;
+    if (from > to) return setSandwichWarning('');
+    const fromDay = from.getDay();
+    const toDay = to.getDay();
+    // Sandwich = Thu/Fri start → Sat+Sun → Mon/Tue end
+    const isSandwich = (fromDay <= 5 && toDay >= 1 && toDay <= 2) && (to.getTime() - from.getTime()) > 86400000 * 2;
+    if (isSandwich && (leaveForm.leaveType === 'cl' || leaveForm.leaveType === 'el')) {
+      setSandwichWarning('⚠ This period spans a weekend (Fri–Mon). If approved, weekend days may be counted as sandwich leave.');
+    } else {
+      setSandwichWarning('');
+    }
+  }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.leaveType]);
 
   const handleSubmitLeave = async (e) => {
     e.preventDefault();
@@ -90,12 +119,14 @@ export default function EmployeeDashboard({ params }) {
     const result = await submitLeaveRequest(code, {
       ...leaveForm,
       toDate: leaveForm.toDate || leaveForm.fromDate,
-      days: parseFloat(leaveForm.days) || 1
+      days: parseFloat(leaveForm.days) || 1,
+      prescriptionFile: leaveForm.leaveType === 'sl' ? prescriptionFile : null
     });
     setSubmittingLeave(false);
     if (result.error) return setLeaveError(result.error);
     setLeaveSuccess('Leave request submitted successfully.');
     setLeaveForm({ leaveType: 'cl', fromDate: '', toDate: '', days: 1, reason: '' });
+    setPrescriptionFile(null);
     loadAll();
   };
 
@@ -185,6 +216,18 @@ export default function EmployeeDashboard({ params }) {
   };
 
   const avgAbsent = (emp.records.reduce((s, r) => s + r.absent, 0) / emp.records.length).toFixed(1);
+
+  const StageBadge = ({ stage }) => {
+    const map = {
+      pending_l2: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3', label: 'L2 Pending' },
+      pending_l1: { bg: 'rgba(255,159,10,0.1)', color: '#b36200', label: 'L1 Pending' },
+      pending_super: { bg: 'rgba(175,82,222,0.1)', color: '#7b2d8b', label: 'Super Pending' },
+      approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Approved' },
+      rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' },
+    };
+    const s = map[stage] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)', label: stage };
+    return <span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, background: s.bg, color: s.color }}>{s.label}</span>;
+  };
 
   const downloadPDF = async (record, empData, ovs) => {
     const { jsPDF } = await import('jspdf');
@@ -364,7 +407,13 @@ export default function EmployeeDashboard({ params }) {
                   <div style={{ height: '4px', background: 'var(--surface3)', borderRadius: '2px', overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: `${pct}%`, background: LEAVE_COLORS[type], borderRadius: '2px', transition: 'width 0.4s' }} />
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '5px' }}>{used} used · {total} total</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '5px' }}>
+                {used} used · {total} total
+                {type === 'cl' && balance.clAccrued != null && <span> · {balance.clAccrued} accrued</span>}
+                {type === 'el' && balance.elAccrued != null && <span> · {balance.elAccrued} accrued</span>}
+                {type === 'sl' && balance.slTotal != null && <span> · {balance.slTotal} allotted</span>}
+                {type === 'rl' && balance.rlTotal != null && <span> · {balance.rlTotal} allotted</span>}
+              </div>
                 </div>
               );
             })}
@@ -456,6 +505,7 @@ export default function EmployeeDashboard({ params }) {
                   onClearAllOverrides={handleClearAllOverrides}
                   readOnly={!isAdmin}
                   onProposeCorrection={isAdmin ? handleProposeCorrection : undefined}
+                  rlEligibleDays={rlHolidays}
                 />
               </div>
             </div>
@@ -476,9 +526,46 @@ export default function EmployeeDashboard({ params }) {
                   <option value="cl">Casual Leave (CL) — 12 days/yr</option>
                   <option value="sl">Sick Leave (SL) — 6 days/yr</option>
                   <option value="el">Earned Leave (EL) — 4 days/yr</option>
-                  <option value="rl">Restricted Holiday (RH) — 2 days/yr</option>
+                  <option value="rl">Restricted Holiday (RL) — 2 days/yr</option>
                 </select>
               </div>
+
+              {/* RL: show eligible dates */}
+              {leaveForm.leaveType === 'rl' && rlHolidays.length > 0 && (
+                <div style={{ background: 'rgba(175,82,222,0.08)', borderRadius: '10px', padding: '12px 14px', fontSize: '12px' }}>
+                  <div style={{ fontWeight: 600, color: '#7b2d8b', marginBottom: '6px' }}>Eligible RL Dates</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {rlHolidays.map((h, i) => (
+                      <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <span style={{ color: 'var(--text2)' }}>
+                          {new Date(2024, h.month - 1, h.day).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                        </span>
+                        <span style={{ fontWeight: 500 }}>{h.name}</span>
+                        {h.isBirthday && <span style={{ fontSize: '10px', background: 'rgba(175,82,222,0.15)', color: '#7b2d8b', padding: '1px 6px', borderRadius: '980px' }}>Birthday</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* SL: prescription upload */}
+              {leaveForm.leaveType === 'sl' && (
+                <div>
+                  <label className="input-label">Prescription (required for Sick Leave)</label>
+                  <input className="input-field" type="file" accept="image/*,.pdf"
+                    style={{ padding: '8px', fontSize: '12px' }}
+                    onChange={e => {
+                      const f = e.target.files?.[0];
+                      if (f) {
+                        const reader = new FileReader();
+                        reader.onload = () => setPrescriptionFile(reader.result);
+                        reader.readAsDataURL(f);
+                      }
+                    }} />
+                  {prescriptionFile && <div style={{ fontSize: '11px', color: 'var(--green)', marginTop: '4px' }}>✓ Prescription uploaded</div>}
+                </div>
+              )}
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
                   <label className="input-label">From Date</label>
@@ -501,6 +588,31 @@ export default function EmployeeDashboard({ params }) {
                 <label className="input-label">Reason</label>
                 <textarea className="input-field" rows={3} placeholder="Brief reason for leave…" value={leaveForm.reason} onChange={e => setLeaveForm(f => ({ ...f, reason: e.target.value }))} style={{ resize: 'vertical' }} />
               </div>
+
+              {/* Sandwich warning */}
+              {sandwichWarning && (
+                <div style={{ background: 'rgba(255,159,10,0.1)', borderRadius: '10px', padding: '10px 14px', fontSize: '12px', color: '#b36200', fontWeight: 500 }}>
+                  {sandwichWarning}
+                </div>
+              )}
+
+              {/* Leave balance breakdown */}
+              {leaveBalanceDetail && (
+                <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '12px 14px', fontSize: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  {['cl', 'sl', 'el', 'rl'].map(type => {
+                    const avail = leaveBalanceDetail[`${type}Avail`] ?? 0;
+                    const total = leaveBalanceDetail[`${type}Total`] ?? 0;
+                    const used = leaveBalanceDetail[`${type}Used`] ?? 0;
+                    return (
+                      <div key={type} style={{ borderLeft: `3px solid ${LEAVE_COLORS[type]}`, paddingLeft: '8px' }}>
+                        <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: '11px', textTransform: 'uppercase' }}>{type}</div>
+                        <div style={{ color: 'var(--text2)' }}>{avail} avail · {used} used · {total} total</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
               {leaveError && <div style={{ color: 'var(--red)', fontSize: '13px' }}>{leaveError}</div>}
               {leaveSuccess && <div style={{ color: 'var(--green)', fontSize: '13px' }}>{leaveSuccess}</div>}
               <button type="submit" className="btn btn-primary" disabled={submittingLeave} style={{ opacity: submittingLeave ? 0.7 : 1 }}>
@@ -524,13 +636,22 @@ export default function EmployeeDashboard({ params }) {
                         <span style={{ fontSize: '13px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{r.leaveType.toUpperCase()}</span>
                         <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
                       </div>
-                      {statusBadge(r.status)}
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        {r.approvalStage && r.status === 'pending' && <StageBadge stage={r.approvalStage} />}
+                        {statusBadge(r.status)}
+                      </div>
                     </div>
+                    {r.sandwichCount > 0 && (
+                      <div style={{ fontSize: '11px', color: 'var(--orange)', marginBottom: '2px', fontWeight: 500 }}>
+                        🥪 {r.sandwichCount === 1 ? '1st sandwich' : `${r.sandwichCount} sandwich`} leave
+                      </div>
+                    )}
                     <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
                       {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                       {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
                     </div>
                     <div style={{ fontSize: '12px', color: 'var(--text2)', marginTop: '2px' }}>{r.reason}</div>
+                    {r.prescriptionFile && <div style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '2px' }}>📎 Prescription attached</div>}
                     {r.reviewNote && <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '4px', fontStyle: 'italic' }}>Note: {r.reviewNote}</div>}
                   </div>
                 ))

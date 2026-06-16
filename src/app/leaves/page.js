@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
 import {
-  getAllLeaveRequests, getAllPendingLeaveRequests, reviewLeaveRequest,
+  getAllLeaveRequests, reviewLeaveRequest, getLeaveRequestsByStage,
   getAllPendingRegularizations, reviewRegularization,
   getPendingSuperRegularizations, reviewRegularizationSuper,
   getAllLeaveBalances, upsertLeavePolicy, getLeavePolicy, adminUpdateLeaveBalance,
@@ -147,8 +147,6 @@ export default function LeavesPage() {
 
   if (authLoading || !isAuthenticated || !isAdmin) return null;
 
-  const pending = leaveRequests.filter(r => r.status === 'pending');
-
   const statusBadge = (status) => {
     const map = {
       pending: { bg: 'rgba(255,159,10,0.1)', color: '#b36200' },
@@ -159,6 +157,18 @@ export default function LeavesPage() {
     return <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: '980px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.color }}>{status}</span>;
   };
 
+  const StageBadge = ({ stage }) => {
+    const map = {
+      pending_l2: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3', label: 'L2 Pending' },
+      pending_l1: { bg: 'rgba(255,159,10,0.1)', color: '#b36200', label: 'L1 Pending' },
+      pending_super: { bg: 'rgba(175,82,222,0.1)', color: '#7b2d8b', label: 'Super Pending' },
+      approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Approved' },
+      rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' },
+    };
+    const s = map[stage] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)', label: stage };
+    return <span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, background: s.bg, color: s.color }}>{s.label}</span>;
+  };
+
   return (
     <div className="page-wrapper animate-fade-in">
       <div style={{ marginBottom: '20px' }}>
@@ -167,14 +177,18 @@ export default function LeavesPage() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '4px', background: 'var(--surface3)', borderRadius: '10px', padding: '3px', marginBottom: '24px', width: 'fit-content' }}>
+      <div style={{ display: 'flex', gap: '4px', background: 'var(--surface3)', borderRadius: '10px', padding: '3px', marginBottom: '24px', width: 'fit-content', flexWrap: 'wrap' }}>
         {[
-          { key: 'requests', label: `Leave Requests${pending.length > 0 ? ` (${pending.length})` : ''}` },
+          { key: 'overview', label: `All Requests (${leaveRequests.length})` },
+          { key: 'myapproval', label: `Pending My Approval${superRegularizations.length + attendanceCorrections.length > 0 ? ` (${superRegularizations.length + attendanceCorrections.length})` : ''}` },
           { key: 'regularize', label: `Regularizations${regularizations.length > 0 ? ` (${regularizations.length})` : ''}` },
           { key: 'corrections', label: `Attendance Corrections${attendanceCorrections.length > 0 ? ` (${attendanceCorrections.length})` : ''}` },
           { key: 'balances', label: 'Leave Balances' },
           { key: 'policy', label: 'Policy' },
-        ].filter(t => isSuperAdmin || (t.key !== 'corrections')).map(t => (
+        ].filter(t => {
+          if (t.key === 'myapproval' || t.key === 'corrections') return isSuperAdmin;
+          return true;
+        }).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             padding: '6px 16px', borderRadius: '7px', fontSize: '13px', fontWeight: 500,
             border: 'none', cursor: 'pointer', fontFamily: 'inherit',
@@ -187,32 +201,75 @@ export default function LeavesPage() {
 
       {loading && <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text2)', fontSize: '14px' }}>Loading…</div>}
 
-      {/* ── LEAVE REQUESTS ── */}
-      {!loading && tab === 'requests' && (
+      {/* ── ALL REQUESTS (admin overview — read only) ── */}
+      {!loading && tab === 'overview' && (
         <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
           <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
-            All Requests ({leaveRequests.length})
+            All Leave Requests ({leaveRequests.length})
           </div>
           {leaveRequests.length === 0
             ? <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text3)', fontSize: '13px' }}>No leave requests yet.</div>
             : leaveRequests.map(r => (
               <div key={r.id} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px' }}>
-                    <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.employee.name}</span>
-                    <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.employee.code}</span>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.employee?.name || 'Unknown'}</span>
+                    <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.employee?.code}</span>
                     <span style={{ fontSize: '12px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
                     <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
                     {statusBadge(r.status)}
+                    <StageBadge stage={r.approvalStage} />
                   </div>
+                  {r.sandwichCount > 0 && (
+                    <div style={{ fontSize: '11px', color: 'var(--orange)', marginBottom: '2px', fontWeight: 500 }}>
+                      🥪 {r.sandwichCount === 1 ? '1st sandwich' : `${r.sandwichCount} sandwich`} leave
+                    </div>
+                  )}
                   <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
                     {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                     {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
                     {' · '}{r.reason}
                   </div>
+                  {r.prescriptionFile && <div style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '2px' }}>📎 Prescription attached</div>}
                   {r.reviewNote && <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '3px', fontStyle: 'italic' }}>Note: {r.reviewNote}</div>}
                 </div>
-                {r.status === 'pending' && (
+              </div>
+            ))
+          }
+        </div>
+      )}
+
+      {/* ── PENDING MY APPROVAL (super admin) ── */}
+      {!loading && tab === 'myapproval' && isSuperAdmin && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
+              Pending Super Admin Approval
+            </div>
+            {leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length === 0
+              ? <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text3)', fontSize: '13px' }}>No leave requests awaiting your approval.</div>
+              : leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').map(r => (
+                <div key={r.id} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.employee?.name}</span>
+                      <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.employee?.code}</span>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
+                      <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
+                      <StageBadge stage={r.approvalStage} />
+                    </div>
+                    {r.sandwichCount > 0 && (
+                      <div style={{ fontSize: '11px', color: 'var(--orange)', marginBottom: '2px', fontWeight: 500 }}>
+                        🥪 {r.sandwichCount === 1 ? '1st sandwich' : `${r.sandwichCount} sandwich`} leave
+                      </div>
+                    )}
+                    <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
+                      {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                      {' · '}{r.reason}
+                    </div>
+                    {r.prescriptionFile && <div style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '2px' }}>📎 Prescription attached</div>}
+                  </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '200px' }}>
                     {reviewingId === r.id ? (
                       <>
@@ -228,10 +285,10 @@ export default function LeavesPage() {
                       <button className="btn btn-secondary" style={{ padding: '6px 14px', fontSize: '12px' }} onClick={() => setReviewingId(r.id)}>Review</button>
                     )}
                   </div>
-                )}
-              </div>
-            ))
-          }
+                </div>
+              ))
+            }
+          </div>
         </div>
       )}
 

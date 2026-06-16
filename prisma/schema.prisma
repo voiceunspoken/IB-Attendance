@@ -199,6 +199,9 @@ model LeaveBalance {
   elUsed       Int      @default(0)
   rlUsed       Int      @default(0)
   clCarry      Int      @default(0)
+  clAccrued    Int      @default(0)
+  elAccrued    Int      @default(0)
+  sandwichUsed Int      @default(0)
   updatedAt    DateTime @updatedAt
   createdAt    DateTime @default(now())
 
@@ -207,19 +210,30 @@ model LeaveBalance {
 
 // Leave requests submitted by employees
 model LeaveRequest {
-  id           String   @id @default(cuid())
-  employeeId   String
-  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  leaveType    String   // "cl" | "sl" | "el" | "rl"
-  fromDate     DateTime
-  toDate       DateTime
-  days         Float    // 0.5 for half day, 1+ for full days
-  reason       String
-  status       String   @default("pending") // "pending" | "approved" | "rejected"
-  reviewedBy   String?
-  reviewedAt   DateTime?
-  reviewNote   String?
-  createdAt    DateTime @default(now())
+  id             String   @id @default(cuid())
+  employeeId     String
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType      String   // "cl" | "sl" | "el" | "rl"
+  fromDate       DateTime
+  toDate         DateTime
+  days           Float    // 0.5 for half day, 1+ for full days
+  reason         String
+  status         String   @default("pending") // "pending" | "approved" | "rejected"
+
+  // Approval stages: l2 → l1 → super → approved
+  approvalStage  String   @default("pending_l2")
+  currentApproverId String?
+
+  // Sandwich leave
+  sandwichCount  Int      @default(0)
+
+  // SL prescription
+  prescriptionFile String?
+
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  reviewNote     String?
+  createdAt      DateTime @default(now())
 }
 
 // Regularization / Conflict requests — employee requests correction for missed punch or wrong marking
@@ -246,13 +260,18 @@ model RegularizationRequest {
 
 // Company holiday calendar
 model Holiday {
-  id        String   @id @default(cuid())
-  year      Int
-  month     Int
-  day       Int
-  name      String
-  type      String   @default("national") // "national" | "optional"
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  year       Int
+  month      Int
+  day        Int
+  name       String
+  type       String   @default("national") // "national" | "optional"
+  isRestricted Boolean @default(false)
+  status     String   @default("active") // "pending" | "active" | "rejected"
+  createdBy  String?
+  reviewedBy String?
+  reviewedAt DateTime?
+  createdAt  DateTime @default(now())
 
   @@unique([year, month, day])
 }
@@ -302,6 +321,13 @@ model AttendancePolicy {
   effectiveFrom   DateTime @default(now())
   isActive        Boolean  @default(false)
   createdAt       DateTime @default(now())
+}
+
+// Super admin configuration toggles
+model SuperAdminConfig {
+  id                   String   @id @default(cuid())
+  requireSuperApproval Boolean  @default(true)
+  updatedAt            DateTime @updatedAt
 }
 
 // Audit log

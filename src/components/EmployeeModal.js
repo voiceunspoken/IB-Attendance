@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-export default function EmployeeModal({ employee, currentMonth, overrides, onClose, onApplyOverride, onRemoveOverride, onClearAllOverrides, readOnly = false, onProposeCorrection }) {
+export default function EmployeeModal({ employee, currentMonth, overrides, onClose, onApplyOverride, onRemoveOverride, onClearAllOverrides, readOnly = false, onProposeCorrection, rlEligibleDays = [] }) {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [overrideType, setOverrideType] = useState('wfm');
@@ -94,6 +94,9 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
       let bg = 'var(--surface2)', border = '1px solid var(--border)', opacity = 1, cursor = 'pointer', outline = 'none';
       let label = '';
 
+      // Check RL-eligible day (birthday or restricted holiday)
+      const rlDay = rlEligibleDays.find(r => r.day === d && r.month === currentMonth.month);
+
       if (ovVal) {
         label = ovVal === 'wfm' ? 'WFM' : ovVal === 'wfm-hd' ? 'WFM½' : ovVal === 'wfh' ? 'WFH' : ovVal === 'wos' ? 'WOS' : 'WOS½';
         bg = ovVal === 'wfm' ? 'rgba(52,199,89,0.12)'
@@ -107,7 +110,7 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
                : '1.5px solid rgba(48,176,199,0.4)';
       } else {
         if (info.type === 'wo') { opacity = 0.4; cursor = 'default'; label = 'WO'; }
-        else         if (info.type === 'present') {
+        else if (info.type === 'present') {
           if (info.inT === null) {
             bg = 'rgba(255,107,53,0.08)'; border = '2px dashed rgba(255,107,53,0.5)'; label = '⚠ P';
           } else {
@@ -125,6 +128,13 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
         if (info.isSL) { label = 'SL'; bg = 'rgba(0,113,227,0.08)'; }
         else if (info.isSS) { label = 'SS'; outline = '2px solid rgba(255,107,53,0.5)'; }
         else if (info.isLate) { label = 'Late'; outline = '2px solid rgba(255,159,10,0.5)'; }
+
+        // RL-eligible: override styling to show eligibility
+        if (rlDay && info.type !== 'rl' && info.type !== 'holiday' && info.type !== 'wo') {
+          outline = '2px dashed rgba(175,82,222,0.5)';
+          if (rlDay.isBirthday) label = label ? `${label} 🎂` : '🎂';
+          else label = label ? `${label} ✅` : '✅';
+        }
       }
 
       cells.push(

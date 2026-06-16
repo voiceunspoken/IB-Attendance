@@ -323,34 +323,59 @@ export default function DashboardHome() {
           </div>
 
           {/* Super admin approval banner */}
-          {isSuperAdmin && (pendingCounts.policies > 0 || pendingCounts.corrections > 0 || pendingCounts.regularizations > 0) && (
+          {isSuperAdmin && (
             <div className="card" style={{
               padding: '12px 20px', marginBottom: 'var(--gap)',
-              background: 'rgba(255,159,10,0.06)', border: '1px solid rgba(255,159,10,0.25)',
+              background: pendingCounts.policies > 0 || pendingCounts.corrections > 0 || pendingCounts.regularizations > 0
+                ? 'rgba(255,159,10,0.06)' : 'var(--surface2)',
+              border: pendingCounts.policies > 0 || pendingCounts.corrections > 0 || pendingCounts.regularizations > 0
+                ? '1px solid rgba(255,159,10,0.25)' : '1px solid var(--border)',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px'
             }}>
-              <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text)' }}>
+              <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 ⚡ Pending Approvals
+                {(pendingCounts.policies + pendingCounts.corrections + pendingCounts.regularizations) > 0 && (
+                  <span style={{ fontSize: '12px', background: 'rgba(255,59,48,0.1)', color: 'var(--red)', padding: '1px 8px', borderRadius: '980px', fontWeight: 600 }}>
+                    {pendingCounts.policies + pendingCounts.corrections + pendingCounts.regularizations}
+                  </span>
+                )}
               </div>
-              <div style={{ display: 'flex', gap: '16px' }}>
-                {pendingCounts.policies > 0 && (
-                  <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '4px 12px' }}
-                    onClick={() => router.push('/settings')}>
-                    {pendingCounts.policies} Policy{pendingCounts.policies > 1 ? 'ies' : 'y'}
-                  </button>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                {(pendingCounts.policies + pendingCounts.corrections + pendingCounts.regularizations) > 0 ? (
+                  <>
+                    {pendingCounts.policies > 0 && (
+                      <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '4px 12px' }}
+                        onClick={() => router.push('/settings')}>
+                        {pendingCounts.policies} Policy{pendingCounts.policies > 1 ? 'ies' : 'y'}
+                      </button>
+                    )}
+                    {pendingCounts.regularizations > 0 && (
+                      <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '4px 12px' }}
+                        onClick={() => router.push('/leaves')}>
+                        {pendingCounts.regularizations} Regularization{pendingCounts.regularizations > 1 ? 's' : ''}
+                      </button>
+                    )}
+                    {pendingCounts.corrections > 0 && (
+                      <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '4px 12px' }}
+                        onClick={() => router.push('/leaves')}>
+                        {pendingCounts.corrections} Correction{pendingCounts.corrections > 1 ? 's' : ''}
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <span style={{ fontSize: '12px', color: 'var(--text3)' }}>All caught up</span>
                 )}
-                {pendingCounts.regularizations > 0 && (
-                  <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '4px 12px' }}
-                    onClick={() => router.push('/leaves')}>
-                    {pendingCounts.regularizations} Regularization{pendingCounts.regularizations > 1 ? 's' : ''}
-                  </button>
-                )}
-                {pendingCounts.corrections > 0 && (
-                  <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '4px 12px' }}
-                    onClick={() => router.push('/leaves')}>
-                    {pendingCounts.corrections} Correction{pendingCounts.corrections > 1 ? 's' : ''}
-                  </button>
-                )}
+                <button className="btn btn-outline" style={{ fontSize: '12px', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  onClick={async () => {
+                    const [pp, ac, sr] = await Promise.all([
+                      getPendingPolicies(),
+                      getPendingAttendanceCorrections(),
+                      getPendingSuperRegularizations()
+                    ]);
+                    setPendingCounts({ policies: pp.length, corrections: ac.length, regularizations: sr.length });
+                  }}>
+                  ↻ Refresh
+                </button>
               </div>
             </div>
           )}
