@@ -13,6 +13,8 @@ import { getAuditLog } from '../../actions/audit';
 import { getAllEmployees, addEmployee, deleteEmployee, deleteMonthRecord, updateMonthRecord, getMonths } from '../../actions/attendance';
 import { changePassword } from '../../actions/auth';
 import { sendAllMonthlyReports } from '../../actions/notifications';
+import { updateEmployeeDetails } from '../../actions/employees';
+import { getDepartments, getDesignations, setEmployeeManagers, getEmployeeManagers } from '../../actions/departments';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -41,9 +43,15 @@ export default function SettingsPage() {
 
   // Employees
   const [employees, setEmployees] = useState([]);
-  const [empForm, setEmpForm] = useState({ code: '', name: '' });
+  const [empForm, setEmpForm] = useState({ code: '', name: '', employeeType: 'regular', departmentId: '', designationId: '' });
   const [empMsg, setEmpMsg] = useState('');
   const [months, setMonths] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [designations, setDesignations] = useState([]);
+  const [editEmp, setEditEmp] = useState(null); // employee being edited
+  const [editEmpForm, setEditEmpForm] = useState({ name: '', birthday: '', workAnniversary: '', employeeType: 'regular', departmentId: '', subDepartmentId: '', designationId: '' });
+  const [editEmpManagers, setEditEmpManagers] = useState([]);
+  const [editEmpMsg, setEditEmpMsg] = useState('');
 
   // Edit month record
   const [editRecord, setEditRecord] = useState({ empCode: '', monthYear: '', present: '', absent: '', late: '', lateHD: '', shortShift: '', ssHD: '', rl: '', holi: '' });
@@ -68,12 +76,14 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!isAdmin) return;
     (async () => {
-      const [h, sp, hist, emps, ms] = await Promise.all([
+      const [h, sp, hist, emps, ms, depts, desigs] = await Promise.all([
         getHolidays(year),
         getActiveShiftPolicy(),
         getShiftPolicyHistory(),
         getAllEmployees(),
-        getMonths()
+        getMonths(),
+        getDepartments(),
+        getDesignations()
       ]);
       setHolidays(h);
       if (isSuperAdmin) {
@@ -84,6 +94,8 @@ export default function SettingsPage() {
       setPolicyHistory(hist);
       setEmployees(emps);
       setMonths(ms);
+      setDepartments(depts);
+      setDesignations(desigs);
       if (ms.length > 0) setNotifMonth(ms[0]);
       if (isSuperAdmin) {
         const logs = await getAuditLog({ limit: 100 });
@@ -155,10 +167,14 @@ export default function SettingsPage() {
   const handleAddEmployee = async (e) => {
     e.preventDefault();
     if (!empForm.code.trim() || !empForm.name.trim()) return setEmpMsg('Code and name are required.');
-    const result = await addEmployee(empForm.code.trim(), empForm.name.trim(), user.username);
+    const result = await addEmployee(empForm.code.trim(), empForm.name.trim(), user.username, {
+      employeeType: empForm.employeeType,
+      departmentId: empForm.departmentId || undefined,
+      designationId: empForm.designationId || undefined,
+    });
     if (result.error) return setEmpMsg(result.error);
     setEmpMsg(`Added: ${empForm.name}`);
-    setEmpForm({ code: '', name: '' });
+    setEmpForm({ code: '', name: '', employeeType: 'regular', departmentId: '', designationId: '' });
     const emps = await getAllEmployees();
     setEmployees(emps);
   };
@@ -183,6 +199,36 @@ export default function SettingsPage() {
     const result = await updateMonthRecord(editRecord.empCode, editRecord.monthYear, editRecord, user.username);
     if (result.error) return setEditRecordMsg(result.error);
     setEditRecordMsg('Record updated successfully.');
+  };
+
+  const openEditEmployee = async (emp) => {
+    setEditEmp(emp);
+    setEditEmpForm({
+      name: emp.name,
+      birthday: emp.birthday ? new Date(emp.birthday).toISOString().split('T')[0] : '',
+      workAnniversary: emp.workAnniversary ? new Date(emp.workAnniversary).toISOString().split('T')[0] : '',
+      employeeType: emp.employeeType || 'regular',
+      departmentId: emp.department?.id || '',
+      subDepartmentId: emp.subDepartment?.id || '',
+      designationId: emp.designation?.id || '',
+    });
+    setEditEmpMsg('');
+    try {
+      const mgrs = await getEmployeeManagers(emp.code);
+      setEditEmpManagers(mgrs.map(m => m.code));
+    } catch { setEditEmpManagers([]); }
+  };
+
+  const handleEditEmployee = async (e) => {
+    e.preventDefault();
+    if (!editEmp) return;
+    const result = await updateEmployeeDetails(editEmp.code, editEmpForm);
+    if (result.error) return setEditEmpMsg(result.error);
+    await setEmployeeManagers(editEmp.code, editEmpManagers);
+    setEditEmpMsg('Saved successfully.');
+    const emps = await getAllEmployees();
+    setEmployees(emps);
+    setTimeout(() => setEditEmp(null), 800);
   };
 
   const handleChangePassword = async (e) => {
@@ -460,18 +506,51 @@ export default function SettingsPage() {
       {!loading && tab === 'employees' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div className="card" style={{ padding: '22px 24px' }}>
-            <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px' }}>Add Employee Manually</div>
-            <form onSubmit={handleAddEmployee} style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-              <div>
-                <label className="input-label">Employee Code</label>
-                <input className="input-field" placeholder="e.g. 1042" value={empForm.code} onChange={e => setEmpForm(f => ({ ...f, code: e.target.value }))} style={{ width: '120px' }} />
+            <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px' }}>Add Employee</div>
+            <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '14px' }}>
+              Employees are also auto-created when you upload attendance via Dashboard. Edit their details here after creation.
+            </div>
+            <form onSubmit={handleAddEmployee} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label className="input-label">Employee Code</label>
+                  <input className="input-field" placeholder="e.g. 1042" value={empForm.code} onChange={e => setEmpForm(f => ({ ...f, code: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="input-label">Full Name</label>
+                  <input className="input-field" placeholder="e.g. John Doe" value={empForm.name} onChange={e => setEmpForm(f => ({ ...f, name: e.target.value }))} />
+                </div>
               </div>
-              <div>
-                <label className="input-label">Full Name</label>
-                <input className="input-field" placeholder="e.g. John Doe" value={empForm.name} onChange={e => setEmpForm(f => ({ ...f, name: e.target.value }))} style={{ width: '220px' }} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label className="input-label">Department</label>
+                  <select className="input-field" value={empForm.departmentId} onChange={e => setEmpForm(f => ({ ...f, departmentId: e.target.value }))}>
+                    <option value="">— None —</option>
+                    {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">Designation</label>
+                  <select className="input-field" value={empForm.designationId} onChange={e => setEmpForm(f => ({ ...f, designationId: e.target.value }))}>
+                    <option value="">— None —</option>
+                    {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </div>
               </div>
-              <button type="submit" className="btn btn-primary">Add Employee</button>
-              {empMsg && <span style={{ fontSize: '13px', color: empMsg.includes('already') ? 'var(--red)' : 'var(--green)', alignSelf: 'center' }}>{empMsg}</span>}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label className="input-label">Employee Type</label>
+                  <select className="input-field" value={empForm.employeeType} onChange={e => setEmpForm(f => ({ ...f, employeeType: e.target.value }))}>
+                    <option value="regular">Regular</option>
+                    <option value="wfh">WFH</option>
+                    <option value="wfm">WFM (Work From Mobile)</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginTop: '4px' }}>
+                <button type="submit" className="btn btn-primary">Add Employee</button>
+                {empMsg && <span style={{ fontSize: '13px', color: empMsg.includes('already') ? 'var(--red)' : 'var(--green)' }}>{empMsg}</span>}
+              </div>
             </form>
           </div>
 
@@ -554,25 +633,109 @@ export default function SettingsPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                 <thead>
                   <tr>
-                    {['Code', 'Name', 'Joined', 'Actions'].map(h => (
-                      <th key={h} style={{ background: 'var(--surface2)', padding: '10px 16px', textAlign: 'left', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text2)', borderBottom: '1px solid var(--border)' }}>{h}</th>
+                    {['Code', 'Name', 'Type', 'Department', 'Designation', 'Joined', 'Actions'].map(h => (
+                      <th key={h} style={{ background: 'var(--surface2)', padding: '10px 14px', textAlign: 'left', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text2)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {employees.map(emp => (
                     <tr key={emp.code} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '11px 16px', color: 'var(--text2)', fontSize: '12px' }}>{emp.code}</td>
-                      <td style={{ padding: '11px 16px', fontWeight: 500 }}>{emp.name}</td>
-                      <td style={{ padding: '11px 16px', color: 'var(--text2)', fontSize: '12px' }}>{new Date(emp.createdAt).toLocaleDateString()}</td>
-                      <td style={{ padding: '11px 16px' }}>
-                        <button onClick={() => handleDeleteEmployee(emp.code, emp.name)} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Delete</button>
+                      <td style={{ padding: '11px 14px', color: 'var(--text2)', fontSize: '12px', fontFamily: 'monospace' }}>{emp.code}</td>
+                      <td style={{ padding: '11px 14px', fontWeight: 500 }}>{emp.name}</td>
+                      <td style={{ padding: '11px 14px' }}>
+                        <span style={{
+                          fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '980px',
+                          background: emp.employeeType === 'wfh' ? 'rgba(175,82,222,0.1)' : emp.employeeType === 'wfm' ? 'rgba(52,199,89,0.1)' : 'var(--surface2)',
+                          color: emp.employeeType === 'wfh' ? 'var(--purple)' : emp.employeeType === 'wfm' ? 'var(--green)' : 'var(--text2)'
+                        }}>{(emp.employeeType || 'regular').toUpperCase()}</span>
+                      </td>
+                      <td style={{ padding: '11px 14px', color: 'var(--text2)', fontSize: '12px' }}>{emp.department?.name || '—'}</td>
+                      <td style={{ padding: '11px 14px', color: 'var(--text2)', fontSize: '12px' }}>{emp.designation?.name || '—'}</td>
+                      <td style={{ padding: '11px 14px', color: 'var(--text2)', fontSize: '12px', whiteSpace: 'nowrap' }}>{new Date(emp.createdAt).toLocaleDateString()}</td>
+                      <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' }}>
+                        <button onClick={() => openEditEmployee(emp)} className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '11px', marginRight: '6px' }}>Edit</button>
+                        <button onClick={() => handleDeleteEmployee(emp.code, emp.name)} style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Delete</button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── EDIT EMPLOYEE MODAL ── */}
+      {editEmp && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'grid', placeItems: 'center', padding: '20px' }} onClick={() => setEditEmp(null)}>
+          <div className="card" style={{ padding: '24px', maxWidth: '520px', width: '100%', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <div style={{ fontSize: '16px', fontWeight: 700 }}>Edit Employee</div>
+                <div style={{ fontSize: '13px', color: 'var(--text2)', marginTop: '2px' }}>{editEmp.name} (#{editEmp.code})</div>
+              </div>
+              <button onClick={() => setEditEmp(null)} style={{ border: 'none', background: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text2)', padding: '4px' }}>✕</button>
+            </div>
+            <form onSubmit={handleEditEmployee} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label className="input-label">Full Name</label>
+                <input className="input-field" value={editEmpForm.name} onChange={e => setEditEmpForm(f => ({ ...f, name: e.target.value }))} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label className="input-label">Birthday</label>
+                  <input className="input-field" type="date" value={editEmpForm.birthday} onChange={e => setEditEmpForm(f => ({ ...f, birthday: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="input-label">Work Anniversary</label>
+                  <input className="input-field" type="date" value={editEmpForm.workAnniversary} onChange={e => setEditEmpForm(f => ({ ...f, workAnniversary: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <label className="input-label">Employee Type</label>
+                <select className="input-field" value={editEmpForm.employeeType} onChange={e => setEditEmpForm(f => ({ ...f, employeeType: e.target.value }))}>
+                  <option value="regular">Regular</option>
+                  <option value="wfh">WFH (Work From Home)</option>
+                  <option value="wfm">WFM (Work From Mobile)</option>
+                </select>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label className="input-label">Department</label>
+                  <select className="input-field" value={editEmpForm.departmentId} onChange={e => setEditEmpForm(f => ({ ...f, departmentId: e.target.value, subDepartmentId: '' }))}>
+                    <option value="">— None —</option>
+                    {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">Sub-Department</label>
+                  <select className="input-field" value={editEmpForm.subDepartmentId} onChange={e => setEditEmpForm(f => ({ ...f, subDepartmentId: e.target.value }))}>
+                    <option value="">— None —</option>
+                    {departments.find(d => d.id === editEmpForm.departmentId)?.subDepartments?.map(sd => (
+                      <option key={sd.id} value={sd.id}>{sd.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="input-label">Designation</label>
+                <select className="input-field" value={editEmpForm.designationId} onChange={e => setEditEmpForm(f => ({ ...f, designationId: e.target.value }))}>
+                  <option value="">— None —</option>
+                  {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="input-label">Managers (employee codes, comma-separated)</label>
+                <input className="input-field" placeholder="e.g. 1001, 1002" value={editEmpManagers.join(', ')} onChange={e => setEditEmpManagers(e.target.value.split(',').map(s => s.trim()).filter(Boolean))} />
+                <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '4px' }}>Enter manager employee codes separated by commas. Leave blank for no manager.</div>
+              </div>
+              {editEmpMsg && <div style={{ fontSize: '13px', color: editEmpMsg.includes('success') ? 'var(--green)' : 'var(--red)' }}>{editEmpMsg}</div>}
+              <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+                <button type="submit" className="btn btn-primary">Save Changes</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setEditEmp(null)}>Cancel</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

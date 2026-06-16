@@ -18,6 +18,7 @@ export async function getEmployeeDetails(code) {
 
 export async function updateEmployeeDetails(code, fields) {
   const data = {};
+  if (fields.name !== undefined) data.name = fields.name;
   if (fields.birthday !== undefined) data.birthday = fields.birthday ? new Date(fields.birthday) : null;
   if (fields.workAnniversary !== undefined) data.workAnniversary = fields.workAnniversary ? new Date(fields.workAnniversary) : null;
   if (fields.employeeType !== undefined) data.employeeType = fields.employeeType;
