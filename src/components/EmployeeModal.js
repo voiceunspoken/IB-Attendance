@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FiX, FiMonitor, FiHome, FiBriefcase, FiClock } from 'react-icons/fi';
 import { useToast } from './Toast';
 
@@ -16,6 +16,16 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
 
   const toast = useToast();
   const fmtTime = (m) => m != null ? `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` : '';
+
+  // Lock body scroll when day detail modal is open
+  useEffect(() => {
+    if (popupDay) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [popupDay]);
 
   if (!employee) return null;
 
@@ -76,18 +86,26 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
     setPopupDay(day);
   };
 
-  const renderCalendar = () => {
+  const { year: calYear, month: calMonth } = currentMonth || { year: 2026, month: 3 };
+  const calFirstDow = new Date(calYear, calMonth - 1, 1).getDay();
+  const calDaysInMonth = new Date(calYear, calMonth, 0).getDate();
+  const weeks = Math.ceil((calFirstDow + calDaysInMonth) / 7);
+
+  const renderCalendar = (showHeaders = true) => {
     const { year, month } = currentMonth || { year: 2026, month: 3 };
     const firstDow = new Date(year, month - 1, 1).getDay();
     const daysInMonth = new Date(year, month, 0).getDate();
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-    const cells = dayNames.map((d, i) => (
-      <div key={`hdr-${i}`} style={{
-        textAlign: 'center', fontSize: '10px', fontWeight: 600,
-        color: 'var(--text2)', padding: '4px 0', letterSpacing: '0.04em', textTransform: 'uppercase'
-      }}>{d}</div>
-    ));
+    const cells = [];
+    if (showHeaders) {
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      dayNames.forEach((d, i) => cells.push(
+        <div key={`hdr-${i}`} style={{
+          textAlign: 'center', fontSize: '9px', fontWeight: 600,
+          color: 'var(--text2)', padding: '2px 0', letterSpacing: '0.03em', textTransform: 'uppercase'
+        }}>{d}</div>
+      ));
+    }
 
     for (let i = 0; i < firstDow; i++) cells.push(<div key={`empty-${i}`} />);
 
@@ -151,16 +169,15 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
           key={`cal-${d}`}
           onClick={(e) => info.type !== 'wo' && info.type !== 'holiday' ? openPopup(e, d) : undefined}
           style={{
-            aspectRatio: '1', borderRadius: '8px', border, background: bg,
+            borderRadius: '5px', border, background: bg,
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
             fontSize: '10px', gap: '1px', position: 'relative', cursor, opacity, outline, outlineOffset: '-2px',
-            transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+            transition: 'box-shadow 0.15s ease',
             boxShadow: isSelected ? '0 0 0 2.5px var(--blue), 0 4px 12px rgba(0,0,0,0.1)' : undefined,
-            transform: isSelected ? 'scale(1.05)' : undefined,
             zIndex: isSelected ? 5 : undefined,
           }}
-          onMouseEnter={e => { if (cursor === 'pointer' && !isSelected) e.currentTarget.style.transform = 'scale(1.06)'; }}
-          onMouseLeave={e => { if (!isSelected) e.currentTarget.style.transform = ''; }}
+          onMouseEnter={e => { if (cursor === 'pointer' && !isSelected) e.currentTarget.style.background = 'var(--surface3)'; }}
+          onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = bg; if (cursor === 'pointer') e.currentTarget.style.background = bg; }}
         >
           {ovVal && (
             <div style={{
@@ -172,8 +189,8 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
                         : 'var(--teal)'
             }} />
           )}
-          <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text)' }}>{d}</span>
-          <span style={{ fontSize: '9px', fontWeight: 600, color: 'var(--text2)', letterSpacing: '0.01em' }}>{label}</span>
+          <span style={{ fontWeight: 700, fontSize: '11px', color: 'var(--text)' }}>{d}</span>
+          <span style={{ fontSize: '8px', fontWeight: 600, color: 'var(--text2)', letterSpacing: '0.01em' }}>{label}</span>
         </div>
       );
     }
@@ -445,22 +462,52 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
     </>
   );
 
-  // ── Mode: Inline (embedded in page, no backdrop) ──
+  // ── Mode: Inline (embedded in page) — flex column, week-filling calendar + centered day detail modal ──
   if (mode === 'inline') {
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     return (
-      <div style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column' }}>
-        {modalBody}
-        {popupCard && (
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        {/* Day name headers — auto height */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', marginBottom: '4px' }}>
+          {dayNames.map((d, i) => (
+            <div key={`il-hdr-${i}`} style={{
+              textAlign: 'center', fontSize: '9px', fontWeight: 600,
+              color: 'var(--text2)', padding: '2px 0', letterSpacing: '0.03em', textTransform: 'uppercase'
+            }}>{d}</div>
+          ))}
+        </div>
+
+        {/* Calendar grid — fills remaining height, weeks distribute equally */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(7, 1fr)',
+          gridTemplateRows: `repeat(${weeks}, 1fr)`,
+          gap: '2px',
+          flex: 1,
+          minHeight: 0,
+        }}>
+          {renderCalendar(false)}
+        </div>
+
+        {/* Day detail modal — centered overlay */}
+        {popupContent && (
           <div style={{
-            position: 'absolute', inset: 0, zIndex: 50,
-            background: 'rgba(0,0,0,0.25)', borderRadius: 'inherit',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            position: 'fixed', inset: 0, zIndex: 99998,
+            background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
+            display: 'grid', placeItems: 'center', padding: '24px',
             animation: 'fadeIn 0.15s ease'
           }}
             onClick={() => { setSelectedDay(null); setPopupDay(null); }}
           >
-            <div onClick={e => e.stopPropagation()}>
-              {popupCard}
+            <div onClick={e => e.stopPropagation()}
+              style={{
+                background: 'var(--surface)', borderRadius: '16px',
+                border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)',
+                padding: '16px', maxWidth: '380px', width: '100%',
+                animation: 'slideUp 0.2s ease',
+              }}
+            >
+              {popupContent}
             </div>
           </div>
         )}

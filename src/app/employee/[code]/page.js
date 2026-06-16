@@ -14,8 +14,9 @@ import EmployeeModal from '../../../components/EmployeeModal';
 import { useToast } from '../../../components/Toast';
 import { FiCalendar, FiFileText, FiTool, FiDownload } from 'react-icons/fi';
 
-const LEAVE_LABELS = { cl: 'Casual Leave', sl: 'Sick Leave', el: 'Earned Leave', rl: 'Restricted Leave', sh: 'Short Leave' };
-const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b' };
+const LEAVE_LABELS = { cl: 'Casual Leave', sl: 'Sick Leave', el: 'Earned Leave', rl: 'Restricted Leave', sh: 'Short Leave', ul: 'Unpaid Leave' };
+const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b', ul: '#8e8e93' };
+
 
 export default function EmployeeDashboard({ params }) {
   const unwrappedParams = use(params);
@@ -47,6 +48,12 @@ export default function EmployeeDashboard({ params }) {
   const [rlHolidays, setRlHolidays] = useState([]);
   const [leaveBalanceDetail, setLeaveBalanceDetail] = useState(null);
   const [fetchTrigger, setFetchTrigger] = useState(0);
+
+  // Bulk override state
+  const [bulkOverrideFrom, setBulkOverrideFrom] = useState('');
+  const [bulkOverrideTo, setBulkOverrideTo] = useState('');
+  const [bulkOverrideType, setBulkOverrideType] = useState('wfm');
+  const [bulkOverrideModal, setBulkOverrideModal] = useState(false);
 
   // Regularization form
   const [regForm, setRegForm] = useState({ date: '', requestedIn: '', requestedOut: '', reason: '' });
@@ -112,6 +119,16 @@ export default function EmployeeDashboard({ params }) {
       setSandwichWarning('');
     }
   }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.leaveType]);
+
+  // Lock body scroll when bulk override modal is open
+  useEffect(() => {
+    if (bulkOverrideModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [bulkOverrideModal]);
 
   const handleSubmitLeave = async (e) => {
     e.preventDefault();
@@ -204,6 +221,23 @@ export default function EmployeeDashboard({ params }) {
     toast.success('Correction request submitted for super admin approval.');
   };
 
+  const handleBulkOverride = () => {
+    const f = parseInt(bulkOverrideFrom);
+    const t = parseInt(bulkOverrideTo) || f;
+    if (!f || isNaN(f)) return toast.error('Please enter a valid start date.');
+    const dIM = new Date(modalCurrentMonth.year, modalCurrentMonth.month, 0).getDate();
+    const start = Math.max(1, Math.min(f, dIM));
+    const end = Math.max(start, Math.min(t, dIM));
+    for (let d = start; d <= end; d++) {
+      const info = formattedEmployee.days.find(x => x.d === d);
+      if (info && info.type !== 'wo' && info.type !== 'holiday') {
+        handleApplyOverride(formattedEmployee.code, d, bulkOverrideType);
+      }
+    }
+    setBulkOverrideFrom('');
+    setBulkOverrideTo('');
+  };
+
   const formatMonth = (my) => {
     const [m, y] = my.split('_');
     return new Date(y, parseInt(m) - 1).toLocaleString('default', { month: 'short', year: 'numeric' });
@@ -219,8 +253,6 @@ export default function EmployeeDashboard({ params }) {
     return <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: '980px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.color }}>{status}</span>;
   };
 
-  const avgAbsent = (emp.records.reduce((s, r) => s + r.absent, 0) / emp.records.length).toFixed(1);
-
   const StageBadge = ({ stage }) => {
     const map = {
       pending_l2: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3', label: 'L2 Pending' },
@@ -232,6 +264,29 @@ export default function EmployeeDashboard({ params }) {
     const s = map[stage] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)', label: stage };
     return <span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, background: s.bg, color: s.color }}>{s.label}</span>;
   };
+
+  const computeOverrideCounts = () => {
+    let wfm = 0, wfmhd = 0, wfh = 0, wos = 0, woshd = 0;
+    Object.keys(currentMonthOverrides).forEach(k => {
+      const v = currentMonthOverrides[k];
+      if (v === 'wfm') wfm++;
+      else if (v === 'wfm-hd') wfmhd++;
+      else if (v === 'wfh') wfh++;
+      else if (v === 'wos') wos++;
+      else if (v === 'wos-hd') woshd++;
+    });
+    return { wfm, wfmhd, wfh, wos, woshd };
+  };
+  const ovCounts = computeOverrideCounts();
+  const kpiStats = [
+    { val: formattedEmployee.present, label: 'Present', color: 'var(--green)' },
+    { val: formattedEmployee.absent, label: 'Absent', color: 'var(--red)' },
+    { val: formattedEmployee.late, label: 'Late', color: 'var(--yellow)' },
+    { val: formattedEmployee.shortShift, label: 'Short Shifts', color: 'var(--orange)' },
+    { val: ovCounts.wfm + ovCounts.wfmhd, label: 'WFM', color: 'var(--green)' },
+    { val: ovCounts.wfh, label: 'WFH', color: 'var(--purple)' },
+    { val: ovCounts.wos + ovCounts.woshd, label: 'WOS', color: 'var(--teal)' },
+  ];
 
   const downloadPDF = async (record, empData, ovs) => {
     const { jsPDF } = await import('jspdf');
@@ -344,67 +399,45 @@ export default function EmployeeDashboard({ params }) {
   };
 
   return (
-    <div style={{ padding: '24px 28px', maxWidth: '1200px', margin: '0 auto' }} className="animate-fade-in">
+    <div className="page-wrapper animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
 
-      {/* Profile header */}
-      <div className="card" style={{ padding: '20px 24px', marginBottom: '18px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ width: '46px', height: '46px', borderRadius: '12px', background: 'var(--surface3)', display: 'grid', placeItems: 'center', fontSize: '20px', fontWeight: 700, color: 'var(--text2)' }}>
-              {emp.name.charAt(0)}
-            </div>
-            <div>
-              <h1 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '-0.03em' }}>{emp.name}</h1>
-              <div style={{ fontSize: '12px', color: 'var(--text2)', marginTop: '1px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                #{emp.code}
-                {emp.employeeType && emp.employeeType !== 'regular' && (
-                  <span style={{ background: emp.employeeType === 'wfh' ? 'rgba(175,82,222,0.1)' : 'rgba(52,199,89,0.1)', color: emp.employeeType === 'wfh' ? 'var(--purple)' : 'var(--green)', padding: '1px 7px', borderRadius: '980px', fontSize: '10px', fontWeight: 600 }}>{emp.employeeType.toUpperCase()}</span>
-                )}
-                {emp.department && <span style={{ fontSize: '11px', background: 'rgba(0,113,227,0.08)', color: 'var(--blue)', padding: '2px 8px', borderRadius: '980px', fontWeight: 500 }}>{emp.department.name}</span>}
-                {emp.designation && <span style={{ fontSize: '11px', background: 'var(--surface2)', color: 'var(--text2)', padding: '2px 8px', borderRadius: '980px', fontWeight: 500 }}>{emp.designation.name}</span>}
-                {emp.managers && emp.managers.length > 0 && (
-                  <span style={{ fontSize: '11px', color: 'var(--text3)' }}>
-                    · {emp.managers.map(m => m.name).join(', ')}
-                  </span>
-                )}
-              </div>
-            </div>
+      {/* Profile header — compact */}
+      <div className="card" style={{ padding: '12px 16px', marginBottom: '10px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--surface3)', display: 'grid', placeItems: 'center', fontSize: '14px', fontWeight: 700, color: 'var(--text2)', flexShrink: 0 }}>
+            {emp.name.charAt(0)}
           </div>
-          <div style={{ display: 'flex', gap: '18px' }}>
-            {[
-              { label: 'Months', value: emp.records.length, color: 'var(--text)' },
-              { label: 'Avg Absent', value: avgAbsent, color: parseFloat(avgAbsent) >= 3 ? 'var(--red)' : 'var(--text)' },
-            ].map(s => (
-              <div key={s.label} style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '-0.04em', color: s.color }}>{s.value}</div>
-                <div style={{ fontSize: '10px', color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 500 }}>{s.label}</div>
-              </div>
-            ))}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              <h1 style={{ fontSize: '16px', fontWeight: 700, letterSpacing: '-0.03em' }}>{emp.name}</h1>
+              <span style={{ fontSize: '10px', color: 'var(--text2)', fontFamily: 'monospace' }}>#{emp.code}</span>
+              {emp.employeeType && emp.employeeType !== 'regular' && (
+                <span style={{ background: emp.employeeType === 'wfh' ? 'rgba(175,82,222,0.1)' : 'rgba(52,199,89,0.1)', color: emp.employeeType === 'wfh' ? 'var(--purple)' : 'var(--green)', padding: '1px 6px', borderRadius: '980px', fontSize: '9px', fontWeight: 600 }}>{emp.employeeType.toUpperCase()}</span>
+              )}
+              {emp.department && <span style={{ fontSize: '10px', background: 'rgba(0,113,227,0.08)', color: 'var(--blue)', padding: '1px 6px', borderRadius: '980px', fontWeight: 500 }}>{emp.department.name}</span>}
+              {emp.designation && <span style={{ fontSize: '10px', background: 'var(--surface2)', color: 'var(--text2)', padding: '1px 6px', borderRadius: '980px', fontWeight: 500 }}>{emp.designation.name}</span>}
+              {emp.managers && emp.managers.length > 0 && (
+                <span style={{ fontSize: '10px', color: 'var(--text3)' }}>· {emp.managers.map(m => m.name).join(', ')}</span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Leave balance strip — inline pills */}
+        {/* Leave balance — inline compact */}
         {leaveBalance && (
-          <div style={{ display: 'flex', gap: '8px', marginTop: '14px', paddingTop: '14px', borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '4px', marginTop: '8px', flexWrap: 'wrap' }}>
             {['cl', 'sl', 'el', 'rl', 'sh'].map(type => {
               const avail = leaveBalance[`${type}Avail`] ?? 0;
               const total = leaveBalance[`${type}Total`] ?? 0;
-              const used = leaveBalance[`${type}Used`] ?? 0;
-              const pct = total > 0 ? Math.max(0, Math.min(100, (avail / total) * 100)) : 0;
               return (
                 <div key={type} style={{
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  background: 'var(--surface2)', borderRadius: '980px',
-                  padding: '6px 14px', border: '1px solid var(--border)'
+                  display: 'flex', alignItems: 'center', gap: '3px',
+                  background: 'var(--surface2)', borderRadius: '6px',
+                  padding: '2px 8px', border: '1px solid var(--border)'
                 }}>
-                  <div>
-                    <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text2)', letterSpacing: '0.03em' }}>{type.toUpperCase()}</div>
-                    <div style={{ height: '3px', width: '48px', background: 'var(--surface3)', borderRadius: '2px', marginTop: '3px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${pct}%`, background: LEAVE_COLORS[type], borderRadius: '2px' }} />
-                    </div>
-                  </div>
-                  <span style={{ fontSize: '16px', fontWeight: 700, color: LEAVE_COLORS[type], minWidth: '20px', textAlign: 'right' }}>{avail}</span>
-                  <span style={{ fontSize: '10px', color: 'var(--text3)' }}>/ {total}</span>
+                  <span style={{ fontSize: '9px', fontWeight: 600, color: LEAVE_COLORS[type] }}>{type.toUpperCase()}</span>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text)' }}>{avail}</span>
+                  <span style={{ fontSize: '9px', color: 'var(--text3)' }}>/{total}</span>
                 </div>
               );
             })}
@@ -413,76 +446,165 @@ export default function EmployeeDashboard({ params }) {
 
         {/* Upcoming holidays */}
         {upcomingHolidays.length > 0 && (
-          <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border)', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Holidays</span>
+          <div style={{ marginTop: '6px', display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
             {upcomingHolidays.slice(0, 3).map(h => (
-              <span key={h.id} style={{ fontSize: '11px', background: 'rgba(255,159,10,0.08)', color: '#b36200', padding: '3px 8px', borderRadius: '980px', fontWeight: 500 }}>
-                {h.name} — {new Date(h.year, h.month - 1, h.day).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+              <span key={h.id} style={{ fontSize: '10px', background: 'rgba(255,159,10,0.08)', color: '#b36200', padding: '2px 7px', borderRadius: '980px', fontWeight: 500 }}>
+                {h.name}
               </span>
             ))}
             {upcomingHolidays.length > 3 && (
-              <span style={{ fontSize: '11px', color: 'var(--text3)' }}>+{upcomingHolidays.length - 3} more</span>
+              <span style={{ fontSize: '10px', color: 'var(--text3)' }}>+{upcomingHolidays.length - 3}</span>
             )}
           </div>
         )}
-      </div>
+        </div>
+      
 
-      {/* ── ATTENDANCE CONTENT (shared by admin & employee) ── */}
+      {/* ── ATTENDANCE CONTENT ── */}
       {tab === 'attendance' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: '18px', alignItems: 'start' }}>
-          <div className="card" style={{ padding: '12px' }}>
-            <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text3)', marginBottom: '10px', letterSpacing: '0.05em', textTransform: 'uppercase', padding: '0 8px' }}>History</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-              {emp.records.map((r, i) => (
-                <button key={r.id} onClick={() => setSelectedMonthIndex(i)} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
-                  border: 'none', fontSize: '12px', fontWeight: selectedMonthIndex === i ? 600 : 400,
-                  color: selectedMonthIndex === i ? 'var(--text)' : 'var(--text2)',
-                  background: selectedMonthIndex === i ? 'var(--blue-light)' : 'transparent',
-                  borderLeft: selectedMonthIndex === i ? '3px solid var(--blue)' : '3px solid transparent',
-                  transition: 'all 0.12s'
-                }}>
-                  <span>{formatMonth(r.monthYear)}</span>
-                  <span style={{ fontSize: '10px', display: 'flex', gap: '3px' }}>
-                    {r.absent > 0 && <span style={{ color: 'var(--red)' }}>{r.absent}A</span>}
-                    {r.late > 0 && <span style={{ color: 'var(--yellow)' }}>{r.late}L</span>}
-                  </span>
-                </button>
-              ))}
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '10px', height: '100%' }}>
+            {/* History sidebar */}
+            <div className="card" style={{ padding: '8px' }}>
+              <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text3)', marginBottom: '6px', letterSpacing: '0.05em', textTransform: 'uppercase', padding: '0 6px' }}>History</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                {emp.records.map((r, i) => (
+                  <button key={r.id} onClick={() => setSelectedMonthIndex(i)} style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                    border: 'none', fontSize: '12px', fontWeight: selectedMonthIndex === i ? 600 : 400,
+                    color: selectedMonthIndex === i ? 'var(--text)' : 'var(--text2)',
+                    background: selectedMonthIndex === i ? 'var(--blue-light)' : 'transparent',
+                    borderLeft: selectedMonthIndex === i ? '3px solid var(--blue)' : '3px solid transparent',
+                    transition: 'all 0.12s'
+                  }}>
+                    <span>{formatMonth(r.monthYear)}</span>
+                    <span style={{ fontSize: '10px', display: 'flex', gap: '2px' }}>
+                      {r.absent > 0 && <span style={{ color: 'var(--red)' }}>{r.absent}A</span>}
+                      {r.late > 0 && <span style={{ color: 'var(--yellow)' }}>{r.late}L</span>}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+            
 
-          <div className="card" style={{ padding: '20px', position: 'relative' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div style={{ fontSize: '15px', fontWeight: 700, letterSpacing: '-0.03em' }}>
+            {/* Workspace card */}
+            <div className="card" style={{ padding: '14px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            {/* Month nav + PDF + Override buttons */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexShrink: 0 }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '-0.03em' }}>
                 {formatMonth(currentRecord.monthYear)}
               </div>
-              <button
-                className="btn btn-secondary"
-                style={{ fontSize: '11px', padding: '5px 12px' }}
-                onClick={() => downloadPDF(currentRecord, emp, currentMonthOverrides)}
-              >
-                <FiDownload size={12} /> PDF
-              </button>
-            </div>
-            <div style={{ position: 'relative', height: '720px', overflow: 'hidden' }}>
-              <style>{`.emp-inline > div { position: absolute !important; inset: 0 !important; background: transparent !important; backdrop-filter: none !important; } .emp-inline > div > div { width: 100% !important; max-width: 100% !important; height: 100% !important; border: none !important; background: transparent !important; box-shadow: none !important; border-radius: 0 !important; }`}</style>
-              <div className="emp-inline">
-                <EmployeeModal
-                  employee={formattedEmployee}
-                  currentMonth={modalCurrentMonth}
-                  overrides={currentMonthOverrides}
-                  onClose={() => {}}
-                  onApplyOverride={handleApplyOverride}
-                  onRemoveOverride={handleRemoveOverride}
-                  onClearAllOverrides={handleClearAllOverrides}
-                  readOnly={!isAdmin}
-                  onProposeCorrection={isAdmin ? handleProposeCorrection : undefined}
-                  rlEligibleDays={rlHolidays}
-                />
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                {isAdmin && (
+                  <>
+                    <button className="btn btn-secondary" style={{ fontSize: '10px', padding: '4px 10px' }}
+                      onClick={() => setBulkOverrideModal(true)}>
+                      Override
+                    </button>
+                    <button className="btn btn-outline" style={{ fontSize: '10px', padding: '4px 10px' }}
+                      onClick={handleClearAllOverrides}>
+                      Clear
+                    </button>
+                  </>
+                )}
+                <button className="btn btn-secondary" style={{ fontSize: '10px', padding: '4px 10px' }}
+                  onClick={() => downloadPDF(currentRecord, emp, currentMonthOverrides)}>
+                  <FiDownload size={10} /> PDF
+                </button>
               </div>
             </div>
+
+            {/* Compact KPI strip */}
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '6px', flexWrap: 'wrap', flexShrink: 0 }}>
+              {kpiStats.map(s => (
+                <div key={s.label} style={{
+                  display: 'flex', alignItems: 'center', gap: '2px',
+                  background: 'var(--surface2)', borderRadius: '5px',
+                  padding: '2px 6px', fontSize: '10px'
+                }}>
+                  <span style={{ fontWeight: 700, color: s.color }}>{s.val}</span>
+                  <span style={{ color: 'var(--text3)' }}>{s.label}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Calendar */}
+            <EmployeeModal
+              employee={formattedEmployee}
+              currentMonth={modalCurrentMonth}
+              overrides={currentMonthOverrides}
+              onClose={() => {}}
+              onApplyOverride={handleApplyOverride}
+              onRemoveOverride={handleRemoveOverride}
+              onClearAllOverrides={handleClearAllOverrides}
+              readOnly={!isAdmin}
+              onProposeCorrection={isAdmin ? handleProposeCorrection : undefined}
+              rlEligibleDays={rlHolidays}
+              mode="inline"
+            />
+
+            {/* Bulk Override modal */}
+            {bulkOverrideModal && (
+              <div style={{
+                position: 'fixed', inset: 0, zIndex: 99998,
+                background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
+                display: 'grid', placeItems: 'center', padding: '24px',
+                animation: 'fadeIn 0.15s ease'
+              }}
+                onClick={() => setBulkOverrideModal(false)}
+              >
+                <div onClick={e => e.stopPropagation()}
+                  style={{
+                    background: 'var(--surface)', borderRadius: '16px',
+                    border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)',
+                    padding: '24px', maxWidth: '420px', width: '100%',
+                    animation: 'slideUp 0.2s ease'
+                  }}
+                >
+                  <div style={{
+                    fontSize: 'var(--fs-md)', fontWeight: 700, letterSpacing: '-0.02em',
+                    marginBottom: '16px'
+                  }}>
+                    Manual Override
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <div>
+                        <label className="input-label">From Date</label>
+                        <input type="number" min="1" max="31" placeholder="5" value={bulkOverrideFrom}
+                          onChange={e => setBulkOverrideFrom(e.target.value)} className="input-field"
+                          style={{ padding: '8px 10px' }} />
+                      </div>
+                      <div>
+                        <label className="input-label">To Date</label>
+                        <input type="number" min="1" max="31" placeholder="same" value={bulkOverrideTo}
+                          onChange={e => setBulkOverrideTo(e.target.value)} className="input-field"
+                          style={{ padding: '8px 10px' }} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="input-label">Type</label>
+                      <select value={bulkOverrideType} onChange={e => setBulkOverrideType(e.target.value)}
+                        className="input-field" style={{ padding: '8px 10px' }}>
+                        <option value="wfm">WFM — Full Day</option>
+                        <option value="wfm-hd">WFM — Half Day</option>
+                        <option value="wfh">WFH</option>
+                        <option value="wos">WOS — Full Day</option>
+                        <option value="wos-hd">WOS — Half Day</option>
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                      <button className="btn btn-primary" style={{ flex: 1, padding: '9px' }}
+                        onClick={() => { handleBulkOverride(); setBulkOverrideModal(false); }}>Apply</button>
+                      <button className="btn btn-secondary" style={{ flex: 1, padding: '9px' }}
+                        onClick={() => { setBulkOverrideModal(false); }}>Cancel</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -519,12 +641,28 @@ export default function EmployeeDashboard({ params }) {
               <div>
                 <label className="input-label">Leave Type</label>
                   <select className="input-field" value={leaveForm.leaveType} onChange={e => setLeaveForm(f => ({ ...f, leaveType: e.target.value, shiftSlot: '10-12' }))}>
-                    <option value="cl">Casual Leave (CL) — 12 days/yr</option>
-                    <option value="sl">Sick Leave (SL) — 6 days/yr</option>
-                    <option value="el">Earned Leave (EL) — 4 days/yr</option>
-                    <option value="rl">Restricted Holiday (RL) — 2 days/yr</option>
-                    <option value="sh">Short Leave (SH) — 2 hrs · every 2 months</option>
+                    {(['cl', 'sl', 'el', 'rl', 'sh']).map(type => {
+                      const avail = leaveBalanceDetail ? (leaveBalanceDetail[`${type}Avail`] ?? 0) : '?';
+                      const total = leaveBalanceDetail ? (leaveBalanceDetail[`${type}Total`] ?? 0) : '?';
+                      return (
+                        <option key={type} value={type}>
+                          {LEAVE_LABELS[type]} ({type.toUpperCase()}) — {avail}/{total} remaining
+                        </option>
+                      );
+                    })}
+                    <option value="ul" style={{ borderTop: '1px solid var(--border)' }}>Unpaid Leave (UL) — no limit</option>
                   </select>
+                  {/* Balance warning */}
+                  {leaveForm.leaveType !== 'ul' && leaveBalanceDetail && leaveBalanceDetail[`${leaveForm.leaveType}Avail`] <= 0 && (
+                    <div style={{ fontSize: '12px', color: 'var(--orange)', marginTop: '6px', background: 'rgba(255,159,10,0.1)', borderRadius: '8px', padding: '8px 12px', fontWeight: 500 }}>
+                      You have no {LEAVE_LABELS[leaveForm.leaveType]} remaining. This will be treated as unpaid leave.
+                    </div>
+                  )}
+                  {leaveForm.leaveType === 'ul' && (
+                    <div style={{ fontSize: '12px', color: 'var(--text3)', marginTop: '6px', background: 'var(--surface2)', borderRadius: '8px', padding: '8px 12px' }}>
+                      No leave balance tracking — this will be unpaid leave.
+                    </div>
+                  )}
               </div>
 
               {/* RL: show eligible dates */}
@@ -620,7 +758,7 @@ export default function EmployeeDashboard({ params }) {
               {/* Leave balance breakdown */}
               {leaveBalanceDetail && (
                 <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '12px 14px', fontSize: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  {['cl', 'sl', 'el', 'rl', 'sh'].map(type => {
+            {['cl', 'sl', 'el', 'rl', 'sh'].map(type => {
                     const avail = leaveBalanceDetail[`${type}Avail`] ?? 0;
                     const total = leaveBalanceDetail[`${type}Total`] ?? 0;
                     const used = leaveBalanceDetail[`${type}Used`] ?? 0;
