@@ -16,6 +16,7 @@ import { sendAllMonthlyReports } from '../../actions/notifications';
 import { updateEmployeeDetails } from '../../actions/employees';
 import { getDepartments, getDesignations, setEmployeeManagers, getEmployeeManagers } from '../../actions/departments';
 import { useToast } from '../../components/Toast';
+import ConfirmModal from '../../components/ConfirmModal';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -67,6 +68,8 @@ export default function SettingsPage() {
   // Notifications
   const [notifMonth, setNotifMonth] = useState('');
   const [notifMsg, setNotifMsg] = useState('');
+
+  const [confirmState, setConfirmState] = useState({ show: false, message: '', confirmLabel: 'Delete', confirmLoadingLabel: 'Deleting…', variant: 'danger', onConfirm: null });
 
   const [loading, setLoading] = useState(true);
 
@@ -121,25 +124,39 @@ export default function SettingsPage() {
     setPendingHolidays(ph);
   };
 
-  const handleDeleteHoliday = async (id) => {
-    if (!confirm('Remove this holiday?')) return;
-    if (isSuperAdmin) {
-      await deletePendingHoliday(id, user.username);
-    } else {
-      await deleteHoliday(id);
-    }
-    const [h, ph] = await Promise.all([getHolidays(year), getPendingHolidays(year)]);
-    setHolidays(h);
-    setPendingHolidays(ph);
+  const handleDeleteHoliday = (id) => {
+    setConfirmState({
+      show: true,
+      message: 'Remove this holiday?',
+      confirmLabel: 'Remove',
+      onConfirm: async () => {
+        if (isSuperAdmin) {
+          await deletePendingHoliday(id, user.username);
+        } else {
+          await deleteHoliday(id);
+        }
+        const [h, ph] = await Promise.all([getHolidays(year), getPendingHolidays(year)]);
+        setHolidays(h);
+        setPendingHolidays(ph);
+      },
+    });
   };
 
-  const handleSeedHolidays = async () => {
-    if (!confirm(`Seed all IB official holidays for ${year}? Existing entries will be updated.`)) return;
-    await seedIBHolidays(year);
-    const [h, ph] = await Promise.all([getHolidays(year), getPendingHolidays(year)]);
-    setHolidays(h);
-    setPendingHolidays(ph);
-    setHMsg(`Seeded IB holidays for ${year}.`);
+  const handleSeedHolidays = () => {
+    setConfirmState({
+      show: true,
+      message: `Seed all IB official holidays for ${year}? Existing entries will be updated.`,
+      confirmLabel: 'Seed',
+      confirmLoadingLabel: 'Seeding…',
+      variant: 'default',
+      onConfirm: async () => {
+        await seedIBHolidays(year);
+        const [h, ph] = await Promise.all([getHolidays(year), getPendingHolidays(year)]);
+        setHolidays(h);
+        setPendingHolidays(ph);
+        setHMsg(`Seeded IB holidays for ${year}.`);
+      },
+    });
   };
 
   const handleUploadHolidays = async () => {
@@ -181,17 +198,27 @@ export default function SettingsPage() {
     setEmployees(emps);
   };
 
-  const handleDeleteEmployee = async (code, name) => {
-    if (!confirm(`Delete ${name} and ALL their attendance data? This cannot be undone.`)) return;
-    await deleteEmployee(code, user.username);
-    const emps = await getAllEmployees();
-    setEmployees(emps);
+  const handleDeleteEmployee = (code, name) => {
+    setConfirmState({
+      show: true,
+      message: `Delete ${name} and ALL their attendance data? This cannot be undone.`,
+      onConfirm: async () => {
+        await deleteEmployee(code, user.username);
+        const emps = await getAllEmployees();
+        setEmployees(emps);
+      },
+    });
   };
 
-  const handleDeleteMonth = async (code, name, monthYear) => {
-    if (!confirm(`Delete ${name}'s data for ${monthYear}? This cannot be undone.`)) return;
-    await deleteMonthRecord(code, monthYear, user.username);
-    toast.success('Month record deleted.');
+  const handleDeleteMonth = (code, name, monthYear) => {
+    setConfirmState({
+      show: true,
+      message: `Delete ${name}'s data for ${monthYear}? This cannot be undone.`,
+      onConfirm: async () => {
+        await deleteMonthRecord(code, monthYear, user.username);
+        toast.success('Month record deleted.');
+      },
+    });
   };
 
   const handleEditRecord = async (e) => {
@@ -834,6 +861,21 @@ export default function SettingsPage() {
             }
           </div>
         </div>
+      )}
+
+      {/* Confirm modal */}
+      {confirmState.show && (
+        <ConfirmModal
+          message={confirmState.message}
+          confirmLabel={confirmState.confirmLabel}
+          confirmLoadingLabel={confirmState.confirmLoadingLabel}
+          variant={confirmState.variant}
+          onConfirm={async () => {
+            await confirmState.onConfirm();
+            setConfirmState(s => ({ ...s, show: false }));
+          }}
+          onCancel={() => setConfirmState(s => ({ ...s, show: false }))}
+        />
       )}
     </div>
   );

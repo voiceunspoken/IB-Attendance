@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { FiX, FiAlertTriangle } from 'react-icons/fi';
 
-export default function ConfirmModal({ message, onConfirm, onCancel }) {
+export default function ConfirmModal({ message, onConfirm, onCancel, confirmLabel = 'Delete', confirmLoadingLabel = 'Deleting…', variant = 'danger' }) {
   const [loading, setLoading] = useState(false);
 
   return (
@@ -64,10 +64,10 @@ export default function ConfirmModal({ message, onConfirm, onCancel }) {
             try { await onConfirm(); } finally { setLoading(false); }
           }}
             className="btn btn-primary"
-            style={{ fontSize: '13px', padding: '8px 16px', background: 'var(--red)', opacity: loading ? 0.7 : 1 }}
+            style={{ fontSize: '13px', padding: '8px 16px', background: variant === 'danger' ? 'var(--red)' : 'var(--blue)', opacity: loading ? 0.7 : 1 }}
             disabled={loading}
           >
-            {loading ? 'Deleting…' : 'Delete'}
+            {loading ? confirmLoadingLabel : confirmLabel}
           </button>
         </div>
       </div>

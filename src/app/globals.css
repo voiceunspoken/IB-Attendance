@@ -39,6 +39,7 @@
   --shadow-lg: 0 16px 48px rgba(0,0,0,0.12), 0 4px 16px rgba(0,0,0,0.06);
 
   /* Fluid type scale */
+  --fs-tiny: clamp(9px, 0.9vw, 10px);
   --fs-xs: clamp(10px, 1.1vw, 11px);
   --fs-sm: clamp(12px, 1.3vw, 13px);
   --fs-base: clamp(13px, 1.4vw, 14px);

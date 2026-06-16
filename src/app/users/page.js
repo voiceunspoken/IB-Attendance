@@ -6,6 +6,7 @@ import { useAuth } from '../../components/AuthProvider';
 import { getUsers, createUser, deleteUser, updateUser, getPendingChanges, reviewPendingChange } from '../../actions/auth';
 import { getAllEmployees } from '../../actions/attendance';
 import { updateEmployeeDetails } from '../../actions/employees';
+import ConfirmModal from '../../components/ConfirmModal';
 
 const ROLE_STYLES = {
   super_admin: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', icon: '👑', label: 'Super Admin' },
@@ -99,6 +100,7 @@ export default function UsersPage() {
   const [userSearch, setUserSearch] = useState('');
   const [empSearch, setEmpSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+  const [confirmState, setConfirmState] = useState({ show: false, message: '', onConfirm: null });
   const [fetchTrigger, setFetchTrigger] = useState(0);
 
   useEffect(() => {
@@ -149,10 +151,15 @@ export default function UsersPage() {
     setFetchTrigger(t => t + 1);
   };
 
-  const handleDelete = async (u) => {
-    if (!confirm(`Delete user "${u.username}"? This cannot be undone.`)) return;
-    await deleteUser(u.id);
-    setFetchTrigger(t => t + 1);
+  const handleDelete = (u) => {
+    setConfirmState({
+      show: true,
+      message: `Delete user "${u.username}"? This cannot be undone.`,
+      onConfirm: async () => {
+        await deleteUser(u.id);
+        setFetchTrigger(t => t + 1);
+      },
+    });
   };
 
   const openEdit = (u) => {
@@ -596,6 +603,18 @@ export default function UsersPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Confirm modal */}
+      {confirmState.show && (
+        <ConfirmModal
+          message={confirmState.message}
+          onConfirm={async () => {
+            await confirmState.onConfirm();
+            setConfirmState(s => ({ ...s, show: false }));
+          }}
+          onCancel={() => setConfirmState(s => ({ ...s, show: false }))}
+        />
+      )}
     </div>
   );
 }
