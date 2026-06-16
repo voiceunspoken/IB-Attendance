@@ -122,6 +122,7 @@ function analyzeEmployee(code, name, row, numDays, weekends, gazHolidays, rlDays
 
   const days = [];
   let present = 0, absent = 0, halfDay = 0, late = 0, shortShift = 0, shortLeave = 0, rl = 0, holi = 0;
+  let lateCounter = 0, ssCounter = 0, lateToHD = 0, ssToHD = 0;
 
   for (let d = 1; d <= numDays; d++) {
     const idx = d + 1, raw = String(row[idx] || '').trim();
@@ -139,40 +140,47 @@ function analyzeEmployee(code, name, row, numDays, weekends, gazHolidays, rlDays
     if (parts.length === 1 && inT !== null && inT >= 15 * 60) { outT = inT; inT = null; }
 
     let isLate = false, isSS = false, isSL = false, isHD = false;
+    let hdReason = null;
 
     if (inT !== null && inT > LATE_THRESHOLD) { isLate = true; late++; }
 
+    // Determine HD/SL/SS — late is mutually exclusive with all
     if (inT !== null && outT !== null) {
       const wh = (outT - inT) / 60;
-
-      // Evening half-day check: leave before evening exit time or within short leave window
-      const isEveningEarly = outT < EVENING_EXIT;
       const isEveningSL = outT >= EVENING_EXIT && outT <= EVENING_EXIT + EVENING_SL_WINDOW;
 
-      // Morning half-day: out before morning half-day cutoff
-      if (outT <= MORNING_HD_CUTOFF) { isHD = true; halfDay++; }
-      // Afternoon half-day: in after afternoon half-day start
-      else if (inT >= EVENING_HD_START) { isHD = true; halfDay++; }
-      // Short leave evening: leaving within early exit + SL window
-      else if (isEveningSL && inT >= SL_START && inT <= SL_END) { isSL = true; shortLeave++; }
-      // Short leave morning: arriving within SL window
-      else if (inT >= SL_START && inT <= SL_END) { isSL = true; shortLeave++; }
-      // Short shift: under min hours
-      else if (wh < MIN_WH && !isLate) { isSS = true; shortShift++; }
+      if (!isLate && outT <= MORNING_HD_CUTOFF) { isHD = true; halfDay++; }
+      else if (!isLate && inT >= EVENING_HD_START) { isHD = true; halfDay++; }
+      else if (!isLate && isEveningSL && inT >= SL_START && inT <= SL_END) { isSL = true; shortLeave++; }
+      else if (!isLate && inT >= SL_START && inT <= SL_END) { isSL = true; shortLeave++; }
+      else if (!isLate && wh < MIN_WH) { isSS = true; shortShift++; }
     } else if (inT !== null && outT === null) {
-      // Only punch-in — check if it's a short leave (late arrival but within SL window)
-      if (inT >= SL_START && inT <= SL_END) { isSL = true; shortLeave++; }
-      else if (inT <= MORNING_HD_CUTOFF) { isHD = true; halfDay++; } // only in, out before cutoff = half
+      if (!isLate && inT >= SL_START && inT <= SL_END) { isSL = true; shortLeave++; }
+      else if (!isLate && inT <= MORNING_HD_CUTOFF) { isHD = true; halfDay++; }
+    }
+
+    // Threshold: every Nth late → HD, every Nth SS → HD
+    if (isLate) {
+      lateCounter++;
+      if (lateCounter % latesPerHD === 0) {
+        isLate = false; isHD = true; hdReason = 'late'; late--; halfDay++; lateToHD++;
+      }
+    }
+    if (isSS) {
+      ssCounter++;
+      if (ssCounter % ssPerHD === 0) {
+        isSS = false; isHD = true; hdReason = 'ss'; shortShift--; halfDay++; ssToHD++;
+      }
     }
 
     if (!isHD) present++;
-    days.push({ d, type: isHD ? 'half' : 'present', raw, isLate, isSS, isSL, inT, outT });
+    days.push({ d, type: isHD ? 'half' : 'present', raw, isLate, isSS, isSL, isHD, inT, outT, hdReason });
   }
 
   return {
     code, name, present, absent, halfDay, late,
-    lateHD: Math.floor(late / latesPerHD),
-    shortShift, ssHD: Math.floor(shortShift / ssPerHD),
+    lateHD: lateToHD,
+    shortShift, ssHD: ssToHD,
     shortLeave, rl, holi, days
   };
 }

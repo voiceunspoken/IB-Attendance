@@ -2,12 +2,14 @@
 
 import { useState } from 'react';
 
-export default function EmployeeModal({ employee, currentMonth, overrides, onClose, onApplyOverride, onRemoveOverride, onClearAllOverrides, readOnly = false }) {
+export default function EmployeeModal({ employee, currentMonth, overrides, onClose, onApplyOverride, onRemoveOverride, onClearAllOverrides, readOnly = false, onProposeCorrection }) {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [overrideType, setOverrideType] = useState('wfm');
   const [popupDay, setPopupDay] = useState(null);
   const [popupPos, setPopupPos] = useState({ x: 0, y: 0 });
+  const [correctionType, setCorrectionType] = useState('present');
+  const [correctionReason, setCorrectionReason] = useState('');
 
   if (!employee) return null;
 
@@ -115,7 +117,11 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
         else if (info.type === 'absent') { bg = 'rgba(255,59,48,0.08)'; border = '1px solid rgba(255,59,48,0.25)'; label = 'A'; }
         else if (info.type === 'holiday') { bg = 'rgba(255,159,10,0.1)'; border = '1px solid rgba(255,159,10,0.3)'; label = '🎉'; cursor = 'default'; }
         else if (info.type === 'rl') { bg = 'rgba(175,82,222,0.08)'; border = '1px solid rgba(175,82,222,0.25)'; label = 'RL'; }
-        else if (info.type === 'half') { bg = 'rgba(255,159,10,0.08)'; border = '1px solid rgba(255,159,10,0.25)'; label = 'HD'; }
+        else if (info.type === 'half') {
+          if (info.hdReason === 'late') { bg = 'rgba(255,59,48,0.08)'; border = '1px solid rgba(255,59,48,0.3)'; label = 'HD(L)'; }
+          else if (info.hdReason === 'ss') { bg = 'rgba(255,107,53,0.08)'; border = '1px solid rgba(255,107,53,0.3)'; label = 'HD(SS)'; }
+          else { bg = 'rgba(255,159,10,0.08)'; border = '1px solid rgba(255,159,10,0.25)'; label = 'HD'; }
+        }
         if (info.isSL) { label = 'SL'; bg = 'rgba(0,113,227,0.08)'; }
         else if (info.isSS) { label = 'SS'; outline = '2px solid rgba(255,107,53,0.5)'; }
         else if (info.isLate) { label = 'Late'; outline = '2px solid rgba(255,159,10,0.5)'; }
@@ -300,6 +306,47 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
               Cancel
             </button>
           </div>
+
+          {/* Attendance correction proposal — admin only */}
+          {onProposeCorrection && (() => {
+            const dayInfo = employee.days.find(x => x.d === popupDay);
+            if (!dayInfo || dayInfo.type === 'wo' || dayInfo.type === 'holiday') return null;
+            const typeLabel = { present: 'Present', absent: 'Absent', half: 'Half Day', rl: 'RL' }[dayInfo.type] || dayInfo.type;
+            return (
+              <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text2)', marginBottom: '8px', letterSpacing: '-0.01em' }}>
+                  Propose Attendance Change
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text3)', marginBottom: '8px' }}>
+                  Current: <strong style={{ color: 'var(--text)' }}>{typeLabel}</strong>
+                </div>
+                <select className="input-field" value={correctionType}
+                  onChange={e => setCorrectionType(e.target.value)}
+                  style={{ width: '100%', padding: '7px 10px', fontSize: '12px', marginBottom: '6px' }}>
+                  <option value="present">Present (Full Day)</option>
+                  <option value="absent">Absent</option>
+                  <option value="half">Half Day</option>
+                </select>
+                <input className="input-field" placeholder="Reason for change…"
+                  value={correctionReason}
+                  onChange={e => setCorrectionReason(e.target.value)}
+                  style={{ width: '100%', padding: '7px 10px', fontSize: '12px', marginBottom: '6px', boxSizing: 'border-box' }} />
+                <button onClick={() => {
+                  if (!correctionReason.trim()) return alert('Please provide a reason.');
+                  onProposeCorrection(employee.code, popupDay, dayInfo.type, correctionType, correctionReason);
+                  setCorrectionReason('');
+                  setCorrectionType('present');
+                  setPopupDay(null);
+                }} style={{
+                  padding: '7px 14px', borderRadius: '9px', border: '1px solid var(--blue)',
+                  background: 'var(--blue-light)', color: 'var(--blue)', cursor: 'pointer',
+                  fontSize: '12px', fontWeight: 600, fontFamily: 'inherit', width: '100%'
+                }}>
+                  Submit Correction Request
+                </button>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

@@ -9,6 +9,7 @@ import {
   getRegularizations, submitRegularization
 } from '../../../actions/leave';
 import { getUpcomingHolidays } from '../../../actions/holidays';
+import { requestAttendanceCorrection } from '../../../actions/attendanceChanges';
 import EmployeeModal from '../../../components/EmployeeModal';
 
 const LEAVE_LABELS = { cl: 'Casual Leave', sl: 'Sick Leave', el: 'Earned Leave', rl: 'Restricted Leave' };
@@ -50,6 +51,7 @@ export default function EmployeeDashboard({ params }) {
     if (!authLoading && isAuthenticated && !isAdmin && user?.employeeCode && user.employeeCode !== code) {
       router.push(`/employee/${user.employeeCode}`);
     }
+    if (isAdmin) setTab('attendance');
   }, [isAuthenticated, isAdmin, user, authLoading, router, code]);
 
   useEffect(() => {
@@ -125,7 +127,7 @@ export default function EmployeeDashboard({ params }) {
     late: currentRecord.late, shortShift: currentRecord.shortShift,
     days: emp.dailyLogs.filter(log => log.monthYear === currentRecord.monthYear).map(dl => ({
       d: dl.day, type: dl.type, raw: dl.raw, inT: dl.inT, outT: dl.outT,
-      isLate: dl.isLate, isSS: dl.isSS, isSL: dl.isSL
+      isLate: dl.isLate, isSS: dl.isSS, isSL: dl.isSL, hdReason: dl.hdReason
     }))
   };
 
@@ -158,6 +160,13 @@ export default function EmployeeDashboard({ params }) {
     setEmp(prev => ({ ...prev, overrides: prev.overrides.filter(o => o.monthYear !== currentRecord.monthYear) }));
     setOverrides({});
     await clearAllOverrides(code, currentRecord.monthYear);
+  };
+
+  const handleProposeCorrection = async (empCode, day, currentType, newType, reason) => {
+    const monthYear = currentRecord.monthYear;
+    const result = await requestAttendanceCorrection(empCode, monthYear, day, currentType, newType, reason, user.username);
+    if (result.error) return alert(result.error);
+    alert('Correction request submitted for super admin approval.');
   };
 
   const formatMonth = (my) => {
@@ -377,12 +386,14 @@ export default function EmployeeDashboard({ params }) {
         )}
       </div>
 
-      {/* Tabs */}
+      {/* Tabs — only employee sees leaves/regularize; admin sees only attendance */}
       <div style={{ display: 'flex', gap: '4px', background: 'var(--surface3)', borderRadius: '10px', padding: '3px', marginBottom: '20px', width: 'fit-content' }}>
         {[
           { key: 'attendance', label: 'Attendance' },
-          { key: 'leaves', label: 'Leave Requests' },
-          { key: 'regularize', label: 'Regularization' },
+          ...(!isAdmin ? [
+            { key: 'leaves', label: 'Leave Requests' },
+            { key: 'regularize', label: 'Regularization' },
+          ] : []),
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             padding: '6px 16px', borderRadius: '7px', fontSize: '13px', fontWeight: 500,
@@ -444,6 +455,7 @@ export default function EmployeeDashboard({ params }) {
                   onRemoveOverride={handleRemoveOverride}
                   onClearAllOverrides={handleClearAllOverrides}
                   readOnly={!isAdmin}
+                  onProposeCorrection={isAdmin ? handleProposeCorrection : undefined}
                 />
               </div>
             </div>

@@ -63,7 +63,8 @@ export async function uploadMonthData(monthYear, parsedResults, numDays) {
       outT: d.outT ?? null,
       isLate: d.isLate || false,
       isSS: d.isSS || false,
-      isSL: d.isSL || false
+      isSL: d.isSL || false,
+      hdReason: d.hdReason || null
     }));
 
     // Insert in chunks of 50
@@ -123,7 +124,9 @@ export async function fetchDashboardData(monthYear) {
       outT: dl.outT,
       isLate: dl.isLate,
       isSS: dl.isSS,
-      isSL: dl.isSL
+      isSL: dl.isSL,
+      isHD: dl.type === 'half',
+      hdReason: dl.hdReason
     }));
     const punchMissingDays = days.filter(d => d.type === 'present' && d.inT === null).map(d => ({
       day: d.d,

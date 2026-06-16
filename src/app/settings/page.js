@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
 import { getHolidays, addHoliday, deleteHoliday, seedIBHolidays } from '../../actions/holidays';
-import { getActiveShiftPolicy, saveShiftPolicy, getShiftPolicyHistory } from '../../actions/shiftPolicy';
+import { getActiveShiftPolicy, saveShiftPolicy, getShiftPolicyHistory, getPendingPolicies, reviewPolicy } from '../../actions/shiftPolicy';
 import { getAuditLog } from '../../actions/audit';
 import { getAllEmployees, addEmployee, deleteEmployee, deleteMonthRecord, updateMonthRecord, getMonths } from '../../actions/attendance';
 import { changePassword } from '../../actions/auth';
@@ -26,6 +26,7 @@ export default function SettingsPage() {
   // Shift policy
   const [policy, setPolicy] = useState({ shiftStartH: 10, shiftStartM: 0, graceMinutes: 15, minHours: 9, latesPerHD: 3, ssPerHD: 3 });
   const [policyHistory, setPolicyHistory] = useState([]);
+  const [pendingPolicies, setPendingPolicies] = useState([]);
   const [policyMsg, setPolicyMsg] = useState('');
 
   // Audit log
@@ -79,6 +80,8 @@ export default function SettingsPage() {
     if (isSuperAdmin) {
       const logs = await getAuditLog({ limit: 100 });
       setAuditLog(logs);
+      const pp = await getPendingPolicies();
+      setPendingPolicies(pp);
     }
     setLoading(false);
   };
@@ -270,6 +273,7 @@ export default function SettingsPage() {
 
       {/* ── SHIFT POLICY ── */}
       {!loading && tab === 'shift' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}>
           <div className="card" style={{ padding: '22px 24px' }}>
             <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '6px' }}>Shift Configuration</div>
@@ -315,6 +319,37 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {/* Pending policies — super admin approval */}
+        {isSuperAdmin && pendingPolicies.length > 0 && (
+          <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
+              Pending Policy Approvals ({pendingPolicies.length})
+            </div>
+            {pendingPolicies.map(p => (
+              <div key={p.id} style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 500 }}>
+                    {String(p.shiftStartH).padStart(2,'0')}:{String(p.shiftStartM).padStart(2,'0')} · {p.graceMinutes}min grace · {p.minHours}h min · {p.latesPerHD} lates = 1 HD · {p.ssPerHD} SS = 1 HD
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '2px' }}>
+                    By {p.createdBy || 'admin'} · {new Date(p.createdAt).toLocaleString()}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: '12px', background: 'var(--green)' }}
+                    onClick={async () => { await reviewPolicy(p.id, user.username, true); const pp = await getPendingPolicies(); setPendingPolicies(pp); }}>
+                    Approve
+                  </button>
+                  <button style={{ padding: '6px 14px', fontSize: '12px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
+                    onClick={async () => { await reviewPolicy(p.id, user.username, false); const pp = await getPendingPolicies(); setPendingPolicies(pp); }}>
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       )}
 
       {/* ── EMPLOYEES ── */}

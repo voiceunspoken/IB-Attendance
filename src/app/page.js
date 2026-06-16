@@ -12,10 +12,13 @@ import { getMonths, uploadMonthData, fetchDashboardData } from '../actions/atten
 import { getActiveShiftPolicy } from '../actions/shiftPolicy';
 import { getHolidays } from '../actions/holidays';
 import { getDepartments } from '../actions/departments';
+import { getPendingPolicies } from '../actions/shiftPolicy';
+import { getPendingAttendanceCorrections } from '../actions/attendanceChanges';
+import { getPendingSuperRegularizations } from '../actions/leave';
 import { FiSearch, FiDownload, FiUpload, FiLogOut, FiChevronDown } from 'react-icons/fi';
 
 export default function DashboardHome() {
-  const { isAuthenticated, isAdmin, user, loading: authLoading, logout } = useAuth();
+  const { isAuthenticated, isAdmin, isSuperAdmin, user, loading: authLoading, logout } = useAuth();
   const router = useRouter();
 
   const [months, setMonths] = useState([]);
@@ -28,6 +31,9 @@ export default function DashboardHome() {
   const [uploadView, setUploadView] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Super admin — pending approvals
+  const [pendingCounts, setPendingCounts] = useState({ policies: 0, corrections: 0, regularizations: 0 });
 
   // Filters
   const [departments, setDepartments] = useState([]);
@@ -46,8 +52,17 @@ export default function DashboardHome() {
     if (isAuthenticated) {
       getDepartments().then(setDepartments);
       loadMonthsList();
+      if (isSuperAdmin) {
+        Promise.all([
+          getPendingPolicies(),
+          getPendingAttendanceCorrections(),
+          getPendingSuperRegularizations()
+        ]).then(([pp, ac, sr]) => {
+          setPendingCounts({ policies: pp.length, corrections: ac.length, regularizations: sr.length });
+        }).catch(() => {});
+      }
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isSuperAdmin]);
 
   const loadMonthsList = async () => {
     setLoading(true);
@@ -306,6 +321,39 @@ export default function DashboardHome() {
               <button className="btn btn-outline" onClick={logout}><FiLogOut size={14} /> Sign Out</button>
             </div>
           </div>
+
+          {/* Super admin approval banner */}
+          {isSuperAdmin && (pendingCounts.policies > 0 || pendingCounts.corrections > 0 || pendingCounts.regularizations > 0) && (
+            <div className="card" style={{
+              padding: '12px 20px', marginBottom: 'var(--gap)',
+              background: 'rgba(255,159,10,0.06)', border: '1px solid rgba(255,159,10,0.25)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px'
+            }}>
+              <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text)' }}>
+                ⚡ Pending Approvals
+              </div>
+              <div style={{ display: 'flex', gap: '16px' }}>
+                {pendingCounts.policies > 0 && (
+                  <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '4px 12px' }}
+                    onClick={() => router.push('/settings')}>
+                    {pendingCounts.policies} Policy{pendingCounts.policies > 1 ? 'ies' : 'y'}
+                  </button>
+                )}
+                {pendingCounts.regularizations > 0 && (
+                  <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '4px 12px' }}
+                    onClick={() => router.push('/leaves')}>
+                    {pendingCounts.regularizations} Regularization{pendingCounts.regularizations > 1 ? 's' : ''}
+                  </button>
+                )}
+                {pendingCounts.corrections > 0 && (
+                  <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '4px 12px' }}
+                    onClick={() => router.push('/leaves')}>
+                    {pendingCounts.corrections} Correction{pendingCounts.corrections > 1 ? 's' : ''}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           <KPIStrip kpis={kpis()} />
 
