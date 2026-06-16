@@ -2,7 +2,6 @@
 
 import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { logAction } from './audit';
 
 export async function getEmployeeDetails(code) {
   return prisma.employee.findUnique({

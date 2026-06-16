@@ -2,6 +2,7 @@
 
 import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { logAction } from './audit';
 
 // ─── LEAVE POLICY ───────────────────────────────────────────
 
@@ -165,7 +166,6 @@ export async function adminUpdateLeaveBalance(employeeCode, year, fields) {
 function detectSandwich(from, to) {
   let sandwich = false;
   let sandwichDays = 0;
-  let isFirst = false;
   const startDow = from.getDay();
   const endDow = to.getDay();
   // Friday(5) → Monday(1) or Friday(5) → Saturday(6) → Sunday(0) → Monday(1)
@@ -176,19 +176,6 @@ function detectSandwich(from, to) {
     sandwichDays = diffDays >= 4 ? diffDays : 4;
   }
   return { sandwich, sandwichDays };
-}
-
-// Find the next lower-priority manager for approval (junior first)
-async function findNextApprover(employeeId, currentStage) {
-  const relations = await prisma.employeeManager.findMany({
-    where: { employeeId },
-    include: { manager: { select: { id: true, code: true, name: true } } },
-    orderBy: { priority: 'asc' } // L2 = priority 1 (junior), L1 = priority 2 (senior)
-  });
-
-  if (currentStage === 'pending_l2') return relations[0]?.manager ?? null; // L2
-  if (currentStage === 'pending_l1') return relations[1]?.manager ?? relations[0]?.manager ?? null; // L1 or fallback
-  return null;
 }
 
 function daysBetween(from, to) {

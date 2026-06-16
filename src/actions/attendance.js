@@ -90,7 +90,7 @@ export async function uploadMonthData(monthYear, parsedResults, numDays) {
         sendHighAbsenceAlert(r.employee.name, r.employee.code, r.absent, monthYear).catch(() => {});
       }
     }
-  } catch (_) {}
+  } catch { /* absence alerts non-blocking */ }
 
   return { success: true };
 }

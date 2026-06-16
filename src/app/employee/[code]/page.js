@@ -25,7 +25,7 @@ export default function EmployeeDashboard({ params }) {
   const [loading, setLoading] = useState(true);
   const [emp, setEmp] = useState(null);
   const [selectedMonthIndex, setSelectedMonthIndex] = useState(0);
-  const [overrides, setOverrides] = useState({});
+  const [, setOverrides] = useState({});
   const [tab, setTab] = useState('attendance'); // attendance | leaves | regularize
 
   // Leave state
@@ -43,6 +43,7 @@ export default function EmployeeDashboard({ params }) {
   const [sandwichWarning, setSandwichWarning] = useState('');
   const [rlHolidays, setRlHolidays] = useState([]);
   const [leaveBalanceDetail, setLeaveBalanceDetail] = useState(null);
+  const [fetchTrigger, setFetchTrigger] = useState(0);
 
   // Regularization form
   const [regForm, setRegForm] = useState({ date: '', requestedIn: '', requestedOut: '', reason: '' });
@@ -59,11 +60,9 @@ export default function EmployeeDashboard({ params }) {
   }, [isAuthenticated, isAdmin, user, authLoading, router, code]);
 
   useEffect(() => {
-    if (isAuthenticated) loadAll();
-  }, [isAuthenticated, code]);
-
-  const loadAll = async () => {
+    if (!isAuthenticated) return;
     setLoading(true);
+    (async () => {
     const year = new Date().getFullYear();
     const [data, balance, requests, regs, holidays, allHolidays] = await Promise.all([
       getEmployeeHistory(code),
@@ -91,7 +90,8 @@ export default function EmployeeDashboard({ params }) {
     setRegularizations(regs);
     setUpcomingHolidays(holidays);
     setLoading(false);
-  };
+    })();
+  }, [isAuthenticated, code, fetchTrigger]);
 
   // Detect Fri+Mon span for sandwich warning
   useEffect(() => {
@@ -127,7 +127,7 @@ export default function EmployeeDashboard({ params }) {
     setLeaveSuccess('Leave request submitted successfully.');
     setLeaveForm({ leaveType: 'cl', fromDate: '', toDate: '', days: 1, reason: '' });
     setPrescriptionFile(null);
-    loadAll();
+    setFetchTrigger(t => t + 1);
   };
 
   const handleSubmitReg = async (e) => {
@@ -141,7 +141,7 @@ export default function EmployeeDashboard({ params }) {
     if (result.error) return setRegError(result.error);
     setRegSuccess('Regularization request submitted.');
     setRegForm({ date: '', requestedIn: '', requestedOut: '', reason: '' });
-    loadAll();
+    setFetchTrigger(t => t + 1);
   };
 
   if (authLoading || !isAuthenticated) return null;
@@ -187,7 +187,7 @@ export default function EmployeeDashboard({ params }) {
   };
 
   const handleRemoveOverride = (empCode, day) => handleApplyOverride(empCode, day, 'clear');
-  const handleClearAllOverrides = async (empCode) => {
+  const handleClearAllOverrides = async () => {
     setEmp(prev => ({ ...prev, overrides: prev.overrides.filter(o => o.monthYear !== currentRecord.monthYear) }));
     setOverrides({});
     await clearAllOverrides(code, currentRecord.monthYear);
@@ -400,10 +400,10 @@ export default function EmployeeDashboard({ params }) {
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '5px' }}>
                 {used} used · {total} total
-                {type === 'cl' && balance.clAccrued != null && <span> · {balance.clAccrued} accrued</span>}
-                {type === 'el' && balance.elAccrued != null && <span> · {balance.elAccrued} accrued</span>}
-                {type === 'sl' && balance.slTotal != null && <span> · {balance.slTotal} allotted</span>}
-                {type === 'rl' && balance.rlTotal != null && <span> · {balance.rlTotal} allotted</span>}
+                {type === 'cl' && leaveBalance.clAccrued != null && <span> · {leaveBalance.clAccrued} accrued</span>}
+                {type === 'el' && leaveBalance.elAccrued != null && <span> · {leaveBalance.elAccrued} accrued</span>}
+                {type === 'sl' && leaveBalance.slTotal != null && <span> · {leaveBalance.slTotal} allotted</span>}
+                {type === 'rl' && leaveBalance.rlTotal != null && <span> · {leaveBalance.rlTotal} allotted</span>}
               </div>
                 </div>
               );

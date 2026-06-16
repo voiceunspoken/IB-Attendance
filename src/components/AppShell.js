@@ -20,8 +20,10 @@ export default function AppShell({ children }) {
 
   // Close sidebar on navigation
   useEffect(() => {
-    setSidebarOpen(false);
-  }, [pathname]);
+    if (!sidebarOpen) return;
+    const id = setTimeout(() => setSidebarOpen(false), 0);
+    return () => clearTimeout(id);
+  }, [pathname, sidebarOpen]);
 
   const isLoginPage = pathname === '/login';
 

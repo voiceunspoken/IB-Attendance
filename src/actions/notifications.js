@@ -5,10 +5,9 @@ import { prisma } from '../lib/prisma';
 const FROM = process.env.EMAIL_FROM || 'IB Attendance <noreply@ibeesattendance.com>';
 
 // Lazy Resend client — only created when actually sending, avoids crash if key not set
-function getResend() {
+async function getResend() {
   if (!process.env.RESEND_API_KEY) return null;
-  // Dynamic require to avoid module-level instantiation
-  const { Resend } = require('resend');
+  const { Resend } = await import('resend');
   return new Resend(process.env.RESEND_API_KEY);
 }
 
@@ -19,7 +18,7 @@ async function getEmployeeEmail(employeeCode) {
 
 export async function sendHighAbsenceAlert(employeeName, employeeCode, absentCount, monthYear) {
   const adminEmail = process.env.ADMIN_EMAIL;
-  const resend = getResend();
+  const resend = await getResend();
   if (!adminEmail || !resend) return { skipped: true };
 
   const [month, year] = monthYear.split('_');
@@ -48,7 +47,7 @@ export async function sendHighAbsenceAlert(employeeName, employeeCode, absentCou
 
 export async function sendDeductionNotification(employeeCode, employeeName, type, detail) {
   const email = await getEmployeeEmail(employeeCode);
-  const resend = getResend();
+  const resend = await getResend();
   if (!email || !resend) return { skipped: true };
 
   await resend.emails.send({
@@ -72,7 +71,7 @@ export async function sendDeductionNotification(employeeCode, employeeName, type
 
 export async function sendLeaveStatusNotification(employeeCode, employeeName, leaveType, status, note) {
   const email = await getEmployeeEmail(employeeCode);
-  const resend = getResend();
+  const resend = await getResend();
   if (!email || !resend) return { skipped: true };
 
   const statusColor = status === 'approved' ? '#34c759' : '#ff3b30';
@@ -103,7 +102,7 @@ export async function sendLeaveStatusNotification(employeeCode, employeeName, le
 
 export async function sendMonthlyReport(employeeCode, employeeName, monthYear, stats) {
   const email = await getEmployeeEmail(employeeCode);
-  const resend = getResend();
+  const resend = await getResend();
   if (!email || !resend) return { skipped: true };
 
   const [month, year] = monthYear.split('_');

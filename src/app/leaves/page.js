@@ -4,10 +4,10 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
 import {
-  getAllLeaveRequests, reviewLeaveRequest, getLeaveRequestsByStage,
+  getAllLeaveRequests, reviewLeaveRequest,
   getAllPendingRegularizations, reviewRegularization,
   getPendingSuperRegularizations, reviewRegularizationSuper,
-  getAllLeaveBalances, upsertLeavePolicy, getLeavePolicy, adminUpdateLeaveBalance,
+  getAllLeaveBalances, upsertLeavePolicy, getLeavePolicy,
   getLeaveBalancesForExport
 } from '../../actions/leave';
 import { getPendingAttendanceCorrections, reviewAttendanceCorrection } from '../../actions/attendanceChanges';
@@ -20,6 +20,7 @@ export default function LeavesPage() {
   const router = useRouter();
 
   const [tab, setTab] = useState('requests');
+  const [fetchTrigger, setFetchTrigger] = useState(0);
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [regularizations, setRegularizations] = useState([]);
   const [superRegularizations, setSuperRegularizations] = useState([]);
@@ -95,54 +96,52 @@ export default function LeavesPage() {
   }, [isAuthenticated, isAdmin, authLoading, router]);
 
   useEffect(() => {
-    if (isAdmin) {
-      if (!isSuperAdmin && tab === 'corrections') setTab('requests');
-      loadAll();
-    }
-  }, [isAdmin, isSuperAdmin]);
-
-  const loadAll = async () => {
+    if (!isAdmin) return;
+    if (!isSuperAdmin && tab === 'corrections') setTab('requests');
     setLoading(true);
-    const [reqs, regs, bal, pol] = await Promise.all([
-      getAllLeaveRequests(),
-      getAllPendingRegularizations(),
-      getAllLeaveBalances(year),
-      getLeavePolicy(year)
-    ]);
-    setLeaveRequests(reqs);
-    setRegularizations(regs);
-    setBalances(bal);
-    if (isSuperAdmin) {
-      const supRegs = await getPendingSuperRegularizations();
-      setSuperRegularizations(supRegs);
-      const ac = await getPendingAttendanceCorrections();
-      setAttendanceCorrections(ac);
-    }
-    if (pol) setPolicy({ cl: pol.cl, sl: pol.sl, el: pol.el, rl: pol.rl });
-    setLoading(false);
-  };
+    (async () => {
+      const [reqs, regs, bal, pol] = await Promise.all([
+        getAllLeaveRequests(),
+        getAllPendingRegularizations(),
+        getAllLeaveBalances(year),
+        getLeavePolicy(year)
+      ]);
+      setLeaveRequests(reqs);
+      setRegularizations(regs);
+      setBalances(bal);
+      if (isSuperAdmin) {
+        const supRegs = await getPendingSuperRegularizations();
+        setSuperRegularizations(supRegs);
+        const ac = await getPendingAttendanceCorrections();
+        setAttendanceCorrections(ac);
+      }
+      if (pol) setPolicy({ cl: pol.cl, sl: pol.sl, el: pol.el, rl: pol.rl });
+      setLoading(false);
+    })();
+  }, [isAdmin, isSuperAdmin, year, tab, fetchTrigger]);
 
   const handleReviewLeave = async (id, approve) => {
     await reviewLeaveRequest(id, user.username, approve, reviewNote);
     setReviewingId(null);
     setReviewNote('');
-    loadAll();
+    setFetchTrigger(t => t + 1);
   };
 
   const handleReviewReg = async (id, approve) => {
     await reviewRegularization(id, user.username, approve);
-    loadAll();
+    setFetchTrigger(t => t + 1);
   };
 
   const handleSuperReviewReg = async (id, approve) => {
     await reviewRegularizationSuper(id, user.username, approve);
-    loadAll();
+    setFetchTrigger(t => t + 1);
   };
 
   const handleSavePolicy = async (e) => {
     e.preventDefault();
     await upsertLeavePolicy(year, policy);
     alert('Policy saved for ' + year);
+    setFetchTrigger(t => t + 1);
   };
 
   if (authLoading || !isAuthenticated || !isAdmin) return null;

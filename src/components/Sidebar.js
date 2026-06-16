@@ -4,7 +4,7 @@ import { useAuth } from './AuthProvider';
 import { useRouter, usePathname } from 'next/navigation';
 
 export default function Sidebar({ open, onClose, isMobile }) {
-  const { user, isAdmin, isSuperAdmin, isAuthenticated, logout } = useAuth();
+  const { user, isAdmin, isSuperAdmin, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 

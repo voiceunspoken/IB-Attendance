@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../components/AuthProvider';
 import UploadSection from '../components/UploadSection';
@@ -48,6 +48,35 @@ export default function DashboardHome() {
     }
   }, [isAuthenticated, isAdmin, user, authLoading, router]);
 
+  const loadDashboardData = useCallback(async (monthYear) => {
+    setLoading(true);
+    const data = await fetchDashboardData(monthYear);
+    setAllResults(data);
+    let ov = {};
+    data.forEach(r => { ov = { ...ov, ...r.overrides }; });
+    setOverrides(ov);
+    setSelectedDept('');
+    setSelectedSubDept('');
+    setCurrentFilter('all');
+    setSearchQuery('');
+    setCurrentPage(1);
+    setLoading(false);
+    setUploadView(false);
+  }, []);
+
+  const loadMonthsList = useCallback(async () => {
+    setLoading(true);
+    const m = await getMonths();
+    setMonths(m);
+    if (m.length > 0) {
+      setSelectedMonth(m[0]);
+      await loadDashboardData(m[0]);
+    } else {
+      setUploadView(true);
+    }
+    setLoading(false);
+  }, [loadDashboardData]);
+
   useEffect(() => {
     if (isAuthenticated) {
       getDepartments().then(setDepartments);
@@ -62,36 +91,7 @@ export default function DashboardHome() {
         }).catch(() => {});
       }
     }
-  }, [isAuthenticated, isSuperAdmin]);
-
-  const loadMonthsList = async () => {
-    setLoading(true);
-    const m = await getMonths();
-    setMonths(m);
-    if (m.length > 0) {
-      setSelectedMonth(m[0]);
-      await loadDashboardData(m[0]);
-    } else {
-      setUploadView(true);
-    }
-    setLoading(false);
-  };
-
-  const loadDashboardData = async (monthYear) => {
-    setLoading(true);
-    const data = await fetchDashboardData(monthYear);
-    setAllResults(data);
-    let ov = {};
-    data.forEach(r => { ov = { ...ov, ...r.overrides }; });
-    setOverrides(ov);
-    setSelectedDept('');
-    setSelectedSubDept('');
-    setCurrentFilter('all');
-    setSearchQuery('');
-    setCurrentPage(1);
-    setLoading(false);
-    setUploadView(false);
-  };
+  }, [isAuthenticated, isSuperAdmin, loadMonthsList]);
 
   const handleMonthChange = async (e) => {
     const val = e.target.value;
@@ -157,7 +157,7 @@ export default function DashboardHome() {
           getHolidays(new Date().getFullYear())
         ]);
 
-        const { results, currentMonth: cm, numDays: nd } = parseAndAnalyze(rows, policy, allHolidays);
+        const { currentMonth: cm, numDays: nd } = parseAndAnalyze(rows, policy, allHolidays);
         const monthYearStr = `${cm.month}_${cm.year}`;
 
         const yearHolidays = cm.year !== new Date().getFullYear()

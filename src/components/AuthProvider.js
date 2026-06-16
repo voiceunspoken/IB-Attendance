@@ -7,19 +7,25 @@ import { loginUser, ensureAdminExists } from '../actions/auth';
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);   // { id, username, role, employeeCode }
+  const [user, setUser] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ib_user');
+        return stored ? JSON.parse(stored) : null;
+      } catch {
+        if (typeof window !== 'undefined') localStorage.removeItem('ib_user');
+        return null;
+      }
+    }
+    return null;
+  });
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    // Seed default admin on first load
     ensureAdminExists();
-
-    const stored = localStorage.getItem('ib_user');
-    if (stored) {
-      try { setUser(JSON.parse(stored)); } catch { localStorage.removeItem('ib_user'); }
-    }
-    setLoading(false);
+    const id = setTimeout(() => setLoading(false), 0);
+    return () => clearTimeout(id);
   }, []);
 
   const login = async (username, password) => {

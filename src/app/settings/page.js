@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
-import { getHolidays, addHoliday, deleteHoliday, seedIBHolidays } from '../../actions/holidays';
+import { getHolidays, deleteHoliday, seedIBHolidays } from '../../actions/holidays';
 import {
   addHolidayPending, getPendingHolidays, approveHoliday, rejectHoliday,
   deletePendingHoliday, uploadHolidayXlsx
@@ -66,36 +66,34 @@ export default function SettingsPage() {
   }, [isAuthenticated, isAdmin, authLoading, router]);
 
   useEffect(() => {
-    if (isAdmin) loadAll();
-  }, [isAdmin]);
-
-  const loadAll = async () => {
-    setLoading(true);
-    const [h, sp, hist, emps, ms] = await Promise.all([
-      getHolidays(year),
-      getActiveShiftPolicy(),
-      getShiftPolicyHistory(),
-      getAllEmployees(),
-      getMonths()
-    ]);
-    setHolidays(h);
-    if (isSuperAdmin) {
-      const ph = await getPendingHolidays(year);
-      setPendingHolidays(ph);
-    }
-    setPolicy({ shiftStartH: sp.shiftStartH, shiftStartM: sp.shiftStartM, graceMinutes: sp.graceMinutes, minHours: sp.minHours, latesPerHD: sp.latesPerHD, ssPerHD: sp.ssPerHD });
-    setPolicyHistory(hist);
-    setEmployees(emps);
-    setMonths(ms);
-    if (ms.length > 0) setNotifMonth(ms[0]);
-    if (isSuperAdmin) {
-      const logs = await getAuditLog({ limit: 100 });
-      setAuditLog(logs);
-      const pp = await getPendingPolicies();
-      setPendingPolicies(pp);
-    }
-    setLoading(false);
-  };
+    if (!isAdmin) return;
+    (async () => {
+      const [h, sp, hist, emps, ms] = await Promise.all([
+        getHolidays(year),
+        getActiveShiftPolicy(),
+        getShiftPolicyHistory(),
+        getAllEmployees(),
+        getMonths()
+      ]);
+      setHolidays(h);
+      if (isSuperAdmin) {
+        const ph = await getPendingHolidays(year);
+        setPendingHolidays(ph);
+      }
+      setPolicy({ shiftStartH: sp.shiftStartH, shiftStartM: sp.shiftStartM, graceMinutes: sp.graceMinutes, minHours: sp.minHours, latesPerHD: sp.latesPerHD, ssPerHD: sp.ssPerHD });
+      setPolicyHistory(hist);
+      setEmployees(emps);
+      setMonths(ms);
+      if (ms.length > 0) setNotifMonth(ms[0]);
+      if (isSuperAdmin) {
+        const logs = await getAuditLog({ limit: 100 });
+        setAuditLog(logs);
+        const pp = await getPendingPolicies();
+        setPendingPolicies(pp);
+      }
+      setLoading(false);
+    })();
+  }, [isAdmin, isSuperAdmin, year]);
 
   const handleAddHoliday = async (e) => {
     e.preventDefault();
@@ -411,7 +409,7 @@ export default function SettingsPage() {
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
             <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>Policy History</div>
             <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-              {policyHistory.map((p, i) => (
+              {policyHistory.map((p) => (
                 <div key={p.id} style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '13px', fontWeight: 500 }}>
@@ -479,7 +477,7 @@ export default function SettingsPage() {
 
           <div className="card" style={{ padding: '22px 24px' }}>
             <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '6px' }}>Delete Month Record</div>
-            <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '16px' }}>Remove a specific month's attendance data for an employee.</div>
+            <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '16px' }}>Remove a specific month&apos;s attendance data for an employee.</div>
             <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
               <div>
                 <label className="input-label">Employee</label>

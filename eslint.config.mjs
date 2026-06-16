@@ -1,13 +1,34 @@
 import { defineConfig, globalIgnores } from "eslint/config";
+import js from "@eslint/js";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 
 const eslintConfig = defineConfig([
+  js.configs.recommended,
   ...nextVitals,
   ...nextTs,
-  // Override default ignores of eslint-config-next.
+  {
+    languageOptions: {
+      globals: {
+        window: "readonly",
+        document: "readonly",
+        localStorage: "readonly",
+        confirm: "readonly",
+        alert: "readonly",
+        FileReader: "readonly",
+        Blob: "readonly",
+        URL: "readonly",
+        setTimeout: "readonly",
+        Set: "readonly",
+        console: "readonly",
+        process: "readonly",
+        fetch: "readonly",
+        FormData: "readonly",
+        NodeJS: "readonly",
+      },
+    },
+  },
   globalIgnores([
-    // Default ignores of eslint-config-next:
     ".next/**",
     "out/**",
     "build/**",
