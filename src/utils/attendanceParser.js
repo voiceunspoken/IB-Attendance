@@ -37,18 +37,34 @@ export function parseAndAnalyze(rows, policy = DEFAULT_POLICY, dbHolidays = []) 
   const EVENING_SL_WINDOW = policy.eveningShortLeaveWindowMin ?? 10;
   const MIN_WH = policy.minHours;
 
-  let headerRowIdx = -1, holidayRowIdx = -1, dataStartIdx = -1, numDays = 31;
+  let headerRowIdx = -1, holidayRowIdx = -1, dataStartIdx = -1, numDays = 0, dayStartCol = -1, codeCol = 0, nameCol = -1;
 
   for (let i = 0; i < rows.length; i++) {
     const joined = rows[i].join(' ').toLowerCase();
     if (joined.includes('emp code') || joined.includes('emp name')) {
       headerRowIdx = i;
-      let dc = 0;
-      for (let j = 2; j < rows[i].length; j++) {
+      // Find first day column in header
+      for (let j = 0; j < rows[i].length; j++) {
         const v = String(rows[i][j]).trim();
-        if (/^\d{1,2}$/.test(v)) dc++;
+        if (/^\d{1,2}$/.test(v)) { dayStartCol = j; break; }
       }
-      if (dc > 20) numDays = dc;
+      if (dayStartCol < 0) throw new Error('Could not detect day columns in header. Please verify file format.');
+      // Count consecutive day columns
+      for (let j = dayStartCol; j < rows[i].length; j++) {
+        const v = String(rows[i][j]).trim();
+        if (/^\d{1,2}$/.test(v)) numDays++;
+        else break;
+      }
+      // Find name column from header text
+      for (let j = 0; j < rows[i].length; j++) {
+        const v = String(rows[i][j]).toLowerCase().trim();
+        if (v.includes('emp name') || v.includes('employee name') || v === 'name') { nameCol = j; break; }
+      }
+      // Find code column from header text
+      for (let j = 0; j < rows[i].length; j++) {
+        const v = String(rows[i][j]).toLowerCase().trim();
+        if (v.includes('emp code') || v.includes('emp. code') || v.includes('employee code') || v === 'code') { codeCol = j; break; }
+      }
       holidayRowIdx = i + 1;
       dataStartIdx = i + 2;
       break;
@@ -95,8 +111,8 @@ export function parseAndAnalyze(rows, policy = DEFAULT_POLICY, dbHolidays = []) 
 
   if (holidayRowIdx >= 0 && rows[holidayRowIdx]) {
     const hr = rows[holidayRowIdx];
-    for (let j = 2; j < hr.length; j++) {
-      const v = String(hr[j]).trim().toUpperCase(), day = j - 1;
+    for (let j = dayStartCol; j < hr.length && j - dayStartCol + 1 <= numDays; j++) {
+      const v = String(hr[j]).trim().toUpperCase(), day = j - dayStartCol + 1;
       if (gazHolidays.size === 0 && (v === 'HOLI' || v === 'HOLIDAY' || v === 'GH')) gazHolidays.add(day);
       if (v === 'RL' && !weekends.has(day)) rlDays.add(day);
     }
@@ -105,10 +121,10 @@ export function parseAndAnalyze(rows, policy = DEFAULT_POLICY, dbHolidays = []) 
   const results = [];
   for (let i = dataStartIdx; i < rows.length; i++) {
     const row = rows[i];
-    if (!row[0] || !/^\d+$/.test(String(row[0]).trim())) continue;
-    const code = String(row[0]).trim(), name = String(row[1]).trim();
+    if (!row[codeCol] || !/^\d+$/.test(String(row[codeCol]).trim())) continue;
+    const code = String(row[codeCol] || '').trim(), name = String(row[nameCol] || '').trim();
     if (!name || name === 'NA') continue;
-    results.push(analyzeEmployee(code, name, row, numDays, weekends, gazHolidays, rlDays,
+    results.push(analyzeEmployee(code, name, row, numDays, dayStartCol, weekends, gazHolidays, rlDays,
       LATE_THRESHOLD, SL_START, SL_END, HD_AFTER, MORNING_HD_CUTOFF, EVENING_HD_START,
       EVENING_EXIT, EVENING_SL_WINDOW, MIN_WH, policy.latesPerHD, policy.ssPerHD));
   }
@@ -116,7 +132,7 @@ export function parseAndAnalyze(rows, policy = DEFAULT_POLICY, dbHolidays = []) 
   return { results, currentMonth, numDays };
 }
 
-function analyzeEmployee(code, name, row, numDays, weekends, gazHolidays, rlDays,
+function analyzeEmployee(code, name, row, numDays, dayStartCol, weekends, gazHolidays, rlDays,
   LATE_THRESHOLD, SL_START, SL_END, HD_AFTER, MORNING_HD_CUTOFF, EVENING_HD_START,
   EVENING_EXIT, EVENING_SL_WINDOW, MIN_WH, latesPerHD, ssPerHD) {
 
@@ -125,7 +141,7 @@ function analyzeEmployee(code, name, row, numDays, weekends, gazHolidays, rlDays
   let lateCounter = 0, ssCounter = 0, lateToHD = 0, ssToHD = 0;
 
   for (let d = 1; d <= numDays; d++) {
-    const idx = d + 1, raw = String(row[idx] || '').trim();
+    const idx = dayStartCol + d - 1, raw = String(row[idx] || '').trim();
     if (raw === 'WO-I' || raw === 'WO-II') { days.push({ d, type: 'wo', raw }); continue; }
     if (weekends.has(d)) { days.push({ d, type: 'wo', raw }); continue; }
     if (gazHolidays.has(d)) { holi++; days.push({ d, type: 'holiday', raw }); continue; }
