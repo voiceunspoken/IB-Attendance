@@ -38,6 +38,7 @@ export async function getLeaveBalance(employeeCode, year) {
         slTotal: policy?.sl ?? 6,
         elTotal: policy?.el ?? 4,
         rlTotal: policy?.rl ?? 2,
+        shTotal: policy?.sh ?? 6,
       }
     });
   }
@@ -51,7 +52,7 @@ export async function getLeaveBalance(employeeCode, year) {
     }
   });
 
-  const used = { cl: 0, sl: 0, el: 0, rl: 0 };
+  const used = { cl: 0, sl: 0, el: 0, rl: 0, sh: 0 };
   approved.forEach(r => { used[r.leaveType] = (used[r.leaveType] || 0) + r.days; });
 
   // RL from attendance records
@@ -85,6 +86,9 @@ export async function getLeaveBalance(employeeCode, year) {
     slAvail: balance.slTotal - used.sl,
     elAvail: elAccrued - used.el,
     rlAvail: balance.rlTotal - Math.max(used.rl, attendanceRL),
+    shTotal: balance.shTotal,
+    shUsed: used.sh,
+    shAvail: balance.shTotal - used.sh,
   };
 }
 
@@ -125,7 +129,7 @@ export async function getLeaveBalancesForExport(year, fromMonth = 1, toMonth = 1
       });
 
       // Count used per type within range
-      const rangeUsed = { cl: 0, sl: 0, el: 0, rl: 0 };
+      const rangeUsed = { cl: 0, sl: 0, el: 0, rl: 0, sh: 0 };
       approved.forEach(r => {
         rangeUsed[r.leaveType] = (rangeUsed[r.leaveType] || 0) + Number(r.days);
       });
@@ -182,7 +186,7 @@ function daysBetween(from, to) {
   return Math.round((to - from) / (1000 * 60 * 60 * 24)) + 1;
 }
 
-export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, toDate, days, reason, prescriptionFile }) {
+export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, toDate, days, reason, prescriptionFile, shiftSlot }) {
   const emp = await prisma.employee.findUnique({
     where: { code: employeeCode },
     include: { managers: { include: { manager: true }, orderBy: { priority: 'asc' } } }
@@ -210,6 +214,34 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
   // ── SL: prescription required ──
   if (leaveType === 'sl' && !prescriptionFile) {
     return { error: 'Prescription is mandatory for Sick Leave. Please upload a prescription.' };
+  }
+
+  // ── SH: Short Leave validation ──
+  if (leaveType === 'sh') {
+    if (!shiftSlot) return { error: 'Please select a shift slot (10-12 or 5-7).' };
+    if (!['10-12', '5-7'].includes(shiftSlot)) return { error: 'Invalid shift slot.' };
+    if (fromDate !== toDate) return { error: 'Short Leave can only be taken for a single day.' };
+    days = 0.5;
+
+    // Check balance
+    const bal = await getLeaveBalance(employeeCode, from.getFullYear());
+    if (bal.shAvail <= 0) return { error: 'No Short Leave balance remaining for this year.' };
+
+    // Enforce 1 per 2-month window
+    const window = Math.ceil(from.getMonth() / 2); // 1-based: Jan=1, Feb=1, Mar=2, Apr=2 ...
+    const windowStart = (window - 1) * 2 + 1; // 1, 3, 5, 7, 9, 11
+    const windowEnd = window * 2; // 2, 4, 6, 8, 10, 12
+    const windowStartDate = new Date(from.getFullYear(), windowStart - 1, 1);
+    const windowEndDate = new Date(from.getFullYear(), windowEnd, 0);
+    const existingSH = await prisma.leaveRequest.findFirst({
+      where: {
+        employeeId: emp.id,
+        leaveType: 'sh',
+        status: { not: 'rejected' },
+        fromDate: { gte: windowStartDate, lte: windowEndDate }
+      }
+    });
+    if (existingSH) return { error: 'You can only take 1 Short Leave per 2-month window. Your next window opens after ' + (windowEnd % 12 + 1) + '/' + from.getFullYear() + '.' };
   }
 
   // ── Sandwich detection ──
@@ -262,6 +294,7 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
       days: computedDays,
       reason,
       prescriptionFile: prescriptionFile || null,
+      shiftSlot: shiftSlot || null,
       approvalStage,
       currentApproverId,
       sandwichCount,
@@ -417,9 +450,19 @@ export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = 
         where: { employeeId_monthYear_day: { employeeId: req.employeeId, monthYear, day } }
       });
       if (existing && existing.type === 'absent') {
+        const updateData = { type: req.leaveType === 'rl' ? 'rl' : 'present', raw: req.leaveType.toUpperCase() };
+        if (req.leaveType === 'sh' && req.shiftSlot) {
+          if (req.shiftSlot === '10-12') {
+            updateData.inT = 600;
+            updateData.outT = 720;
+          } else if (req.shiftSlot === '5-7') {
+            updateData.inT = 1020;
+            updateData.outT = 1140;
+          }
+        }
         await prisma.dailyLog.update({
           where: { employeeId_monthYear_day: { employeeId: req.employeeId, monthYear, day } },
-          data: { type: req.leaveType === 'rl' ? 'rl' : 'present', raw: req.leaveType.toUpperCase() }
+          data: updateData
         });
         await prisma.monthRecord.updateMany({
           where: { employeeId: req.employeeId, monthYear },

@@ -12,8 +12,8 @@ import {
 } from '../../actions/leave';
 import { getPendingAttendanceCorrections, reviewAttendanceCorrection } from '../../actions/attendanceChanges';
 
-const LEAVE_LABELS = { cl: 'CL', sl: 'SL', el: 'EL', rl: 'RL' };
-const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de' };
+const LEAVE_LABELS = { cl: 'CL', sl: 'SL', el: 'EL', rl: 'RL', sh: 'SH' };
+const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b' };
 
 export default function LeavesPage() {
   const { isAdmin, isSuperAdmin, isAuthenticated, user, loading: authLoading } = useAuth();
@@ -26,7 +26,7 @@ export default function LeavesPage() {
   const [superRegularizations, setSuperRegularizations] = useState([]);
   const [attendanceCorrections, setAttendanceCorrections] = useState([]);
   const [balances, setBalances] = useState([]);
-  const [policy, setPolicy] = useState({ cl: 12, sl: 6, el: 4, rl: 2 });
+  const [policy, setPolicy] = useState({ cl: 12, sl: 6, el: 4, rl: 2, sh: 6 });
   const [loading, setLoading] = useState(true);
   const [reviewNote, setReviewNote] = useState('');
   const [reviewingId, setReviewingId] = useState(null);
@@ -67,12 +67,16 @@ export default function LeavesPage() {
         'RL Total': balance?.rlTotal ?? 0,
         'RL Used (Period)': rangeUsed.rl,
         'RL Remaining': balance?.rlAvail ?? 0,
+        'SH Total': balance?.shTotal ?? 0,
+        'SH Used (Period)': rangeUsed.sh,
+        'SH Remaining': balance?.shAvail ?? 0,
         'Leave Details': leaveDetail,
       }));
 
       const ws = XLSX.utils.json_to_sheet(rows);
       ws['!cols'] = [
         { wch: 10 }, { wch: 24 },
+        { wch: 9 }, { wch: 16 }, { wch: 13 },
         { wch: 9 }, { wch: 16 }, { wch: 13 },
         { wch: 9 }, { wch: 16 }, { wch: 13 },
         { wch: 9 }, { wch: 16 }, { wch: 13 },
@@ -115,7 +119,7 @@ export default function LeavesPage() {
         const ac = await getPendingAttendanceCorrections();
         setAttendanceCorrections(ac);
       }
-      if (pol) setPolicy({ cl: pol.cl, sl: pol.sl, el: pol.el, rl: pol.rl });
+      if (pol) setPolicy({ cl: pol.cl, sl: pol.sl, el: pol.el, rl: pol.rl, sh: pol.sh ?? 6 });
       setLoading(false);
     })();
   }, [isAdmin, isSuperAdmin, year, tab, fetchTrigger]);
@@ -216,6 +220,7 @@ export default function LeavesPage() {
                     <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.employee?.code}</span>
                     <span style={{ fontSize: '12px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
                     <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
+                    {r.shiftSlot && <span style={{ fontSize: '11px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
                     {statusBadge(r.status)}
                     <StageBadge stage={r.approvalStage} />
                   </div>
@@ -255,6 +260,7 @@ export default function LeavesPage() {
                       <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.employee?.code}</span>
                       <span style={{ fontSize: '12px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
                       <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
+                      {r.shiftSlot && <span style={{ fontSize: '11px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
                       <StageBadge stage={r.approvalStage} />
                     </div>
                     {r.sandwichCount > 0 && (
@@ -441,7 +447,7 @@ export default function LeavesPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
                 <tr>
-                  {['Employee', 'CL Avail', 'SL Avail', 'EL Avail', 'RL Avail', 'CL Used', 'SL Used', 'EL Used', 'RL Used'].map(h => (
+                  {['Employee', 'CL Avail', 'SL Avail', 'EL Avail', 'RL Avail', 'SH Avail', 'CL Used', 'SL Used', 'EL Used', 'RL Used', 'SH Used'].map(h => (
                     <th key={h} style={{ background: 'var(--surface2)', padding: '10px 14px', textAlign: 'left', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text2)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
@@ -450,12 +456,12 @@ export default function LeavesPage() {
                 {balances.map(({ code, name, balance }) => balance && (
                   <tr key={code} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '11px 14px', fontWeight: 500 }}>{name} <span style={{ color: 'var(--text3)', fontSize: '11px' }}>#{code}</span></td>
-                    {['cl', 'sl', 'el', 'rl'].map(t => (
-                      <td key={t} style={{ padding: '11px 14px', color: (balance[`${t}Avail`] ?? 0) <= 1 ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>
+                    {['cl', 'sl', 'el', 'rl', 'sh'].map(t => (
+                      <td key={t} style={{ padding: '11px 14px', color: (balance[`${t}Avail`] ?? 0) <= 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>
                         {balance[`${t}Avail`] ?? 0}
                       </td>
                     ))}
-                    {['cl', 'sl', 'el', 'rl'].map(t => (
+                    {['cl', 'sl', 'el', 'rl', 'sh'].map(t => (
                       <td key={t} style={{ padding: '11px 14px', color: 'var(--text2)' }}>
                         {balance[`${t}Used`] ?? 0}
                       </td>
@@ -479,6 +485,7 @@ export default function LeavesPage() {
               { key: 'sl', label: 'Sick Leave (SL)', hint: '6 days/yr · medical cert required >1 day' },
               { key: 'el', label: 'Earned Leave (EL)', hint: '4 days/yr · quarterly after 1 yr service' },
               { key: 'rl', label: 'Restricted Holiday (RH)', hint: '2 days/yr · 1 per month · 1 month advance notice' },
+              { key: 'sh', label: 'Short Leave (SH)', hint: '6/yr · 2 hrs each · 1 per 2-month window' },
             ].map(({ key, label, hint }) => (
               <div key={key}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>

@@ -181,6 +181,7 @@ model LeavePolicy {
   sl        Int    @default(6)
   el        Int    @default(15)
   rl        Int    @default(2)
+  sh        Int    @default(6)
   createdAt DateTime @default(now())
 }
 
@@ -194,10 +195,12 @@ model LeaveBalance {
   slTotal      Int      @default(6)
   elTotal      Int      @default(15)
   rlTotal      Int      @default(2)
+  shTotal      Int      @default(6)
   clUsed       Int      @default(0)
   slUsed       Int      @default(0)
   elUsed       Int      @default(0)
   rlUsed       Int      @default(0)
+  shUsed       Int      @default(0)
   clCarry      Int      @default(0)
   clAccrued    Int      @default(0)
   elAccrued    Int      @default(0)
@@ -229,6 +232,9 @@ model LeaveRequest {
 
   // SL prescription
   prescriptionFile String?
+
+  // Short leave shift slot
+  shiftSlot      String?
 
   reviewedBy     String?
   reviewedAt     DateTime?

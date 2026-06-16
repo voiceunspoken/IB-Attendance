@@ -12,8 +12,8 @@ import { getUpcomingHolidays, getHolidays } from '../../../actions/holidays';
 import { requestAttendanceCorrection } from '../../../actions/attendanceChanges';
 import EmployeeModal from '../../../components/EmployeeModal';
 
-const LEAVE_LABELS = { cl: 'Casual Leave', sl: 'Sick Leave', el: 'Earned Leave', rl: 'Restricted Leave' };
-const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de' };
+const LEAVE_LABELS = { cl: 'Casual Leave', sl: 'Sick Leave', el: 'Earned Leave', rl: 'Restricted Leave', sh: 'Short Leave' };
+const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b' };
 
 export default function EmployeeDashboard({ params }) {
   const unwrappedParams = use(params);
@@ -35,7 +35,7 @@ export default function EmployeeDashboard({ params }) {
   const [upcomingHolidays, setUpcomingHolidays] = useState([]);
 
   // Leave form
-  const [leaveForm, setLeaveForm] = useState({ leaveType: 'cl', fromDate: '', toDate: '', days: 1, reason: '' });
+  const [leaveForm, setLeaveForm] = useState({ leaveType: 'cl', fromDate: '', toDate: '', days: 1, reason: '', shiftSlot: '10-12' });
   const [leaveError, setLeaveError] = useState('');
   const [leaveSuccess, setLeaveSuccess] = useState('');
   const [submittingLeave, setSubmittingLeave] = useState(false);
@@ -120,12 +120,13 @@ export default function EmployeeDashboard({ params }) {
       ...leaveForm,
       toDate: leaveForm.toDate || leaveForm.fromDate,
       days: parseFloat(leaveForm.days) || 1,
-      prescriptionFile: leaveForm.leaveType === 'sl' ? prescriptionFile : null
+      prescriptionFile: leaveForm.leaveType === 'sl' ? prescriptionFile : null,
+      shiftSlot: leaveForm.leaveType === 'sh' ? leaveForm.shiftSlot : null
     });
     setSubmittingLeave(false);
     if (result.error) return setLeaveError(result.error);
     setLeaveSuccess('Leave request submitted successfully.');
-    setLeaveForm({ leaveType: 'cl', fromDate: '', toDate: '', days: 1, reason: '' });
+    setLeaveForm({ leaveType: 'cl', fromDate: '', toDate: '', days: 1, reason: '', shiftSlot: '10-12' });
     setPrescriptionFile(null);
     setFetchTrigger(t => t + 1);
   };
@@ -383,8 +384,8 @@ export default function EmployeeDashboard({ params }) {
 
         {/* Leave balance strip */}
         {leaveBalance && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginTop: '20px', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>
-            {['cl', 'sl', 'el', 'rl'].map(type => {
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', marginTop: '20px', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>
+            {['cl', 'sl', 'el', 'rl', 'sh'].map(type => {
               const avail = leaveBalance[`${type}Avail`] ?? 0;
               const total = leaveBalance[`${type}Total`] ?? 0;
               const used = leaveBalance[`${type}Used`] ?? 0;
@@ -404,6 +405,7 @@ export default function EmployeeDashboard({ params }) {
                 {type === 'el' && leaveBalance.elAccrued != null && <span> · {leaveBalance.elAccrued} accrued</span>}
                 {type === 'sl' && leaveBalance.slTotal != null && <span> · {leaveBalance.slTotal} allotted</span>}
                 {type === 'rl' && leaveBalance.rlTotal != null && <span> · {leaveBalance.rlTotal} allotted</span>}
+                {type === 'sh' && leaveBalance.shTotal != null && <span> · {leaveBalance.shTotal} allotted</span>}
               </div>
                 </div>
               );
@@ -513,12 +515,13 @@ export default function EmployeeDashboard({ params }) {
             <form onSubmit={handleSubmitLeave} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
                 <label className="input-label">Leave Type</label>
-                <select className="input-field" value={leaveForm.leaveType} onChange={e => setLeaveForm(f => ({ ...f, leaveType: e.target.value }))}>
-                  <option value="cl">Casual Leave (CL) — 12 days/yr</option>
-                  <option value="sl">Sick Leave (SL) — 6 days/yr</option>
-                  <option value="el">Earned Leave (EL) — 4 days/yr</option>
-                  <option value="rl">Restricted Holiday (RL) — 2 days/yr</option>
-                </select>
+                  <select className="input-field" value={leaveForm.leaveType} onChange={e => setLeaveForm(f => ({ ...f, leaveType: e.target.value, shiftSlot: '10-12' }))}>
+                    <option value="cl">Casual Leave (CL) — 12 days/yr</option>
+                    <option value="sl">Sick Leave (SL) — 6 days/yr</option>
+                    <option value="el">Earned Leave (EL) — 4 days/yr</option>
+                    <option value="rl">Restricted Holiday (RL) — 2 days/yr</option>
+                    <option value="sh">Short Leave (SH) — 2 hrs · every 2 months</option>
+                  </select>
               </div>
 
               {/* RL: show eligible dates */}
@@ -557,6 +560,27 @@ export default function EmployeeDashboard({ params }) {
                 </div>
               )}
 
+              {/* SH: shift slot selector */}
+              {leaveForm.leaveType === 'sh' && (
+                <div>
+                  <label className="input-label">Shift Slot (2 hours)</label>
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+                    {['10-12', '5-7'].map(slot => (
+                      <label key={slot} style={{
+                        flex: 1, padding: '10px', borderRadius: '10px', cursor: 'pointer', textAlign: 'center',
+                        border: leaveForm.shiftSlot === slot ? '2px solid #ff6b6b' : '2px solid var(--border)',
+                        background: leaveForm.shiftSlot === slot ? 'rgba(255,107,107,0.08)' : 'var(--surface2)',
+                        fontWeight: leaveForm.shiftSlot === slot ? 600 : 400, fontSize: '13px', transition: 'all 0.15s'
+                      }}>
+                        <input type="radio" name="shiftSlot" value={slot} checked={leaveForm.shiftSlot === slot}
+                          onChange={e => setLeaveForm(f => ({ ...f, shiftSlot: e.target.value }))} style={{ display: 'none' }} />
+                        <div>{slot === '10-12' ? '🌅 10:00 AM – 12:00 PM' : '🌆 5:00 PM – 7:00 PM'}</div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
                   <label className="input-label">From Date</label>
@@ -569,7 +593,10 @@ export default function EmployeeDashboard({ params }) {
               </div>
               <div>
                 <label className="input-label">Days</label>
-                <select className="input-field" value={leaveForm.days} onChange={e => setLeaveForm(f => ({ ...f, days: parseFloat(e.target.value) }))}>
+                <select className="input-field" value={leaveForm.leaveType === 'sh' ? 0.5 : leaveForm.days}
+                  onChange={e => setLeaveForm(f => ({ ...f, days: parseFloat(e.target.value) }))}
+                  disabled={leaveForm.leaveType === 'sh'}
+                  style={{ opacity: leaveForm.leaveType === 'sh' ? 0.6 : 1 }}>
                   <option value={0.5}>Half Day (0.5)</option>
                   <option value={1}>1 Day</option>
                   {[2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n} Days</option>)}
@@ -590,7 +617,7 @@ export default function EmployeeDashboard({ params }) {
               {/* Leave balance breakdown */}
               {leaveBalanceDetail && (
                 <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '12px 14px', fontSize: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  {['cl', 'sl', 'el', 'rl'].map(type => {
+                  {['cl', 'sl', 'el', 'rl', 'sh'].map(type => {
                     const avail = leaveBalanceDetail[`${type}Avail`] ?? 0;
                     const total = leaveBalanceDetail[`${type}Total`] ?? 0;
                     const used = leaveBalanceDetail[`${type}Used`] ?? 0;
@@ -626,6 +653,7 @@ export default function EmployeeDashboard({ params }) {
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         <span style={{ fontSize: '13px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{r.leaveType.toUpperCase()}</span>
                         <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
+                        {r.shiftSlot && <span style={{ fontSize: '11px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
                       </div>
                       <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                         {r.approvalStage && r.status === 'pending' && <StageBadge stage={r.approvalStage} />}
