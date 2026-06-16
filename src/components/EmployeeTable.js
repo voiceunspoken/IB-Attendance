@@ -64,14 +64,25 @@ export default function EmployeeTable({ results, onOpenDetail, currentPage, setC
   };
 
   const StatusBadge = ({ r, ov }) => {
-    if (ov.wfm > 0 || ov.wfmhd > 0) return <span style={badge('rgba(52,199,89,0.12)', '#1a7f37')}>WFM</span>;
-    if (ov.wfh > 0) return <span style={badge('rgba(175,82,222,0.12)', '#7b2d8b')}>WFH</span>;
-    if (ov.wos > 0 || ov.woshd > 0) return <span style={badge('rgba(48,176,199,0.12)', '#1a6e7a')}>WOS</span>;
-    if (r.punchMissing >= 3) return <span style={badge('rgba(255,107,53,0.12)', '#c04a1a')}>⚠️ No Punch</span>;
-    if (r.absent >= 8) return <span style={badge('rgba(255,59,48,0.1)', '#c0392b')}>High Absent</span>;
-    if (r.lateHD + r.ssHD > 1) return <span style={badge('rgba(255,159,10,0.12)', '#b36200')}>HD Ded.</span>;
-    if (r.absent === 0 && r.lateHD === 0 && r.punchMissing === 0) return <span style={badge('rgba(52,199,89,0.1)', '#1a7f37')}>Clean</span>;
-    return <span style={badge('rgba(0,0,0,0.05)', 'var(--text2)')}>Normal</span>;
+    const s = (bg, color, label, icon) => (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: '4px',
+        padding: '3px 10px', borderRadius: '980px',
+        fontSize: 'clamp(10px, 0.9vw, 11px)', fontWeight: 600, letterSpacing: '0.01em',
+        background: bg, color
+      }}>
+        {icon && <span style={{ fontSize: '10px' }}>{icon}</span>}
+        {label}
+      </span>
+    );
+    if (ov.wfm > 0 || ov.wfmhd > 0) return s('rgba(52,199,89,0.12)', '#1a7f37', 'WFM', '🟢');
+    if (ov.wfh > 0) return s('rgba(175,82,222,0.12)', '#7b2d8b', 'WFH', '🟣');
+    if (ov.wos > 0 || ov.woshd > 0) return s('rgba(48,176,199,0.12)', '#1a6e7a', 'WOS', '🔵');
+    if (r.punchMissing >= 3) return s('rgba(255,107,53,0.12)', '#c04a1a', 'No Punch', '⚠');
+    if (r.absent >= 8) return s('rgba(255,59,48,0.1)', '#c0392b', 'High Absent', '🔴');
+    if (r.lateHD + r.ssHD > 1) return s('rgba(255,159,10,0.12)', '#b36200', 'HD Ded', '🟡');
+    if (r.absent === 0 && r.lateHD === 0 && r.punchMissing === 0) return s('rgba(52,199,89,0.1)', '#1a7f37', 'Clean', '✅');
+    return s('rgba(0,0,0,0.05)', 'var(--text2)', 'Normal', '—');
   };
 
   return (
@@ -112,19 +123,19 @@ export default function EmployeeTable({ results, onOpenDetail, currentPage, setC
                   key={r.code}
                   onClick={() => onOpenDetail(r)}
                   style={{ cursor: 'pointer', borderBottom: '1px solid var(--border)', transition: 'background 0.12s', animation: `fadeIn 0.3s ease ${idx * 0.03}s both` }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
-                  onMouseLeave={e => e.currentTarget.style.background = ''}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface2)'; e.currentTarget.querySelector('.view-btn').style.opacity = '1'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.querySelector('.view-btn').style.opacity = '0'; }}
                 >
                   <td style={{ ...td, color: 'var(--text2)', fontSize: '12px' }}>{r.code}</td>
                   <td style={{ ...td, textAlign: 'left', fontWeight: 500, color: 'var(--text)', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</td>
                   <td style={{ ...td, color: 'var(--text2)', fontSize: '12px', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.department || '—'}</td>
                   {!showMissingDays && <td style={{ ...td, color: 'var(--green)', fontWeight: 500 }}>{r.present}</td>}
                   {!showMissingDays && <td style={{ ...td, color: r.absent >= 5 ? 'var(--red)' : 'var(--text)', fontWeight: r.absent >= 5 ? 600 : 400 }}>{r.absent}</td>}
-                  {!showMissingDays && <td style={td}>{r.halfDay || '—'}</td>}
-                  {!showMissingDays && <td style={{ ...td, color: r.late >= 9 ? 'var(--yellow)' : 'var(--text)' }}>{r.late}</td>}
+                  {!showMissingDays && <td style={{ ...td, color: 'var(--orange)', fontWeight: r.halfDay > 0 ? 500 : 400 }}>{r.halfDay || '—'}</td>}
+                  {!showMissingDays && <td style={{ ...td, color: r.late >= 6 ? 'var(--yellow)' : 'var(--text)' }}>{r.late}</td>}
                   {!showMissingDays && <td style={{ ...td, color: r.lateHD > 0 ? 'var(--yellow)' : 'var(--text2)' }}>{r.lateHD || '—'}</td>}
-                  {!showMissingDays && <td style={{ ...td, color: r.shortShift >= 9 ? 'var(--orange)' : 'var(--text)' }}>{r.shortShift}</td>}
-                  {!showMissingDays && <td style={{ ...td, color: r.ssHD > 0 ? 'var(--red)' : 'var(--text2)' }}>{r.ssHD || '—'}</td>}
+                  {!showMissingDays && <td style={{ ...td, color: r.shortShift >= 6 ? 'var(--orange)' : 'var(--text)' }}>{r.shortShift}</td>}
+                  {!showMissingDays && <td style={{ ...td, color: r.ssHD > 0 ? 'var(--orange)' : 'var(--text2)' }}>{r.ssHD || '—'}</td>}
                   {!showMissingDays && <td style={{ ...td, color: r.shortLeave > 0 ? 'var(--blue)' : 'var(--text2)' }}>{r.shortLeave || '—'}</td>}
                   {!showMissingDays && <td style={{ ...td, color: r.rl > 0 ? 'var(--purple)' : 'var(--text2)' }}>{r.rl || '—'}</td>}
                   {!showMissingDays && <td style={td}>{r.holi || '—'}</td>}
@@ -141,8 +152,13 @@ export default function EmployeeTable({ results, onOpenDetail, currentPage, setC
                     <MissingDaysTooltip days={r.punchMissingDays} />
                   </td>
                   <td style={td}><StatusBadge r={r} ov={ov} /></td>
-                  <td style={td}>
-                    <span style={{ color: 'var(--blue)', fontSize: '13px', fontWeight: 500 }}>View →</span>
+                  <td style={{ ...td, position: 'relative' }}>
+                    <span className="view-btn" style={{
+                      color: 'var(--blue)', fontSize: '12px', fontWeight: 600,
+                      opacity: 0, transition: 'opacity 0.12s',
+                      padding: '4px 10px', borderRadius: '6px',
+                      background: 'rgba(0,113,227,0.08)',
+                    }}>View</span>
                   </td>
                 </tr>
               );

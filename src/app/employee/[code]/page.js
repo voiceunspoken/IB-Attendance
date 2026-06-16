@@ -11,6 +11,8 @@ import {
 import { getUpcomingHolidays, getHolidays } from '../../../actions/holidays';
 import { requestAttendanceCorrection } from '../../../actions/attendanceChanges';
 import EmployeeModal from '../../../components/EmployeeModal';
+import { useToast } from '../../../components/Toast';
+import { FiCalendar, FiFileText, FiTool, FiDownload } from 'react-icons/fi';
 
 const LEAVE_LABELS = { cl: 'Casual Leave', sl: 'Sick Leave', el: 'Earned Leave', rl: 'Restricted Leave', sh: 'Short Leave' };
 const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b' };
@@ -21,6 +23,7 @@ export default function EmployeeDashboard({ params }) {
 
   const { isAuthenticated, isAdmin, user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const toast = useToast();
 
   const [loading, setLoading] = useState(true);
   const [emp, setEmp] = useState(null);
@@ -197,8 +200,8 @@ export default function EmployeeDashboard({ params }) {
   const handleProposeCorrection = async (empCode, day, currentType, newType, reason) => {
     const monthYear = currentRecord.monthYear;
     const result = await requestAttendanceCorrection(empCode, monthYear, day, currentType, newType, reason, user.username);
-    if (result.error) return alert(result.error);
-    alert('Correction request submitted for super admin approval.');
+    if (result.error) return toast.error(result.error);
+    toast.success('Correction request submitted for super admin approval.');
   };
 
   const formatMonth = (my) => {
@@ -344,69 +347,64 @@ export default function EmployeeDashboard({ params }) {
     <div style={{ padding: '24px 28px', maxWidth: '1200px', margin: '0 auto' }} className="animate-fade-in">
 
       {/* Profile header */}
-      <div className="card" style={{ padding: '24px 28px', marginBottom: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: 'var(--surface3)', display: 'grid', placeItems: 'center', fontSize: '22px', fontWeight: 700, color: 'var(--text2)' }}>
+      <div className="card" style={{ padding: '20px 24px', marginBottom: '18px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{ width: '46px', height: '46px', borderRadius: '12px', background: 'var(--surface3)', display: 'grid', placeItems: 'center', fontSize: '20px', fontWeight: 700, color: 'var(--text2)' }}>
               {emp.name.charAt(0)}
             </div>
             <div>
-              <h1 style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '-0.03em' }}>{emp.name}</h1>
-              <div style={{ fontSize: '13px', color: 'var(--text2)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                Employee #{emp.code}
+              <h1 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '-0.03em' }}>{emp.name}</h1>
+              <div style={{ fontSize: '12px', color: 'var(--text2)', marginTop: '1px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                #{emp.code}
                 {emp.employeeType && emp.employeeType !== 'regular' && (
-                  <span style={{ background: emp.employeeType === 'wfh' ? 'rgba(175,82,222,0.1)' : 'rgba(52,199,89,0.1)', color: emp.employeeType === 'wfh' ? 'var(--purple)' : 'var(--green)', padding: '1px 8px', borderRadius: '980px', fontSize: '11px', fontWeight: 600 }}>{emp.employeeType.toUpperCase()}</span>
+                  <span style={{ background: emp.employeeType === 'wfh' ? 'rgba(175,82,222,0.1)' : 'rgba(52,199,89,0.1)', color: emp.employeeType === 'wfh' ? 'var(--purple)' : 'var(--green)', padding: '1px 7px', borderRadius: '980px', fontSize: '10px', fontWeight: 600 }}>{emp.employeeType.toUpperCase()}</span>
                 )}
-              </div>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
-                {emp.department && <span style={{ fontSize: '12px', background: 'rgba(0,113,227,0.08)', color: 'var(--blue)', padding: '2px 10px', borderRadius: '980px', fontWeight: 500 }}>{emp.department.name}</span>}
-                {emp.designation && <span style={{ fontSize: '12px', background: 'var(--surface2)', color: 'var(--text2)', padding: '2px 10px', borderRadius: '980px', fontWeight: 500 }}>{emp.designation.name}</span>}
+                {emp.department && <span style={{ fontSize: '11px', background: 'rgba(0,113,227,0.08)', color: 'var(--blue)', padding: '2px 8px', borderRadius: '980px', fontWeight: 500 }}>{emp.department.name}</span>}
+                {emp.designation && <span style={{ fontSize: '11px', background: 'var(--surface2)', color: 'var(--text2)', padding: '2px 8px', borderRadius: '980px', fontWeight: 500 }}>{emp.designation.name}</span>}
                 {emp.managers && emp.managers.length > 0 && (
-                  <span style={{ fontSize: '12px', color: 'var(--text2)', fontWeight: 500 }}>
-                    Manager{emp.managers.length > 1 ? 's' : ''}: {emp.managers.map(m => m.name).join(', ')}
+                  <span style={{ fontSize: '11px', color: 'var(--text3)' }}>
+                    · {emp.managers.map(m => m.name).join(', ')}
                   </span>
                 )}
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '24px' }}>
+          <div style={{ display: 'flex', gap: '18px' }}>
             {[
-              { label: 'Months Tracked', value: emp.records.length, color: 'var(--text)' },
-              { label: 'Avg Absent / mo', value: avgAbsent, color: parseFloat(avgAbsent) >= 3 ? 'var(--red)' : 'var(--text)' },
+              { label: 'Months', value: emp.records.length, color: 'var(--text)' },
+              { label: 'Avg Absent', value: avgAbsent, color: parseFloat(avgAbsent) >= 3 ? 'var(--red)' : 'var(--text)' },
             ].map(s => (
               <div key={s.label} style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '26px', fontWeight: 700, letterSpacing: '-0.04em', color: s.color }}>{s.value}</div>
-                <div style={{ fontSize: '11px', color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 500 }}>{s.label}</div>
+                <div style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '-0.04em', color: s.color }}>{s.value}</div>
+                <div style={{ fontSize: '10px', color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 500 }}>{s.label}</div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Leave balance strip */}
+        {/* Leave balance strip — inline pills */}
         {leaveBalance && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', marginTop: '20px', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '14px', paddingTop: '14px', borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
             {['cl', 'sl', 'el', 'rl', 'sh'].map(type => {
               const avail = leaveBalance[`${type}Avail`] ?? 0;
               const total = leaveBalance[`${type}Total`] ?? 0;
               const used = leaveBalance[`${type}Used`] ?? 0;
               const pct = total > 0 ? Math.max(0, Math.min(100, (avail / total) * 100)) : 0;
               return (
-                <div key={type} style={{ background: 'var(--surface2)', borderRadius: '12px', padding: '14px 16px', border: '1px solid var(--border)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{LEAVE_LABELS[type]}</span>
-                    <span style={{ fontSize: '18px', fontWeight: 700, color: LEAVE_COLORS[type] }}>{avail}</span>
+                <div key={type} style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  background: 'var(--surface2)', borderRadius: '980px',
+                  padding: '6px 14px', border: '1px solid var(--border)'
+                }}>
+                  <div>
+                    <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text2)', letterSpacing: '0.03em' }}>{type.toUpperCase()}</div>
+                    <div style={{ height: '3px', width: '48px', background: 'var(--surface3)', borderRadius: '2px', marginTop: '3px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: LEAVE_COLORS[type], borderRadius: '2px' }} />
+                    </div>
                   </div>
-                  <div style={{ height: '4px', background: 'var(--surface3)', borderRadius: '2px', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${pct}%`, background: LEAVE_COLORS[type], borderRadius: '2px', transition: 'width 0.4s' }} />
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '5px' }}>
-                {used} used · {total} total
-                {type === 'cl' && leaveBalance.clAccrued != null && <span> · {leaveBalance.clAccrued} accrued</span>}
-                {type === 'el' && leaveBalance.elAccrued != null && <span> · {leaveBalance.elAccrued} accrued</span>}
-                {type === 'sl' && leaveBalance.slTotal != null && <span> · {leaveBalance.slTotal} allotted</span>}
-                {type === 'rl' && leaveBalance.rlTotal != null && <span> · {leaveBalance.rlTotal} allotted</span>}
-                {type === 'sh' && leaveBalance.shTotal != null && <span> · {leaveBalance.shTotal} allotted</span>}
-              </div>
+                  <span style={{ fontSize: '16px', fontWeight: 700, color: LEAVE_COLORS[type], minWidth: '20px', textAlign: 'right' }}>{avail}</span>
+                  <span style={{ fontSize: '10px', color: 'var(--text3)' }}>/ {total}</span>
                 </div>
               );
             })}
@@ -415,36 +413,38 @@ export default function EmployeeDashboard({ params }) {
 
         {/* Upcoming holidays */}
         {upcomingHolidays.length > 0 && (
-          <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>Upcoming Holidays</div>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {upcomingHolidays.map(h => (
-                <span key={h.id} style={{ fontSize: '12px', background: 'rgba(255,159,10,0.1)', color: '#b36200', padding: '4px 10px', borderRadius: '980px', fontWeight: 500 }}>
-                  🎉 {h.name} — {new Date(h.year, h.month - 1, h.day).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                </span>
-              ))}
-            </div>
+          <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border)', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Holidays</span>
+            {upcomingHolidays.slice(0, 3).map(h => (
+              <span key={h.id} style={{ fontSize: '11px', background: 'rgba(255,159,10,0.08)', color: '#b36200', padding: '3px 8px', borderRadius: '980px', fontWeight: 500 }}>
+                {h.name} — {new Date(h.year, h.month - 1, h.day).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+              </span>
+            ))}
+            {upcomingHolidays.length > 3 && (
+              <span style={{ fontSize: '11px', color: 'var(--text3)' }}>+{upcomingHolidays.length - 3} more</span>
+            )}
           </div>
         )}
       </div>
 
       {/* ── ATTENDANCE CONTENT (shared by admin & employee) ── */}
       {tab === 'attendance' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: '16px', alignItems: 'start' }}>
-          <div className="card" style={{ padding: '16px' }}>
-            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text2)', marginBottom: '12px', letterSpacing: '0.02em', textTransform: 'uppercase' }}>History</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: '18px', alignItems: 'start' }}>
+          <div className="card" style={{ padding: '12px' }}>
+            <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text3)', marginBottom: '10px', letterSpacing: '0.05em', textTransform: 'uppercase', padding: '0 8px' }}>History</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
               {emp.records.map((r, i) => (
                 <button key={r.id} onClick={() => setSelectedMonthIndex(i)} style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '9px 12px', borderRadius: '9px', cursor: 'pointer', textAlign: 'left',
-                  border: selectedMonthIndex === i ? '1px solid rgba(0,113,227,0.3)' : '1px solid transparent',
+                  padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                  border: 'none', fontSize: '12px', fontWeight: selectedMonthIndex === i ? 600 : 400,
+                  color: selectedMonthIndex === i ? 'var(--text)' : 'var(--text2)',
                   background: selectedMonthIndex === i ? 'var(--blue-light)' : 'transparent',
-                  color: selectedMonthIndex === i ? 'var(--blue)' : 'var(--text2)',
-                  fontFamily: 'inherit', fontSize: '13px', fontWeight: selectedMonthIndex === i ? 600 : 400, transition: 'all 0.15s'
+                  borderLeft: selectedMonthIndex === i ? '3px solid var(--blue)' : '3px solid transparent',
+                  transition: 'all 0.12s'
                 }}>
                   <span>{formatMonth(r.monthYear)}</span>
-                  <span style={{ fontSize: '11px', display: 'flex', gap: '4px' }}>
+                  <span style={{ fontSize: '10px', display: 'flex', gap: '3px' }}>
                     {r.absent > 0 && <span style={{ color: 'var(--red)' }}>{r.absent}A</span>}
                     {r.late > 0 && <span style={{ color: 'var(--yellow)' }}>{r.late}L</span>}
                   </span>
@@ -453,20 +453,20 @@ export default function EmployeeDashboard({ params }) {
             </div>
           </div>
 
-          <div className="card" style={{ padding: '24px', position: 'relative' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <div style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.03em' }}>
+          <div className="card" style={{ padding: '20px', position: 'relative' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ fontSize: '15px', fontWeight: 700, letterSpacing: '-0.03em' }}>
                 {formatMonth(currentRecord.monthYear)}
               </div>
               <button
                 className="btn btn-secondary"
-                style={{ fontSize: '12px', padding: '6px 14px' }}
+                style={{ fontSize: '11px', padding: '5px 12px' }}
                 onClick={() => downloadPDF(currentRecord, emp, currentMonthOverrides)}
               >
-                ↓ Download PDF
+                <FiDownload size={12} /> PDF
               </button>
             </div>
-            <div style={{ position: 'relative', height: '760px', overflow: 'hidden' }}>
+            <div style={{ position: 'relative', height: '720px', overflow: 'hidden' }}>
               <style>{`.emp-inline > div { position: absolute !important; inset: 0 !important; background: transparent !important; backdrop-filter: none !important; } .emp-inline > div > div { width: 100% !important; max-width: 100% !important; height: 100% !important; border: none !important; background: transparent !important; box-shadow: none !important; border-radius: 0 !important; }`}</style>
               <div className="emp-inline">
                 <EmployeeModal
@@ -489,20 +489,22 @@ export default function EmployeeDashboard({ params }) {
 
       {/* ── NON-ADMIN: sidebar tabs + content ── */}
       {!isAdmin && (
-        <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '16px', alignItems: 'start', marginTop: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '18px', alignItems: 'start', marginTop: '20px' }}>
           <div className="card" style={{ padding: '6px' }}>
             {[
-              { key: 'attendance', label: '📅 Attendance' },
-              { key: 'leaves', label: '📝 Leave Requests' },
-              { key: 'regularize', label: '🔧 Regularization' },
+              { key: 'attendance', label: 'Attendance', icon: <FiCalendar size={14} /> },
+              { key: 'leaves', label: 'Leave Requests', icon: <FiFileText size={14} /> },
+              { key: 'regularize', label: 'Regularization', icon: <FiTool size={14} /> },
             ].map(t => (
               <button key={t.key} onClick={() => setTab(t.key)} style={{
                 width: '100%', padding: '10px 14px', borderRadius: '7px', fontSize: '13px',
                 border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', fontWeight: 500,
                 background: tab === t.key ? 'var(--surface)' : 'transparent',
                 color: tab === t.key ? 'var(--text)' : 'var(--text2)',
-                boxShadow: tab === t.key ? 'var(--shadow-sm)' : 'none', transition: 'all 0.15s'
-              }}>{t.label}</button>
+                boxShadow: tab === t.key ? 'var(--shadow-sm)' : 'none', transition: 'all 0.12s',
+                display: 'flex', alignItems: 'center', gap: '8px',
+                borderLeft: tab === t.key ? '3px solid var(--blue)' : '3px solid transparent',
+              }}>{t.icon} {t.label}</button>
             ))}
           </div>
 

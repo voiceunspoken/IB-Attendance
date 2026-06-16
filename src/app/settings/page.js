@@ -15,12 +15,14 @@ import { changePassword } from '../../actions/auth';
 import { sendAllMonthlyReports } from '../../actions/notifications';
 import { updateEmployeeDetails } from '../../actions/employees';
 import { getDepartments, getDesignations, setEmployeeManagers, getEmployeeManagers } from '../../actions/departments';
+import { useToast } from '../../components/Toast';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 export default function SettingsPage() {
   const { isAdmin, isSuperAdmin, isAuthenticated, user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const toast = useToast();
   const [tab, setTab] = useState('holidays');
 
   // Holidays
@@ -189,7 +191,7 @@ export default function SettingsPage() {
   const handleDeleteMonth = async (code, name, monthYear) => {
     if (!confirm(`Delete ${name}'s data for ${monthYear}? This cannot be undone.`)) return;
     await deleteMonthRecord(code, monthYear, user.username);
-    alert('Month record deleted.');
+    toast.success('Month record deleted.');
   };
 
   const handleEditRecord = async (e) => {
@@ -577,7 +579,7 @@ export default function SettingsPage() {
                   const code = document.getElementById('del-emp-select').value;
                   const monthYear = document.getElementById('del-month-select').value;
                   const emp = employees.find(e => e.code === code);
-                  if (!code || !monthYear) return alert('Select both employee and month.');
+                  if (!code || !monthYear) return toast.error('Select both employee and month.');
                   handleDeleteMonth(code, emp?.name, monthYear);
                 }}>
                 Delete Month

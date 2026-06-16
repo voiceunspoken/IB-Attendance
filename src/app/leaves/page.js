@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
+import { useToast } from '../../components/Toast';
 import {
   getAllLeaveRequests, reviewLeaveRequest,
   getAllPendingRegularizations, reviewRegularization,
@@ -18,6 +19,7 @@ const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de
 export default function LeavesPage() {
   const { isAdmin, isSuperAdmin, isAuthenticated, user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const toast = useToast();
 
   const [tab, setTab] = useState('requests');
   const [fetchTrigger, setFetchTrigger] = useState(0);
@@ -42,7 +44,7 @@ export default function LeavesPage() {
   const YEARS = Array.from({ length: 4 }, (_, i) => new Date().getFullYear() - i);
 
   const exportLeaveBalances = async () => {
-    if (exportFrom > exportTo) return alert('From month cannot be after To month.');
+    if (exportFrom > exportTo) return toast.error('From month cannot be after To month.');
     setExporting(true);
     try {
       const XLSX = await import('xlsx');
@@ -88,7 +90,7 @@ export default function LeavesPage() {
       XLSX.utils.book_append_sheet(wb, ws, rangeLabel);
       XLSX.writeFile(wb, `Leave_Balances_${rangeLabel.replace(/[–\s]/g, '_')}.xlsx`);
     } catch (err) {
-      alert('Export failed: ' + err.message);
+      toast.error('Export failed: ' + err.message);
     } finally {
       setExporting(false);
     }
@@ -144,7 +146,7 @@ export default function LeavesPage() {
   const handleSavePolicy = async (e) => {
     e.preventDefault();
     await upsertLeavePolicy(year, policy);
-    alert('Policy saved for ' + year);
+    toast.success('Policy saved for ' + year);
     setFetchTrigger(t => t + 1);
   };
 

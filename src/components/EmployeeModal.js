@@ -1,16 +1,20 @@
 "use client";
 
 import { useState } from 'react';
+import { FiX, FiMonitor, FiHome, FiBriefcase, FiClock } from 'react-icons/fi';
+import { useToast } from './Toast';
 
 export default function EmployeeModal({ employee, currentMonth, overrides, onClose, onApplyOverride, onRemoveOverride, onClearAllOverrides, readOnly = false, onProposeCorrection, rlEligibleDays = [] }) {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [overrideType, setOverrideType] = useState('wfm');
   const [popupDay, setPopupDay] = useState(null);
+  const [selectedDay, setSelectedDay] = useState(null);
   const [popupPos, setPopupPos] = useState({ x: 0, y: 0 });
   const [correctionType, setCorrectionType] = useState('present');
   const [correctionReason, setCorrectionReason] = useState('');
 
+  const toast = useToast();
   const fmtTime = (m) => m != null ? `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` : '';
 
   if (!employee) return null;
@@ -44,7 +48,7 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
   const handleApply = () => {
     const f = parseInt(fromDate);
     const t = parseInt(toDate) || f;
-    if (!f || isNaN(f)) return alert('Please enter a valid start date.');
+    if (!f || isNaN(f)) return toast.error('Please enter a valid start date.');
     const dIM = new Date(currentMonth.year, currentMonth.month, 0).getDate();
     const start = Math.max(1, Math.min(f, dIM));
     const end = Math.max(start, Math.min(t, dIM));
@@ -64,10 +68,11 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
     const info = employee.days.find(x => x.d === day);
     if (!info || info.type === 'wo' || info.type === 'holiday') return;
     const rect = e.currentTarget.getBoundingClientRect();
-    let x = rect.right + 8, y = rect.top;
-    if (x + 280 > window.innerWidth) x = Math.max(8, rect.left - 280 - 8);
-    if (y + 320 > window.innerHeight) y = Math.max(8, window.innerHeight - 320 - 8);
+    let x = rect.right + 10, y = rect.top - 4;
+    if (x + 300 > window.innerWidth) x = Math.max(10, rect.left - 300 - 10);
+    if (y + 360 > window.innerHeight) y = Math.max(10, window.innerHeight - 360 - 10);
     setPopupPos({ x, y });
+    setSelectedDay(day);
     setPopupDay(day);
   };
 
@@ -102,43 +107,44 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
 
       if (ovVal) {
         label = ovVal === 'wfm' ? 'WFM' : ovVal === 'wfm-hd' ? 'WFM½' : ovVal === 'wfh' ? 'WFH' : ovVal === 'wos' ? 'WOS' : 'WOS½';
-        bg = ovVal === 'wfm' ? 'rgba(52,199,89,0.12)'
-           : ovVal === 'wfm-hd' ? 'rgba(52,199,89,0.08)'
-           : ovVal === 'wfh' ? 'rgba(175,82,222,0.1)'
-           : ovVal === 'wos' ? 'rgba(48,176,199,0.12)'
-           : 'rgba(48,176,199,0.08)';
-        border = ovVal === 'wfm' ? '1.5px solid rgba(52,199,89,0.4)'
-               : ovVal === 'wfm-hd' ? '1.5px solid rgba(52,199,89,0.3)'
-               : ovVal === 'wfh' ? '1.5px solid rgba(175,82,222,0.35)'
-               : '1.5px solid rgba(48,176,199,0.4)';
+        bg = ovVal === 'wfm' ? 'rgba(52,199,89,0.15)'
+           : ovVal === 'wfm-hd' ? 'rgba(52,199,89,0.1)'
+           : ovVal === 'wfh' ? 'rgba(175,82,222,0.12)'
+           : ovVal === 'wos' ? 'rgba(48,176,199,0.15)'
+           : 'rgba(48,176,199,0.1)';
+        border = ovVal === 'wfm' ? '2px solid rgba(52,199,89,0.5)'
+               : ovVal === 'wfm-hd' ? '2px solid rgba(52,199,89,0.35)'
+               : ovVal === 'wfh' ? '2px solid rgba(175,82,222,0.4)'
+               : '2px solid rgba(48,176,199,0.45)';
       } else {
-        if (info.type === 'wo') { opacity = 0.4; cursor = 'default'; label = 'WO'; }
+        if (info.type === 'wo') { opacity = 0.35; cursor = 'default'; label = 'WO'; bg = 'transparent'; border = '1px solid var(--border)'; }
         else if (info.type === 'present') {
           if (info.inT === null) {
-            bg = 'rgba(255,107,53,0.08)'; border = '2px dashed rgba(255,107,53,0.5)'; label = '⚠ P';
+            bg = 'rgba(255,107,53,0.08)'; border = '2px dashed rgba(255,107,53,0.45)'; label = '⚠';
           } else {
-            bg = 'rgba(52,199,89,0.08)'; border = '1px solid rgba(52,199,89,0.25)'; label = 'P';
+            bg = 'rgba(52,199,89,0.1)'; border = '2px solid rgba(52,199,89,0.3)'; label = '';
           }
         }
-        else if (info.type === 'absent') { bg = 'rgba(255,59,48,0.08)'; border = '1px solid rgba(255,59,48,0.25)'; label = 'A'; }
-        else if (info.type === 'holiday') { bg = 'rgba(255,159,10,0.1)'; border = '1px solid rgba(255,159,10,0.3)'; label = '🎉'; cursor = 'default'; }
-        else if (info.type === 'rl') { bg = 'rgba(175,82,222,0.08)'; border = '1px solid rgba(175,82,222,0.25)'; label = 'RL'; }
+        else if (info.type === 'absent') { bg = 'rgba(255,59,48,0.09)'; border = '2px solid rgba(255,59,48,0.3)'; label = 'Absent'; }
+        else if (info.type === 'holiday') { bg = 'rgba(255,159,10,0.12)'; border = '2px solid rgba(255,159,10,0.35)'; label = ''; cursor = 'default'; }
+        else if (info.type === 'rl') { bg = 'rgba(175,82,222,0.1)'; border = '2px solid rgba(175,82,222,0.3)'; label = 'RL'; }
         else if (info.type === 'half') {
-          if (info.hdReason === 'late') { bg = 'rgba(255,59,48,0.08)'; border = '1px solid rgba(255,59,48,0.3)'; label = 'HD(L)'; }
-          else if (info.hdReason === 'ss') { bg = 'rgba(255,107,53,0.08)'; border = '1px solid rgba(255,107,53,0.3)'; label = 'HD(SS)'; }
-          else { bg = 'rgba(255,159,10,0.08)'; border = '1px solid rgba(255,159,10,0.25)'; label = 'HD'; }
+          if (info.hdReason === 'late') { bg = 'rgba(255,59,48,0.08)'; border = '2px solid rgba(255,59,48,0.3)'; label = 'HD(L)'; }
+          else if (info.hdReason === 'ss') { bg = 'rgba(255,107,53,0.1)'; border = '2px solid rgba(255,107,53,0.3)'; label = 'HD(SS)'; }
+          else { bg = 'rgba(255,159,10,0.1)'; border = '2px solid rgba(255,159,10,0.3)'; label = 'HD'; }
         }
-        if (info.isSL) { label = 'SL'; bg = 'rgba(0,113,227,0.08)'; }
-        else if (info.isSS) { label = 'SS'; outline = '2px solid rgba(255,107,53,0.5)'; }
-        else if (info.isLate) { label = 'Late'; outline = '2px solid rgba(255,159,10,0.5)'; }
+        if (info.isSL) { label = 'SL'; bg = 'rgba(0,113,227,0.08)'; border = '2px solid rgba(0,113,227,0.25)'; }
+        else if (info.isSS) { label = 'SS'; border = '2px solid rgba(255,107,53,0.5)'; }
+        else if (info.isLate) { label = 'Late'; border = '2px solid rgba(255,159,10,0.5)'; }
 
-        // RL-eligible: override styling to show eligibility
         if (rlDay && info.type !== 'rl' && info.type !== 'holiday' && info.type !== 'wo') {
           outline = '2px dashed rgba(175,82,222,0.5)';
           if (rlDay.isBirthday) label = label ? `${label} 🎂` : '🎂';
           else label = label ? `${label} ✅` : '✅';
         }
       }
+
+      const isSelected = d === selectedDay;
 
       cells.push(
         <div
@@ -148,10 +154,13 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
             aspectRatio: '1', borderRadius: '8px', border, background: bg,
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
             fontSize: '10px', gap: '1px', position: 'relative', cursor, opacity, outline, outlineOffset: '-2px',
-            transition: 'transform 0.1s'
+            transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+            boxShadow: isSelected ? '0 0 0 2.5px var(--blue), 0 4px 12px rgba(0,0,0,0.1)' : undefined,
+            transform: isSelected ? 'scale(1.05)' : undefined,
+            zIndex: isSelected ? 5 : undefined,
           }}
-          onMouseEnter={e => { if (cursor === 'pointer') e.currentTarget.style.transform = 'scale(1.06)'; }}
-          onMouseLeave={e => { e.currentTarget.style.transform = ''; }}
+          onMouseEnter={e => { if (cursor === 'pointer' && !isSelected) e.currentTarget.style.transform = 'scale(1.06)'; }}
+          onMouseLeave={e => { if (!isSelected) e.currentTarget.style.transform = ''; }}
         >
           {ovVal && (
             <div style={{
@@ -163,8 +172,8 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
                         : 'var(--teal)'
             }} />
           )}
-          <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--text)' }}>{d}</span>
-          <span style={{ fontSize: '8px', color: 'var(--text2)', letterSpacing: '0.01em' }}>{label}</span>
+          <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text)' }}>{d}</span>
+          <span style={{ fontSize: '9px', fontWeight: 600, color: 'var(--text2)', letterSpacing: '0.01em' }}>{label}</span>
         </div>
       );
     }
@@ -204,9 +213,9 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
             style={{
               width: '30px', height: '30px', borderRadius: '50%', border: 'none',
               background: 'var(--surface3)', color: 'var(--text2)', cursor: 'pointer',
-              display: 'grid', placeItems: 'center', fontSize: '14px', fontFamily: 'inherit'
+              display: 'grid', placeItems: 'center', fontSize: '16px', fontFamily: 'inherit'
             }}
-          >✕</button>
+          ><FiX size={16} /></button>
         </div>
 
         {/* Body */}
@@ -237,11 +246,11 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
                 <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 500 }}>Type</span>
                 <select value={overrideType} onChange={e => setOverrideType(e.target.value)}
                   className="input-field" style={{ width: '220px', padding: '7px 10px' }}>
-                  <option value="wfm">🏛️ Work From Ministry — Full Day</option>
-                  <option value="wfm-hd">🏛️ Work From Ministry — Half Day</option>
-                  <option value="wfh">🏠 Work From Home</option>
-                  <option value="wos">🏢 Work On Site — Full Day</option>
-                  <option value="wos-hd">🏢 Work On Site — Half Day</option>
+                  <option value="wfm">WFM — Full Day</option>
+                  <option value="wfm-hd">WFM — Half Day</option>
+                  <option value="wfh">WFH</option>
+                  <option value="wos">WOS — Full Day</option>
+                  <option value="wos-hd">WOS — Half Day</option>
                 </select>
               </div>
               <button className="btn btn-primary" style={{ padding: '8px 18px' }} onClick={handleApply}>Apply</button>
@@ -272,108 +281,180 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
       </div>
 
       {/* Day popup */}
-      {popupDay && (
-        <div
-          style={{
-            position: 'fixed', left: popupPos.x, top: popupPos.y, zIndex: 300,
-            background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: '14px', padding: '12px', minWidth: '250px',
-            boxShadow: 'var(--shadow-lg)', animation: 'fadeIn 0.15s ease'
-          }}
-          onClick={e => e.stopPropagation()}
-        >
-          <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '4px', letterSpacing: '-0.02em', color: 'var(--text)' }}>
-            Day {popupDay}
-          </div>
-          {(() => {
-            const di = employee.days.find(x => x.d === popupDay);
-            if (di && di.inT != null) {
-              return (
-                <div style={{ fontSize: '11px', color: 'var(--text3)', marginBottom: '10px' }}>
-                  In: <strong style={{ color: 'var(--text)' }}>{fmtTime(di.inT)}</strong>
-                  {di.outT != null && <> · Out: <strong style={{ color: 'var(--text)' }}>{fmtTime(di.outT)}</strong></>}
-                </div>
-              );
-            }
-            return null;
-          })()}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            {[
-              { label: '🏛️ WFM — Full Day', type: 'wfm', bg: 'rgba(52,199,89,0.08)', color: '#1a7f37', border: 'rgba(52,199,89,0.25)' },
-              { label: '🏛️ WFM — Half Day', type: 'wfm-hd', bg: 'rgba(52,199,89,0.06)', color: '#1a7f37', border: 'rgba(52,199,89,0.2)' },
-              { label: '🏠 Work From Home', type: 'wfh', bg: 'rgba(175,82,222,0.08)', color: '#7b2d8b', border: 'rgba(175,82,222,0.25)' },
-              { label: '🏢 Work On Site — Full Day', type: 'wos', bg: 'rgba(48,176,199,0.08)', color: '#1a6e7a', border: 'rgba(48,176,199,0.25)' },
-              { label: '🏢 Work On Site — Half Day', type: 'wos-hd', bg: 'rgba(48,176,199,0.06)', color: '#1a6e7a', border: 'rgba(48,176,199,0.2)' },
-            ].map(item => (
-              <button key={item.type} onClick={() => { onApplyOverride(employee.code, popupDay, item.type); setPopupDay(null); }}
-                style={{
-                  padding: '9px 12px', borderRadius: '9px', border: `1px solid ${item.border}`,
-                  background: item.bg, color: item.color, cursor: 'pointer', fontSize: '13px',
-                  fontWeight: 500, textAlign: 'left', fontFamily: 'inherit', letterSpacing: '-0.01em'
-                }}>
-                {item.label}
-              </button>
-            ))}
-            <button onClick={() => { onRemoveOverride(employee.code, popupDay); setPopupDay(null); }}
-              style={{
-                padding: '9px 12px', borderRadius: '9px', border: '1px solid rgba(255,59,48,0.2)',
-                background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer',
-                fontSize: '13px', fontWeight: 500, textAlign: 'left', fontFamily: 'inherit'
-              }}>
-              Remove Override
-            </button>
-            <button onClick={() => setPopupDay(null)}
-              style={{
-                padding: '9px 12px', borderRadius: '9px', border: '1px solid var(--border)',
-                background: 'transparent', color: 'var(--text2)', cursor: 'pointer',
-                fontSize: '13px', fontFamily: 'inherit'
-              }}>
-              Cancel
-            </button>
-          </div>
+      {popupDay && (() => {
+        const di = employee.days.find(x => x.d === popupDay);
+        if (!di) return null;
+        const ovVal = overrides[`${employee.code}_${popupDay}`];
+        const pd = new Date(currentMonth.year, currentMonth.month - 1, popupDay);
+        const dayName = pd.toLocaleDateString('en-US', { weekday: 'long' });
+        const dateStr = pd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-          {/* Attendance correction proposal — admin only */}
-          {onProposeCorrection && (() => {
-            const dayInfo = employee.days.find(x => x.d === popupDay);
-            if (!dayInfo || dayInfo.type === 'wo' || dayInfo.type === 'holiday') return null;
-            const typeLabel = { present: 'Present', absent: 'Absent', half: 'Half Day', rl: 'RL' }[dayInfo.type] || dayInfo.type;
-            return (
-              <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text2)', marginBottom: '8px', letterSpacing: '-0.01em' }}>
-                  Propose Attendance Change
+        const statusLabel = ovVal
+          ? ({ wfm: 'WFM Full', 'wfm-hd': 'WFM Half', wfh: 'WFH', wos: 'WOS Full', 'wos-hd': 'WOS Half' }[ovVal] || ovVal)
+          : ({ present: 'Present', absent: 'Absent', half: 'Half Day', rl: 'RL', holiday: 'Holiday', wo: 'WO' }[di.type] || di.type);
+
+        const statusBg = ovVal
+          ? ({ wfm: '#34c759', 'wfm-hd': '#30d158', wfh: '#af52de', wos: '#30b0c7', 'wos-hd': '#30b0c7' }[ovVal] || 'var(--text2)')
+          : ({ present: '#34c759', absent: '#ff3b30', half: '#ff6b35', rl: '#af52de', holiday: '#ff9f0a', wo: 'var(--text3)' }[di.type] || 'var(--text2)');
+
+        const workingHrs = di.inT != null && di.outT != null
+          ? `${Math.floor((di.outT - di.inT) / 60)}h ${(di.outT - di.inT) % 60}m`
+          : null;
+
+        const sectionDiv = <div style={{ margin: '12px 0', height: '1px', background: 'var(--border)' }} />;
+
+        return (
+          <div
+            style={{
+              position: 'fixed', left: popupPos.x, top: popupPos.y, zIndex: 300,
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: '16px', padding: '16px', minWidth: '290px', maxWidth: '320px',
+              boxShadow: 'var(--shadow-lg)', animation: 'fadeIn 0.15s ease'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+              <div>
+                <div style={{ fontSize: '15px', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)', lineHeight: 1.2 }}>
+                  Day {popupDay}
+                  <span style={{ fontWeight: 400, color: 'var(--text2)', marginLeft: '6px' }}>· {dayName}</span>
                 </div>
-                <div style={{ fontSize: '11px', color: 'var(--text3)', marginBottom: '8px' }}>
-                  Current: <strong style={{ color: 'var(--text)' }}>{typeLabel}</strong>
-                </div>
-                <select className="input-field" value={correctionType}
-                  onChange={e => setCorrectionType(e.target.value)}
-                  style={{ width: '100%', padding: '7px 10px', fontSize: '12px', marginBottom: '6px' }}>
-                  <option value="present">Present (Full Day)</option>
-                  <option value="absent">Absent</option>
-                  <option value="half">Half Day</option>
-                </select>
-                <input className="input-field" placeholder="Reason for change…"
-                  value={correctionReason}
-                  onChange={e => setCorrectionReason(e.target.value)}
-                  style={{ width: '100%', padding: '7px 10px', fontSize: '12px', marginBottom: '6px', boxSizing: 'border-box' }} />
-                <button onClick={() => {
-                  if (!correctionReason.trim()) return alert('Please provide a reason.');
-                  onProposeCorrection(employee.code, popupDay, dayInfo.type, correctionType, correctionReason);
-                  setCorrectionReason('');
-                  setCorrectionType('present');
-                  setPopupDay(null);
-                }} style={{
-                  padding: '7px 14px', borderRadius: '9px', border: '1px solid var(--blue)',
-                  background: 'var(--blue-light)', color: 'var(--blue)', cursor: 'pointer',
-                  fontSize: '12px', fontWeight: 600, fontFamily: 'inherit', width: '100%'
-                }}>
-                  Submit Correction Request
-                </button>
+                <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '2px', letterSpacing: '-0.01em' }}>{dateStr}</div>
               </div>
-            );
-          })()}
-        </div>
-      )}
+              <button onClick={() => { setSelectedDay(null); setPopupDay(null); }}
+                style={{
+                  width: '26px', height: '26px', borderRadius: '50%', border: 'none',
+                  background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer',
+                  display: 'grid', placeItems: 'center', fontFamily: 'inherit', flexShrink: 0
+                }}>
+                <FiX size={13} />
+              </button>
+            </div>
+
+            {/* Status badge */}
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+              padding: '4px 12px', borderRadius: '980px',
+              background: statusBg + '14', color: statusBg,
+              fontSize: '12px', fontWeight: 600, letterSpacing: '-0.01em',
+              marginBottom: '14px'
+            }}>
+              <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: statusBg, flexShrink: 0 }} />
+              {di.isLate && !ovVal ? 'Late — ' : ''}{statusLabel}
+            </div>
+
+            {/* Punch timeline */}
+            {di.inT != null && (
+              <div style={{
+                background: 'var(--surface2)', borderRadius: '12px',
+                padding: '14px 16px', marginBottom: '4px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: 600, color: 'var(--text)' }}>
+                  <FiClock size={14} style={{ color: 'var(--text3)', flexShrink: 0 }} />
+                  <span>{fmtTime(di.inT)}</span>
+                  <div style={{ flex: 1, height: '1px', background: 'var(--border2)', position: 'relative' }} />
+                  <span>{di.outT != null ? fmtTime(di.outT) : '—'}</span>
+                </div>
+                {workingHrs && (
+                  <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '6px', letterSpacing: '-0.01em', paddingLeft: '24px' }}>
+                    Working Hours: <strong style={{ color: 'var(--text)' }}>{workingHrs}</strong>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Override section */}
+            {!readOnly && (
+              <>
+                {sectionDiv}
+                <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text3)', marginBottom: '8px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                  Override
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  {[
+                    { label: 'WFM — Full Day', type: 'wfm', icon: <FiMonitor size={13} />, bg: 'rgba(52,199,89,0.08)', color: '#1a7f37', border: 'rgba(52,199,89,0.25)' },
+                    { label: 'WFM — Half Day', type: 'wfm-hd', icon: <FiMonitor size={13} />, bg: 'rgba(52,199,89,0.06)', color: '#1a7f37', border: 'rgba(52,199,89,0.2)' },
+                    { label: 'Work From Home', type: 'wfh', icon: <FiHome size={13} />, bg: 'rgba(175,82,222,0.08)', color: '#7b2d8b', border: 'rgba(175,82,222,0.25)' },
+                    { label: 'On Site — Full Day', type: 'wos', icon: <FiBriefcase size={13} />, bg: 'rgba(48,176,199,0.08)', color: '#1a6e7a', border: 'rgba(48,176,199,0.25)' },
+                    { label: 'On Site — Half Day', type: 'wos-hd', icon: <FiBriefcase size={13} />, bg: 'rgba(48,176,199,0.06)', color: '#1a6e7a', border: 'rgba(48,176,199,0.2)' },
+                  ].map(item => (
+                    <button key={item.type} onClick={() => { onApplyOverride(employee.code, popupDay, item.type); setSelectedDay(null); setPopupDay(null); }}
+                      style={{
+                        padding: '9px 12px', borderRadius: '9px', border: `1px solid ${item.border}`,
+                        background: item.bg, color: item.color, cursor: 'pointer', fontSize: '12px',
+                        fontWeight: 500, textAlign: 'left', fontFamily: 'inherit', letterSpacing: '-0.01em',
+                        display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.12s'
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = item.color + '18'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = item.bg; }}
+                    >
+                      {item.icon}
+                      {item.label}
+                    </button>
+                  ))}
+                  <button onClick={() => { onRemoveOverride(employee.code, popupDay); setSelectedDay(null); setPopupDay(null); }}
+                    style={{
+                      padding: '9px 12px', borderRadius: '9px', border: '1px solid rgba(255,59,48,0.2)',
+                      background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer',
+                      fontSize: '12px', fontWeight: 500, textAlign: 'left', fontFamily: 'inherit',
+                      display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.12s'
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,59,48,0.12)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,59,48,0.06)'; }}
+                  >
+                    <FiX size={13} />
+                    Remove Override
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Attendance correction proposal — admin only */}
+            {onProposeCorrection && (() => {
+              const cdi = employee.days.find(x => x.d === popupDay);
+              if (!cdi || cdi.type === 'wo' || cdi.type === 'holiday') return null;
+              const cl = { present: 'Present', absent: 'Absent', half: 'Half Day', rl: 'RL' }[cdi.type] || cdi.type;
+              return (
+                <>
+                  {sectionDiv}
+                  <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text3)', marginBottom: '8px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                    Propose Change
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text3)', marginBottom: '8px' }}>
+                    Current: <strong style={{ color: 'var(--text)' }}>{cl}</strong>
+                  </div>
+                  <select className="input-field" value={correctionType}
+                    onChange={e => setCorrectionType(e.target.value)}
+                    style={{ width: '100%', padding: '7px 10px', fontSize: '12px', marginBottom: '6px' }}>
+                    <option value="present">Present (Full Day)</option>
+                    <option value="absent">Absent</option>
+                    <option value="half">Half Day</option>
+                  </select>
+                  <input className="input-field" placeholder="Reason for change…"
+                    value={correctionReason}
+                    onChange={e => setCorrectionReason(e.target.value)}
+                    style={{ width: '100%', padding: '7px 10px', fontSize: '12px', marginBottom: '6px', boxSizing: 'border-box' }} />
+                  <button onClick={() => {
+                    if (!correctionReason.trim()) return toast.error('Please provide a reason.');
+                    onProposeCorrection(employee.code, popupDay, cdi.type, correctionType, correctionReason);
+                    setCorrectionReason('');
+                    setCorrectionType('present');
+                    setSelectedDay(null);
+                    setPopupDay(null);
+                  }} style={{
+                    padding: '7px 14px', borderRadius: '9px', border: '1px solid var(--blue)',
+                    background: 'var(--blue-light)', color: 'var(--blue)', cursor: 'pointer',
+                    fontSize: '12px', fontWeight: 600, fontFamily: 'inherit', width: '100%'
+                  }}>
+                    Submit Correction Request
+                  </button>
+                </>
+              );
+            })()}
+          </div>
+        );
+      })()}
     </div>
   );
 }

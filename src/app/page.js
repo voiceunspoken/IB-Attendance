@@ -15,11 +15,13 @@ import { getDepartments } from '../actions/departments';
 import { getPendingPolicies } from '../actions/shiftPolicy';
 import { getPendingAttendanceCorrections } from '../actions/attendanceChanges';
 import { getPendingSuperRegularizations } from '../actions/leave';
-import { FiSearch, FiDownload, FiUpload, FiChevronDown } from 'react-icons/fi';
+import { FiSearch, FiDownload, FiUpload, FiChevronDown, FiUsers, FiAlertCircle, FiClock, FiZap, FiHome, FiMonitor, FiAlertTriangle, FiClipboard } from 'react-icons/fi';
+import { useToast } from '../components/Toast';
 
 export default function DashboardHome() {
   const { isAuthenticated, isAdmin, isSuperAdmin, user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const toast = useToast();
 
   const [months, setMonths] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState('');
@@ -170,7 +172,7 @@ export default function DashboardHome() {
         setSelectedMonth(monthYearStr);
         await loadDashboardData(monthYearStr);
       } catch (err) {
-        alert('Error reading file: ' + err.message);
+        toast.error('Error reading file: ' + err.message);
         setUploadView(true);
       } finally {
         setUploading(false);
@@ -209,14 +211,14 @@ export default function DashboardHome() {
     const totalWFMHD = Object.values(overrides).filter(v => v === 'wfm-hd').length;
     const totalWFH = Object.values(overrides).filter(v => v === 'wfh').length;
     return [
-      { label: 'Employees', value: allResults.length, sub: 'Analyzed this month', color: '#0071e3', icon: '👥' },
-      { label: 'Absences', value: allResults.reduce((s, x) => s + x.absent, 0), sub: 'Working days missed', color: '#ff3b30', icon: '📵' },
-      { label: 'Late Marks', value: allResults.reduce((s, x) => s + x.late, 0), sub: 'After 10:15 AM', color: '#ff9f0a', icon: '⏰' },
-      { label: 'Short Shifts', value: allResults.reduce((s, x) => s + x.shortShift, 0), sub: 'Under 9 hrs', color: '#ff6b35', icon: '⚡' },
-      { label: 'WFM Days', value: totalWFM + totalWFMHD, sub: `Full: ${totalWFM} · Half: ${totalWFMHD}`, color: '#34c759', icon: '🏛️' },
-      { label: 'WFH Days', value: totalWFH, sub: 'Work from home', color: '#af52de', icon: '🏠' },
-      { label: 'Missed Punches', value: totalPunchMissing, sub: 'Present days w/o punch', color: '#ff6b35', icon: '⚠️', onClick: () => setCurrentFilter('punchmissing') },
-      { label: 'HD Deductions', value: allResults.reduce((s, x) => s + x.lateHD + x.ssHD, 0), sub: 'Late + short shifts', color: '#ff3b30', icon: '📋' },
+      { label: 'Employees', value: allResults.length, sub: 'Analyzed this month', color: '#0071e3', icon: <FiUsers size={18} /> },
+      { label: 'Absences', value: allResults.reduce((s, x) => s + x.absent, 0), sub: 'Working days missed', color: '#ff3b30', icon: <FiAlertCircle size={18} /> },
+      { label: 'Late Marks', value: allResults.reduce((s, x) => s + x.late, 0), sub: 'After 10:15 AM', color: '#ff9f0a', icon: <FiClock size={18} /> },
+      { label: 'Short Shifts', value: allResults.reduce((s, x) => s + x.shortShift, 0), sub: 'Under 9 hrs', color: '#ff6b35', icon: <FiZap size={18} /> },
+      { label: 'WFM Days', value: totalWFM + totalWFMHD, sub: `Full: ${totalWFM} · Half: ${totalWFMHD}`, color: '#34c759', icon: <FiMonitor size={18} /> },
+      { label: 'WFH Days', value: totalWFH, sub: 'Work from home', color: '#af52de', icon: <FiHome size={18} /> },
+      { label: 'Missed Punches', value: totalPunchMissing, sub: 'Present days w/o punch', color: '#ff6b35', icon: <FiAlertTriangle size={18} />, onClick: () => setCurrentFilter('punchmissing') },
+      { label: 'HD Deductions', value: allResults.reduce((s, x) => s + x.lateHD + x.ssHD, 0), sub: 'Late + short shifts', color: '#ff3b30', icon: <FiClipboard size={18} /> },
     ];
   };
 
@@ -323,47 +325,50 @@ export default function DashboardHome() {
           {/* Super admin approval banner */}
           {isSuperAdmin && (
             <div className="card" style={{
-              padding: '12px 20px', marginBottom: 'var(--gap)',
+              padding: '10px 18px', marginBottom: 'var(--gap)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px',
               background: pendingCounts.policies > 0 || pendingCounts.corrections > 0 || pendingCounts.regularizations > 0
                 ? 'rgba(255,159,10,0.06)' : 'var(--surface2)',
               border: pendingCounts.policies > 0 || pendingCounts.corrections > 0 || pendingCounts.regularizations > 0
                 ? '1px solid rgba(255,159,10,0.25)' : '1px solid var(--border)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px'
             }}>
-              <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                ⚡ Pending Approvals
+              <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '14px' }}>⚡</span> Pending Approvals
                 {(pendingCounts.policies + pendingCounts.corrections + pendingCounts.regularizations) > 0 && (
-                  <span style={{ fontSize: '12px', background: 'rgba(255,59,48,0.1)', color: 'var(--red)', padding: '1px 8px', borderRadius: '980px', fontWeight: 600 }}>
+                  <span style={{
+                    fontSize: '11px', background: 'var(--red)', color: '#fff',
+                    padding: '1px 7px', borderRadius: '980px', fontWeight: 700
+                  }}>
                     {pendingCounts.policies + pendingCounts.corrections + pendingCounts.regularizations}
                   </span>
                 )}
               </div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                 {(pendingCounts.policies + pendingCounts.corrections + pendingCounts.regularizations) > 0 ? (
                   <>
                     {pendingCounts.policies > 0 && (
-                      <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '4px 12px' }}
+                      <button className="btn btn-secondary" style={{ fontSize: '11px', padding: '3px 10px' }}
                         onClick={() => router.push('/settings')}>
                         {pendingCounts.policies} Policy{pendingCounts.policies > 1 ? 'ies' : 'y'}
                       </button>
                     )}
                     {pendingCounts.regularizations > 0 && (
-                      <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '4px 12px' }}
+                      <button className="btn btn-secondary" style={{ fontSize: '11px', padding: '3px 10px' }}
                         onClick={() => router.push('/leaves')}>
-                        {pendingCounts.regularizations} Regularization{pendingCounts.regularizations > 1 ? 's' : ''}
+                        {pendingCounts.regularizations} Reg.
                       </button>
                     )}
                     {pendingCounts.corrections > 0 && (
-                      <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '4px 12px' }}
+                      <button className="btn btn-secondary" style={{ fontSize: '11px', padding: '3px 10px' }}
                         onClick={() => router.push('/leaves')}>
-                        {pendingCounts.corrections} Correction{pendingCounts.corrections > 1 ? 's' : ''}
+                        {pendingCounts.corrections} Corr.
                       </button>
                     )}
                   </>
                 ) : (
-                  <span style={{ fontSize: '12px', color: 'var(--text3)' }}>All caught up</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text3)' }}>All caught up</span>
                 )}
-                <button className="btn btn-outline" style={{ fontSize: '12px', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                <button className="btn btn-outline" style={{ fontSize: '11px', padding: '3px 8px', display: 'flex', alignItems: 'center', gap: '3px' }}
                   onClick={async () => {
                     const [pp, ac, sr] = await Promise.all([
                       getPendingPolicies(),
@@ -372,7 +377,7 @@ export default function DashboardHome() {
                     ]);
                     setPendingCounts({ policies: pp.length, corrections: ac.length, regularizations: sr.length });
                   }}>
-                  ↻ Refresh
+                  ↻
                 </button>
               </div>
             </div>
@@ -440,22 +445,22 @@ export default function DashboardHome() {
                     key={f.key}
                     onClick={() => setCurrentFilter(f.key)}
                     style={{
-                      padding: '6px 14px', borderRadius: '9px', fontSize: 'var(--fs-xs)', fontWeight: 500,
-                      border: active ? '1px solid var(--blue)' : '1px solid transparent',
-                      cursor: 'pointer', letterSpacing: '-0.01em',
-                      background: active ? 'var(--blue-light)' : 'transparent',
-                      color: active ? 'var(--blue)' : 'var(--text2)',
-                      transition: 'all 0.15s', fontFamily: 'inherit', whiteSpace: 'nowrap',
-                      display: 'inline-flex', alignItems: 'center', gap: '6px',
+                      padding: '5px 12px', borderRadius: '980px', fontSize: 'var(--fs-xs)', fontWeight: 600,
+                      cursor: 'pointer', letterSpacing: '-0.01em', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                      display: 'inline-flex', alignItems: 'center', gap: '5px',
+                      background: active ? 'var(--blue)' : 'transparent',
+                      color: active ? '#fff' : 'var(--text2)',
+                      border: active ? '1px solid var(--blue)' : '1px solid var(--border)',
+                      transition: 'all 0.12s',
                     }}
                     onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'var(--surface2)'; e.currentTarget.style.color = 'var(--text)'; }}}
                     onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text2)'; }}}
                   >
                     {f.label}
                     <span style={{
-                      background: active ? 'var(--blue)' : 'var(--surface3)',
+                      background: active ? 'rgba(255,255,255,0.2)' : 'var(--surface3)',
                       color: active ? '#fff' : 'var(--text2)',
-                      borderRadius: '980px', padding: '1px 7px', fontSize: '10px', fontWeight: 700,
+                      borderRadius: '980px', padding: '1px 6px', fontSize: '10px', fontWeight: 700,
                     }}>
                       {f.count}
                     </span>
