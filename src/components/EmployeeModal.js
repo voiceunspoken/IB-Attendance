@@ -11,6 +11,8 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
   const [correctionType, setCorrectionType] = useState('present');
   const [correctionReason, setCorrectionReason] = useState('');
 
+  const fmtTime = (m) => m != null ? `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` : '';
+
   if (!employee) return null;
 
   const empOverrideCounts = () => {
@@ -61,9 +63,10 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
     e.stopPropagation();
     const info = employee.days.find(x => x.d === day);
     if (!info || info.type === 'wo' || info.type === 'holiday') return;
-    let x = e.clientX + 12, y = e.clientY + 12;
-    if (x + 250 > window.innerWidth) x = e.clientX - 262;
-    if (y + 240 > window.innerHeight) y = e.clientY - 252;
+    const rect = e.currentTarget.getBoundingClientRect();
+    let x = rect.right + 8, y = rect.top;
+    if (x + 280 > window.innerWidth) x = Math.max(8, rect.left - 280 - 8);
+    if (y + 320 > window.innerHeight) y = Math.max(8, window.innerHeight - 320 - 8);
     setPopupPos({ x, y });
     setPopupDay(day);
   };
@@ -274,14 +277,26 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
           style={{
             position: 'fixed', left: popupPos.x, top: popupPos.y, zIndex: 300,
             background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: '14px', padding: '12px', minWidth: '220px',
+            borderRadius: '14px', padding: '12px', minWidth: '250px',
             boxShadow: 'var(--shadow-lg)', animation: 'fadeIn 0.15s ease'
           }}
           onClick={e => e.stopPropagation()}
         >
-          <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '10px', letterSpacing: '-0.02em', color: 'var(--text)' }}>
+          <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '4px', letterSpacing: '-0.02em', color: 'var(--text)' }}>
             Day {popupDay}
           </div>
+          {(() => {
+            const di = employee.days.find(x => x.d === popupDay);
+            if (di && di.inT != null) {
+              return (
+                <div style={{ fontSize: '11px', color: 'var(--text3)', marginBottom: '10px' }}>
+                  In: <strong style={{ color: 'var(--text)' }}>{fmtTime(di.inT)}</strong>
+                  {di.outT != null && <> · Out: <strong style={{ color: 'var(--text)' }}>{fmtTime(di.outT)}</strong></>}
+                </div>
+              );
+            }
+            return null;
+          })()}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
             {[
               { label: '🏛️ WFM — Full Day', type: 'wfm', bg: 'rgba(52,199,89,0.08)', color: '#1a7f37', border: 'rgba(52,199,89,0.25)' },

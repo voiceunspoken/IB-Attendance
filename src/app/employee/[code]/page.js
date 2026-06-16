@@ -428,26 +428,7 @@ export default function EmployeeDashboard({ params }) {
         )}
       </div>
 
-      {/* Tabs — only employee sees leaves/regularize; admin sees only attendance */}
-      <div style={{ display: 'flex', gap: '4px', background: 'var(--surface3)', borderRadius: '10px', padding: '3px', marginBottom: '20px', width: 'fit-content' }}>
-        {[
-          { key: 'attendance', label: 'Attendance' },
-          ...(!isAdmin ? [
-            { key: 'leaves', label: 'Leave Requests' },
-            { key: 'regularize', label: 'Regularization' },
-          ] : []),
-        ].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} style={{
-            padding: '6px 16px', borderRadius: '7px', fontSize: '13px', fontWeight: 500,
-            border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-            background: tab === t.key ? 'var(--surface)' : 'transparent',
-            color: tab === t.key ? 'var(--text)' : 'var(--text2)',
-            boxShadow: tab === t.key ? 'var(--shadow-sm)' : 'none', transition: 'all 0.15s'
-          }}>{t.label}</button>
-        ))}
-      </div>
-
-      {/* ── ATTENDANCE TAB ── */}
+      {/* ── ATTENDANCE CONTENT (shared by admin & employee) ── */}
       {tab === 'attendance' && (
         <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: '16px', alignItems: 'start' }}>
           <div className="card" style={{ padding: '16px' }}>
@@ -506,12 +487,32 @@ export default function EmployeeDashboard({ params }) {
         </div>
       )}
 
-      {/* ── LEAVE REQUESTS TAB ── */}
-      {tab === 'leaves' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}>
-          {/* Apply form */}
-          <div className="card" style={{ padding: '22px 24px' }}>
-            <div style={{ fontSize: '15px', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '16px' }}>Apply for Leave</div>
+      {/* ── NON-ADMIN: sidebar tabs + content ── */}
+      {!isAdmin && (
+        <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '16px', alignItems: 'start', marginTop: '20px' }}>
+          <div className="card" style={{ padding: '6px' }}>
+            {[
+              { key: 'attendance', label: '📅 Attendance' },
+              { key: 'leaves', label: '📝 Leave Requests' },
+              { key: 'regularize', label: '🔧 Regularization' },
+            ].map(t => (
+              <button key={t.key} onClick={() => setTab(t.key)} style={{
+                width: '100%', padding: '10px 14px', borderRadius: '7px', fontSize: '13px',
+                border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', fontWeight: 500,
+                background: tab === t.key ? 'var(--surface)' : 'transparent',
+                color: tab === t.key ? 'var(--text)' : 'var(--text2)',
+                boxShadow: tab === t.key ? 'var(--shadow-sm)' : 'none', transition: 'all 0.15s'
+              }}>{t.label}</button>
+            ))}
+          </div>
+
+          <div>
+            {/* ── LEAVE REQUESTS TAB ── */}
+            {tab === 'leaves' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}>
+                {/* Apply form */}
+                <div className="card" style={{ padding: '22px 24px' }}>
+                  <div style={{ fontSize: '15px', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '16px' }}>Apply for Leave</div>
             <form onSubmit={handleSubmitLeave} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
                 <label className="input-label">Leave Type</label>
@@ -680,63 +681,66 @@ export default function EmployeeDashboard({ params }) {
         </div>
       )}
 
-      {/* ── REGULARIZATION TAB ── */}
-      {tab === 'regularize' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}>
-          <div className="card" style={{ padding: '22px 24px' }}>
-            <div style={{ fontSize: '15px', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '6px' }}>Regularization Request</div>
-            <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '16px' }}>Missed a punch-in or punch-out? Request a correction here.</div>
-            <form onSubmit={handleSubmitReg} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label className="input-label">Date</label>
-                <input className="input-field" type="date" value={regForm.date} onChange={e => setRegForm(f => ({ ...f, date: e.target.value }))} />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div>
-                  <label className="input-label">Punch In (HH:MM)</label>
-                  <input className="input-field" type="time" value={regForm.requestedIn} onChange={e => setRegForm(f => ({ ...f, requestedIn: e.target.value }))} />
-                </div>
-                <div>
-                  <label className="input-label">Punch Out (HH:MM)</label>
-                  <input className="input-field" type="time" value={regForm.requestedOut} onChange={e => setRegForm(f => ({ ...f, requestedOut: e.target.value }))} />
-                </div>
-              </div>
-              <div>
-                <label className="input-label">Reason</label>
-                <textarea className="input-field" rows={3} placeholder="Why was the punch missed?" value={regForm.reason} onChange={e => setRegForm(f => ({ ...f, reason: e.target.value }))} style={{ resize: 'vertical' }} />
-              </div>
-              {regError && <div style={{ color: 'var(--red)', fontSize: '13px' }}>{regError}</div>}
-              {regSuccess && <div style={{ color: 'var(--green)', fontSize: '13px' }}>{regSuccess}</div>}
-              <button type="submit" className="btn btn-primary" disabled={submittingReg} style={{ opacity: submittingReg ? 0.7 : 1 }}>
-                {submittingReg ? 'Submitting…' : 'Submit Request'}
-              </button>
-            </form>
-          </div>
-
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
-              My Regularizations ({regularizations.length})
-            </div>
-            <div style={{ maxHeight: '480px', overflowY: 'auto' }}>
-              {regularizations.length === 0
-                ? <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text3)', fontSize: '13px' }}>No requests yet.</div>
-                : regularizations.map(r => (
-                  <div key={r.id} style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '13px', fontWeight: 600 }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                      {statusBadge(r.status)}
-                    </div>
-                    <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
-                      {r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`}
-                    </div>
-                    <div style={{ fontSize: '12px', color: 'var(--text2)', marginTop: '2px' }}>{r.reason}</div>
+              {/* ── REGULARIZATION TAB ── */}
+              {tab === 'regularize' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}>
+                  <div className="card" style={{ padding: '22px 24px' }}>
+                    <div style={{ fontSize: '15px', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '6px' }}>Regularization Request</div>
+                    <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '16px' }}>Missed a punch-in or punch-out? Request a correction here.</div>
+                    <form onSubmit={handleSubmitReg} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      <div>
+                        <label className="input-label">Date</label>
+                        <input className="input-field" type="date" value={regForm.date} onChange={e => setRegForm(f => ({ ...f, date: e.target.value }))} />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                        <div>
+                          <label className="input-label">Punch In (HH:MM)</label>
+                          <input className="input-field" type="time" value={regForm.requestedIn} onChange={e => setRegForm(f => ({ ...f, requestedIn: e.target.value }))} />
+                        </div>
+                        <div>
+                          <label className="input-label">Punch Out (HH:MM)</label>
+                          <input className="input-field" type="time" value={regForm.requestedOut} onChange={e => setRegForm(f => ({ ...f, requestedOut: e.target.value }))} />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="input-label">Reason</label>
+                        <textarea className="input-field" rows={3} placeholder="Why was the punch missed?" value={regForm.reason} onChange={e => setRegForm(f => ({ ...f, reason: e.target.value }))} style={{ resize: 'vertical' }} />
+                      </div>
+                      {regError && <div style={{ color: 'var(--red)', fontSize: '13px' }}>{regError}</div>}
+                      {regSuccess && <div style={{ color: 'var(--green)', fontSize: '13px' }}>{regSuccess}</div>}
+                      <button type="submit" className="btn btn-primary" disabled={submittingReg} style={{ opacity: submittingReg ? 0.7 : 1 }}>
+                        {submittingReg ? 'Submitting…' : 'Submit Request'}
+                      </button>
+                    </form>
                   </div>
-                ))
-              }
+
+                  <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                    <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
+                      My Regularizations ({regularizations.length})
+                    </div>
+                    <div style={{ maxHeight: '480px', overflowY: 'auto' }}>
+                      {regularizations.length === 0
+                        ? <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text3)', fontSize: '13px' }}>No requests yet.</div>
+                        : regularizations.map(r => (
+                          <div key={r.id} style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ fontSize: '13px', fontWeight: 600 }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                              {statusBadge(r.status)}
+                            </div>
+                            <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
+                              {r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`}
+                            </div>
+                            <div style={{ fontSize: '12px', color: 'var(--text2)', marginTop: '2px' }}>{r.reason}</div>
+                          </div>
+                        ))
+                      }
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        )}
     </div>
   );
 }

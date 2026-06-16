@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
 import { getUsers, createUser, deleteUser, updateUser, getPendingChanges, reviewPendingChange } from '../../actions/auth';
-import { fetchDashboardData, getMonths } from '../../actions/attendance';
+import { getAllEmployees } from '../../actions/attendance';
 import { updateEmployeeDetails } from '../../actions/employees';
 
 const ROLE_STYLES = {
@@ -109,17 +109,14 @@ export default function UsersPage() {
   useEffect(() => {
     if (!isAdmin) return;
     (async () => {
-      const [u, months, pending] = await Promise.all([
+      const [u, allEmps, pending] = await Promise.all([
         getUsers(),
-        getMonths(),
+        getAllEmployees(),
         isSuperAdmin ? getPendingChanges() : Promise.resolve([])
       ]);
       setUsers(u);
       setPendingChanges(pending);
-      if (months.length > 0) {
-        const empData = await fetchDashboardData(months[0]);
-        setEmployees(empData.map(e => ({ code: e.code, name: e.name, birthday: e.birthday, workAnniversary: e.workAnniversary })));
-      }
+      setEmployees(allEmps.map(e => ({ code: e.code, name: e.name, birthday: e.birthday, workAnniversary: e.workAnniversary })));
       setLoading(false);
     })();
   }, [isAdmin, isSuperAdmin, fetchTrigger]);
