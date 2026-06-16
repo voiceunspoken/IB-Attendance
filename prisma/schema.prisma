@@ -60,6 +60,7 @@ model Employee {
   code            String     @unique
   name            String
   birthday        DateTime?
+  joiningDate     DateTime?
   workAnniversary DateTime?
 
   employeeType    String     @default("regular") // "regular" | "wfh" | "wfm"

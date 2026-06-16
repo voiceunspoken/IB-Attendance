@@ -183,6 +183,12 @@ export default function EmployeeDashboard({ params }) {
     }))
   };
 
+  // EL only available after 1 year from joining date
+  const isELEligible = emp.joiningDate
+    ? new Date(new Date(emp.joiningDate).getTime() + 365 * 24 * 60 * 60 * 1000) <= new Date()
+    : false;
+  const availableLeaveTypes = ['cl', 'sl', ...(isELEligible ? ['el'] : []), 'rl', 'sh'];
+
   const currentMonthOverrides = {};
   emp.overrides.filter(o => o.monthYear === currentRecord.monthYear)
     .forEach(o => { currentMonthOverrides[`${emp.code}_${o.day}`] = o.type; });
@@ -401,136 +407,86 @@ export default function EmployeeDashboard({ params }) {
   return (
     <div className="page-wrapper animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
 
-      {/* Profile header — compact */}
-      <div className="card" style={{ padding: '12px 16px', marginBottom: '10px', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--surface3)', display: 'grid', placeItems: 'center', fontSize: '14px', fontWeight: 700, color: 'var(--text2)', flexShrink: 0 }}>
+      {/* Compact employee header */}
+      <div style={{ padding: '10px 0', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: 'var(--surface3)', display: 'grid', placeItems: 'center', fontSize: '12px', fontWeight: 700, color: 'var(--text2)', flexShrink: 0 }}>
             {emp.name.charAt(0)}
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-              <h1 style={{ fontSize: '16px', fontWeight: 700, letterSpacing: '-0.03em' }}>{emp.name}</h1>
-              <span style={{ fontSize: '10px', color: 'var(--text2)', fontFamily: 'monospace' }}>#{emp.code}</span>
-              {emp.employeeType && emp.employeeType !== 'regular' && (
-                <span style={{ background: emp.employeeType === 'wfh' ? 'rgba(175,82,222,0.1)' : 'rgba(52,199,89,0.1)', color: emp.employeeType === 'wfh' ? 'var(--purple)' : 'var(--green)', padding: '1px 6px', borderRadius: '980px', fontSize: '9px', fontWeight: 600 }}>{emp.employeeType.toUpperCase()}</span>
-              )}
-              {emp.department && <span style={{ fontSize: '10px', background: 'rgba(0,113,227,0.08)', color: 'var(--blue)', padding: '1px 6px', borderRadius: '980px', fontWeight: 500 }}>{emp.department.name}</span>}
-              {emp.designation && <span style={{ fontSize: '10px', background: 'var(--surface2)', color: 'var(--text2)', padding: '1px 6px', borderRadius: '980px', fontWeight: 500 }}>{emp.designation.name}</span>}
-              {emp.managers && emp.managers.length > 0 && (
-                <span style={{ fontSize: '10px', color: 'var(--text3)' }}>· {emp.managers.map(m => m.name).join(', ')}</span>
-              )}
-            </div>
-          </div>
+          <span style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '-0.03em' }}>{emp.name}</span>
+          <span style={{ fontSize: '10px', color: 'var(--text2)', fontFamily: 'monospace' }}>#{emp.code}</span>
+          {emp.employeeType && emp.employeeType !== 'regular' && (
+            <span style={{ background: emp.employeeType === 'wfh' ? 'rgba(175,82,222,0.1)' : 'rgba(52,199,89,0.1)', color: emp.employeeType === 'wfh' ? 'var(--purple)' : 'var(--green)', padding: '1px 6px', borderRadius: '980px', fontSize: '9px', fontWeight: 600 }}>{emp.employeeType.toUpperCase()}</span>
+          )}
+          {emp.department && <span style={{ fontSize: '10px', background: 'rgba(0,113,227,0.08)', color: 'var(--blue)', padding: '1px 6px', borderRadius: '980px', fontWeight: 500 }}>{emp.department.name}</span>}
+          {emp.designation && <span style={{ fontSize: '10px', background: 'var(--surface2)', color: 'var(--text2)', padding: '1px 6px', borderRadius: '980px', fontWeight: 500 }}>{emp.designation.name}</span>}
+          {emp.managers && emp.managers.length > 0 && (
+            <span style={{ fontSize: '10px', color: 'var(--text3)' }}>· {emp.managers.map(m => m.name).join(', ')}</span>
+          )}
         </div>
 
-        {/* Leave balance — inline compact */}
+        {/* Leave balance + upcoming holidays — inline */}
         {leaveBalance && (
-          <div style={{ display: 'flex', gap: '4px', marginTop: '8px', flexWrap: 'wrap' }}>
-            {['cl', 'sl', 'el', 'rl', 'sh'].map(type => {
+          <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {availableLeaveTypes.map(type => {
               const avail = leaveBalance[`${type}Avail`] ?? 0;
               const total = leaveBalance[`${type}Total`] ?? 0;
               return (
-                <div key={type} style={{
-                  display: 'flex', alignItems: 'center', gap: '3px',
-                  background: 'var(--surface2)', borderRadius: '6px',
-                  padding: '2px 8px', border: '1px solid var(--border)'
-                }}>
-                  <span style={{ fontSize: '9px', fontWeight: 600, color: LEAVE_COLORS[type] }}>{type.toUpperCase()}</span>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text)' }}>{avail}</span>
-                  <span style={{ fontSize: '9px', color: 'var(--text3)' }}>/{total}</span>
-                </div>
+                <span key={type} style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                  <span style={{ fontWeight: 600, color: LEAVE_COLORS[type] }}>{type.toUpperCase()}</span> {avail}/{total}
+                </span>
               );
             })}
-          </div>
-        )}
-
-        {/* Upcoming holidays */}
-        {upcomingHolidays.length > 0 && (
-          <div style={{ marginTop: '6px', display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
-            {upcomingHolidays.slice(0, 3).map(h => (
-              <span key={h.id} style={{ fontSize: '10px', background: 'rgba(255,159,10,0.08)', color: '#b36200', padding: '2px 7px', borderRadius: '980px', fontWeight: 500 }}>
-                {h.name}
+            {upcomingHolidays.length > 0 && (
+              <span style={{ fontSize: '10px', color: 'var(--text3)', marginLeft: '2px' }}>
+                · {upcomingHolidays.slice(0, 3).map(h => h.name).join(', ')}{upcomingHolidays.length > 3 ? ` +${upcomingHolidays.length - 3}` : ''}
               </span>
-            ))}
-            {upcomingHolidays.length > 3 && (
-              <span style={{ fontSize: '10px', color: 'var(--text3)' }}>+{upcomingHolidays.length - 3}</span>
             )}
           </div>
         )}
-        </div>
+      </div>
       
 
       {/* ── ATTENDANCE CONTENT ── */}
       {tab === 'attendance' && (
-        <div style={{ flex: 1, minHeight: 0 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '10px', height: '100%' }}>
-            {/* History sidebar */}
-            <div className="card" style={{ padding: '8px' }}>
-              <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text3)', marginBottom: '6px', letterSpacing: '0.05em', textTransform: 'uppercase', padding: '0 6px' }}>History</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                {emp.records.map((r, i) => (
-                  <button key={r.id} onClick={() => setSelectedMonthIndex(i)} style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
-                    border: 'none', fontSize: '12px', fontWeight: selectedMonthIndex === i ? 600 : 400,
-                    color: selectedMonthIndex === i ? 'var(--text)' : 'var(--text2)',
-                    background: selectedMonthIndex === i ? 'var(--blue-light)' : 'transparent',
-                    borderLeft: selectedMonthIndex === i ? '3px solid var(--blue)' : '3px solid transparent',
-                    transition: 'all 0.12s'
-                  }}>
-                    <span>{formatMonth(r.monthYear)}</span>
-                    <span style={{ fontSize: '10px', display: 'flex', gap: '2px' }}>
-                      {r.absent > 0 && <span style={{ color: 'var(--red)' }}>{r.absent}A</span>}
-                      {r.late > 0 && <span style={{ color: 'var(--yellow)' }}>{r.late}L</span>}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            
-
-            {/* Workspace card */}
-            <div className="card" style={{ padding: '14px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            {/* Month nav + PDF + Override buttons */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexShrink: 0 }}>
-              <div style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '-0.03em' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          {/* Calendar header bar — month nav + KPIs + actions */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button onClick={() => setSelectedMonthIndex(Math.max(0, selectedMonthIndex - 1))}
+                style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text2)', fontSize: '12px', lineHeight: 1 }}
+                disabled={selectedMonthIndex === 0}>◀</button>
+              <span style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '-0.03em' }}>
                 {formatMonth(currentRecord.monthYear)}
-              </div>
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                {isAdmin && (
-                  <>
-                    <button className="btn btn-secondary" style={{ fontSize: '10px', padding: '4px 10px' }}
-                      onClick={() => setBulkOverrideModal(true)}>
-                      Override
-                    </button>
-                    <button className="btn btn-outline" style={{ fontSize: '10px', padding: '4px 10px' }}
-                      onClick={handleClearAllOverrides}>
-                      Clear
-                    </button>
-                  </>
-                )}
-                <button className="btn btn-secondary" style={{ fontSize: '10px', padding: '4px 10px' }}
-                  onClick={() => downloadPDF(currentRecord, emp, currentMonthOverrides)}>
-                  <FiDownload size={10} /> PDF
-                </button>
-              </div>
+              </span>
+              <button onClick={() => setSelectedMonthIndex(Math.min(emp.records.length - 1, selectedMonthIndex + 1))}
+                style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text2)', fontSize: '12px', lineHeight: 1 }}
+                disabled={selectedMonthIndex === emp.records.length - 1}>▶</button>
             </div>
-
-            {/* Compact KPI strip */}
-            <div style={{ display: 'flex', gap: '4px', marginBottom: '6px', flexWrap: 'wrap', flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '11px', color: 'var(--text2)' }}>
               {kpiStats.map(s => (
-                <div key={s.label} style={{
-                  display: 'flex', alignItems: 'center', gap: '2px',
-                  background: 'var(--surface2)', borderRadius: '5px',
-                  padding: '2px 6px', fontSize: '10px'
-                }}>
+                <span key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                   <span style={{ fontWeight: 700, color: s.color }}>{s.val}</span>
-                  <span style={{ color: 'var(--text3)' }}>{s.label}</span>
-                </div>
+                  <span>{s.label}</span>
+                </span>
               ))}
             </div>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              {isAdmin && (
+                <button className="btn btn-secondary" style={{ fontSize: '10px', padding: '4px 10px' }}
+                  onClick={() => setBulkOverrideModal(true)}>
+                  Override
+                </button>
+              )}
+              <button className="btn btn-outline" style={{ fontSize: '10px', padding: '4px 10px' }}
+                onClick={() => downloadPDF(currentRecord, emp, currentMonthOverrides)}>
+                <FiDownload size={10} /> PDF
+              </button>
+            </div>
+          </div>
 
-            {/* Calendar */}
+          {/* Calendar */}
+          <div style={{ flex: 1, minHeight: 0 }}>
             <EmployeeModal
               employee={formattedEmployee}
               currentMonth={modalCurrentMonth}
@@ -544,68 +500,68 @@ export default function EmployeeDashboard({ params }) {
               rlEligibleDays={rlHolidays}
               mode="inline"
             />
+          </div>
 
-            {/* Bulk Override modal */}
-            {bulkOverrideModal && (
-              <div style={{
-                position: 'fixed', inset: 0, zIndex: 99998,
-                background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
-                display: 'grid', placeItems: 'center', padding: '24px',
-                animation: 'fadeIn 0.15s ease'
-              }}
-                onClick={() => setBulkOverrideModal(false)}
+          {/* Bulk Override modal */}
+          {bulkOverrideModal && (
+            <div style={{
+              position: 'fixed', inset: 0, zIndex: 99998,
+              background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
+              display: 'grid', placeItems: 'center', padding: '24px',
+              animation: 'fadeIn 0.15s ease'
+            }}
+              onClick={() => setBulkOverrideModal(false)}
+            >
+              <div onClick={e => e.stopPropagation()}
+                style={{
+                  background: 'var(--surface)', borderRadius: '16px',
+                  border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)',
+                  padding: '24px', maxWidth: '420px', width: '100%',
+                  animation: 'slideUp 0.2s ease'
+                }}
               >
-                <div onClick={e => e.stopPropagation()}
-                  style={{
-                    background: 'var(--surface)', borderRadius: '16px',
-                    border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)',
-                    padding: '24px', maxWidth: '420px', width: '100%',
-                    animation: 'slideUp 0.2s ease'
-                  }}
-                >
-                  <div style={{
-                    fontSize: 'var(--fs-md)', fontWeight: 700, letterSpacing: '-0.02em',
-                    marginBottom: '16px'
-                  }}>
-                    Manual Override
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                      <div>
-                        <label className="input-label">From Date</label>
-                        <input type="number" min="1" max="31" placeholder="5" value={bulkOverrideFrom}
-                          onChange={e => setBulkOverrideFrom(e.target.value)} className="input-field"
-                          style={{ padding: '8px 10px' }} />
-                      </div>
-                      <div>
-                        <label className="input-label">To Date</label>
-                        <input type="number" min="1" max="31" placeholder="same" value={bulkOverrideTo}
-                          onChange={e => setBulkOverrideTo(e.target.value)} className="input-field"
-                          style={{ padding: '8px 10px' }} />
-                      </div>
+                <div style={{
+                  fontSize: 'var(--fs-md)', fontWeight: 700, letterSpacing: '-0.02em',
+                  marginBottom: '16px'
+                }}>
+                  Manual Override
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label className="input-label">From Date</label>
+                      <input type="number" min="1" max="31" placeholder="5" value={bulkOverrideFrom}
+                        onChange={e => setBulkOverrideFrom(e.target.value)} className="input-field"
+                        style={{ padding: '8px 10px' }} />
                     </div>
                     <div>
-                      <label className="input-label">Type</label>
-                      <select value={bulkOverrideType} onChange={e => setBulkOverrideType(e.target.value)}
-                        className="input-field" style={{ padding: '8px 10px' }}>
-                        <option value="wfm">WFM — Full Day</option>
-                        <option value="wfm-hd">WFM — Half Day</option>
-                        <option value="wfh">WFH</option>
-                        <option value="wos">WOS — Full Day</option>
-                        <option value="wos-hd">WOS — Half Day</option>
-                      </select>
+                      <label className="input-label">To Date</label>
+                      <input type="number" min="1" max="31" placeholder="same" value={bulkOverrideTo}
+                        onChange={e => setBulkOverrideTo(e.target.value)} className="input-field"
+                        style={{ padding: '8px 10px' }} />
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                      <button className="btn btn-primary" style={{ flex: 1, padding: '9px' }}
-                        onClick={() => { handleBulkOverride(); setBulkOverrideModal(false); }}>Apply</button>
-                      <button className="btn btn-secondary" style={{ flex: 1, padding: '9px' }}
-                        onClick={() => { setBulkOverrideModal(false); }}>Cancel</button>
-                    </div>
+                  </div>
+                  <div>
+                    <label className="input-label">Type</label>
+                    <select value={bulkOverrideType} onChange={e => setBulkOverrideType(e.target.value)}
+                      className="input-field" style={{ padding: '8px 10px' }}>
+                      <option value="wfm">WFM — Full Day</option>
+                      <option value="wfm-hd">WFM — Half Day</option>
+                      <option value="wfh">WFH</option>
+                      <option value="wos">WOS — Full Day</option>
+                      <option value="wos-hd">WOS — Half Day</option>
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                    <button className="btn btn-primary" style={{ flex: 1, padding: '9px' }}
+                      onClick={() => { handleBulkOverride(); setBulkOverrideModal(false); }}>Apply</button>
+                    <button className="btn btn-secondary" style={{ flex: 1, padding: '9px' }}
+                      onClick={() => { setBulkOverrideModal(false); }}>Cancel</button>
                   </div>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -641,7 +597,7 @@ export default function EmployeeDashboard({ params }) {
               <div>
                 <label className="input-label">Leave Type</label>
                   <select className="input-field" value={leaveForm.leaveType} onChange={e => setLeaveForm(f => ({ ...f, leaveType: e.target.value, shiftSlot: '10-12' }))}>
-                    {(['cl', 'sl', 'el', 'rl', 'sh']).map(type => {
+                    {availableLeaveTypes.map(type => {
                       const avail = leaveBalanceDetail ? (leaveBalanceDetail[`${type}Avail`] ?? 0) : '?';
                       const total = leaveBalanceDetail ? (leaveBalanceDetail[`${type}Total`] ?? 0) : '?';
                       return (
@@ -758,7 +714,7 @@ export default function EmployeeDashboard({ params }) {
               {/* Leave balance breakdown */}
               {leaveBalanceDetail && (
                 <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '12px 14px', fontSize: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            {['cl', 'sl', 'el', 'rl', 'sh'].map(type => {
+            {availableLeaveTypes.map(type => {
                     const avail = leaveBalanceDetail[`${type}Avail`] ?? 0;
                     const total = leaveBalanceDetail[`${type}Total`] ?? 0;
                     const used = leaveBalanceDetail[`${type}Used`] ?? 0;

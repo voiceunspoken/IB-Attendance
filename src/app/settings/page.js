@@ -52,7 +52,7 @@ export default function SettingsPage() {
   const [departments, setDepartments] = useState([]);
   const [designations, setDesignations] = useState([]);
   const [editEmp, setEditEmp] = useState(null); // employee being edited
-  const [editEmpForm, setEditEmpForm] = useState({ name: '', birthday: '', workAnniversary: '', employeeType: 'regular', departmentId: '', subDepartmentId: '', designationId: '' });
+  const [editEmpForm, setEditEmpForm] = useState({ name: '', birthday: '', joiningDate: '', workAnniversary: '', employeeType: 'regular', departmentId: '', subDepartmentId: '', designationId: '' });
   const [editEmpManagers, setEditEmpManagers] = useState([]);
   const [editEmpMsg, setEditEmpMsg] = useState('');
 
@@ -235,6 +235,7 @@ export default function SettingsPage() {
     setEditEmpForm({
       name: emp.name,
       birthday: emp.birthday ? new Date(emp.birthday).toISOString().split('T')[0] : '',
+      joiningDate: emp.joiningDate ? new Date(emp.joiningDate).toISOString().split('T')[0] : '',
       workAnniversary: emp.workAnniversary ? new Date(emp.workAnniversary).toISOString().split('T')[0] : '',
       employeeType: emp.employeeType || 'regular',
       departmentId: emp.department?.id || '',
@@ -715,6 +716,10 @@ export default function SettingsPage() {
                 <div>
                   <label className="input-label">Birthday</label>
                   <input className="input-field" type="date" value={editEmpForm.birthday} onChange={e => setEditEmpForm(f => ({ ...f, birthday: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="input-label">Joining Date</label>
+                  <input className="input-field" type="date" value={editEmpForm.joiningDate} onChange={e => setEditEmpForm(f => ({ ...f, joiningDate: e.target.value }))} />
                 </div>
                 <div>
                   <label className="input-label">Work Anniversary</label>

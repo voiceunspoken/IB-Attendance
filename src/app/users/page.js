@@ -95,7 +95,7 @@ export default function UsersPage() {
   const [editError, setEditError] = useState('');
 
   const [editEmp, setEditEmp] = useState(null);
-  const [empFields, setEmpFields] = useState({ birthday: '', workAnniversary: '' });
+  const [empFields, setEmpFields] = useState({ birthday: '', joiningDate: '', workAnniversary: '' });
 
   const [userSearch, setUserSearch] = useState('');
   const [empSearch, setEmpSearch] = useState('');
@@ -191,6 +191,7 @@ export default function UsersPage() {
     setEditEmp(emp);
     setEmpFields({
       birthday: emp.birthday ? emp.birthday.split('T')[0] : '',
+      joiningDate: emp.joiningDate ? emp.joiningDate.split('T')[0] : '',
       workAnniversary: emp.workAnniversary ? emp.workAnniversary.split('T')[0] : ''
     });
   };
@@ -199,6 +200,7 @@ export default function UsersPage() {
     e.preventDefault();
     await updateEmployeeDetails(editEmp.code, {
       birthday: empFields.birthday || null,
+      joiningDate: empFields.joiningDate || null,
       workAnniversary: empFields.workAnniversary || null
     });
     setEditEmp(null);
@@ -464,7 +466,7 @@ export default function UsersPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
-                    {['Code', 'Name', 'Birthday', 'Work Anniversary', 'Actions'].map(h => (
+                    {['Code', 'Name', 'Birthday', 'Joining Date', 'Work Anniversary', 'Actions'].map(h => (
                       <th key={h} style={thStyle}>{h}</th>
                     ))}
                   </tr>
@@ -479,6 +481,11 @@ export default function UsersPage() {
                       <td style={{ ...tdStyle, color: emp.birthday ? 'var(--text)' : 'var(--text3)' }}>
                         {emp.birthday
                           ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>🎂 {new Date(emp.birthday).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                          : '—'}
+                      </td>
+                      <td style={{ ...tdStyle, color: emp.joiningDate ? 'var(--text)' : 'var(--text3)' }}>
+                        {emp.joiningDate
+                          ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>📅 {new Date(emp.joiningDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                           : '—'}
                       </td>
                       <td style={{ ...tdStyle, color: emp.workAnniversary ? 'var(--text)' : 'var(--text3)' }}>
@@ -591,6 +598,11 @@ export default function UsersPage() {
             <label className="input-label">Birthday</label>
             <input className="input-field" type="date" value={empFields.birthday}
               onChange={e => setEmpFields(f => ({ ...f, birthday: e.target.value }))} />
+          </div>
+          <div>
+            <label className="input-label">Joining Date</label>
+            <input className="input-field" type="date" value={empFields.joiningDate}
+              onChange={e => setEmpFields(f => ({ ...f, joiningDate: e.target.value }))} />
           </div>
           <div>
             <label className="input-label">Work Anniversary</label>

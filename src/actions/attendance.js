@@ -138,6 +138,7 @@ export async function fetchDashboardData(monthYear) {
       code: record.employee.code,
       name: record.employee.name,
       birthday: record.employee.birthday ?? null,
+      joiningDate: record.employee.joiningDate ?? null,
       workAnniversary: record.employee.workAnniversary ?? null,
       employeeType: record.employee.employeeType,
       department: record.employee.department?.name ?? null,
@@ -225,6 +226,7 @@ export async function addEmployee(code, name, performedBy = 'admin', extra = {})
     data: {
       code, name,
       employeeType: extra.employeeType || 'regular',
+      joiningDate: extra.joiningDate ? new Date(extra.joiningDate) : null,
       departmentId: extra.departmentId || null,
       subDepartmentId: extra.subDepartmentId || null,
       designationId: extra.designationId || null
@@ -261,7 +263,7 @@ export async function deleteMonthRecord(employeeCode, monthYear, performedBy = '
 export async function getAllEmployees() {
   return prisma.employee.findMany({
     select: {
-      id: true, code: true, name: true, birthday: true, workAnniversary: true,
+      id: true, code: true, name: true, birthday: true, joiningDate: true, workAnniversary: true,
       employeeType: true,
       department: { select: { id: true, name: true } },
       subDepartment: { select: { id: true, name: true } },
