@@ -301,14 +301,28 @@ export default function EmployeeDashboard({ params }) {
 
       {/* Profile header */}
       <div className="card" style={{ padding: '24px 28px', marginBottom: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: 'var(--surface3)', display: 'grid', placeItems: 'center', fontSize: '22px', fontWeight: 700, color: 'var(--text2)' }}>
               {emp.name.charAt(0)}
             </div>
             <div>
               <h1 style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '-0.03em' }}>{emp.name}</h1>
-              <div style={{ fontSize: '13px', color: 'var(--text2)', marginTop: '2px' }}>Employee #{emp.code}</div>
+              <div style={{ fontSize: '13px', color: 'var(--text2)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                Employee #{emp.code}
+                {emp.employeeType && emp.employeeType !== 'regular' && (
+                  <span style={{ background: emp.employeeType === 'wfh' ? 'rgba(175,82,222,0.1)' : 'rgba(52,199,89,0.1)', color: emp.employeeType === 'wfh' ? 'var(--purple)' : 'var(--green)', padding: '1px 8px', borderRadius: '980px', fontSize: '11px', fontWeight: 600 }}>{emp.employeeType.toUpperCase()}</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
+                {emp.department && <span style={{ fontSize: '12px', background: 'rgba(0,113,227,0.08)', color: 'var(--blue)', padding: '2px 10px', borderRadius: '980px', fontWeight: 500 }}>{emp.department.name}</span>}
+                {emp.designation && <span style={{ fontSize: '12px', background: 'var(--surface2)', color: 'var(--text2)', padding: '2px 10px', borderRadius: '980px', fontWeight: 500 }}>{emp.designation.name}</span>}
+                {emp.managers && emp.managers.length > 0 && (
+                  <span style={{ fontSize: '12px', color: 'var(--text2)', fontWeight: 500 }}>
+                    Manager{emp.managers.length > 1 ? 's' : ''}: {emp.managers.map(m => m.name).join(', ')}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: '24px' }}>

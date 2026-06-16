@@ -1,10 +1,52 @@
 "use client";
 
-export default function EmployeeTable({ results, onOpenDetail, currentPage, setCurrentPage, pageSize = 20, overrides }) {
+const getMonthSuffix = (d) => {
+  if (d > 3 && d < 21) return 'th';
+  switch (d % 10) { case 1: return 'st'; case 2: return 'nd'; case 3: return 'rd'; default: return 'th'; }
+};
+
+export default function EmployeeTable({ results, onOpenDetail, currentPage, setCurrentPage, pageSize = 20, overrides, showMissingDays = false }) {
   const start = (currentPage - 1) * pageSize;
   const end = Math.min(start + pageSize, results.length);
   const currentData = results.slice(start, end);
   const totalPages = Math.ceil(results.length / pageSize);
+
+  const MissingDaysTooltip = ({ days }) => {
+    if (!days || days.length === 0) return null;
+    return (
+      <div className="pm-tooltip" style={{
+        position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)',
+        background: '#1c1c1e', color: '#fff', borderRadius: '10px', padding: '8px 14px',
+        fontSize: '12px', fontWeight: 500, letterSpacing: '-0.01em',
+        whiteSpace: 'nowrap', zIndex: 100,
+        boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+        pointerEvents: 'none', opacity: 0, transition: 'opacity 0.15s',
+      }}>
+        Missing: {days.map(d => `${d.day}${getMonthSuffix(d.day)}`).join(', ')}
+      </div>
+    );
+  };
+
+  const MissingDayPills = ({ days }) => {
+    if (!days || days.length === 0) return null;
+    return (
+      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', maxWidth: '200px' }}>
+        {days.map((d, i) => {
+          const day = d.day;
+          return (
+            <span key={i} style={{
+              display: 'inline-flex', alignItems: 'center', gap: '3px',
+              padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600,
+              background: 'rgba(255,107,53,0.1)', color: '#c04a1a',
+              letterSpacing: '-0.01em',
+            }}>
+              ⚠ {day}{getMonthSuffix(day)}
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
 
   const empOverrideCounts = (code) => {
     let wfm = 0, wfmhd = 0, wfh = 0, wos = 0, woshd = 0;
@@ -25,9 +67,10 @@ export default function EmployeeTable({ results, onOpenDetail, currentPage, setC
     if (ov.wfm > 0 || ov.wfmhd > 0) return <span style={badge('rgba(52,199,89,0.12)', '#1a7f37')}>WFM</span>;
     if (ov.wfh > 0) return <span style={badge('rgba(175,82,222,0.12)', '#7b2d8b')}>WFH</span>;
     if (ov.wos > 0 || ov.woshd > 0) return <span style={badge('rgba(48,176,199,0.12)', '#1a6e7a')}>WOS</span>;
+    if (r.punchMissing >= 3) return <span style={badge('rgba(255,107,53,0.12)', '#c04a1a')}>⚠️ No Punch</span>;
     if (r.absent >= 8) return <span style={badge('rgba(255,59,48,0.1)', '#c0392b')}>High Absent</span>;
     if (r.lateHD + r.ssHD > 1) return <span style={badge('rgba(255,159,10,0.12)', '#b36200')}>HD Ded.</span>;
-    if (r.absent === 0 && r.lateHD === 0) return <span style={badge('rgba(52,199,89,0.1)', '#1a7f37')}>Clean</span>;
+    if (r.absent === 0 && r.lateHD === 0 && r.punchMissing === 0) return <span style={badge('rgba(52,199,89,0.1)', '#1a7f37')}>Clean</span>;
     return <span style={badge('rgba(0,0,0,0.05)', 'var(--text2)')}>Normal</span>;
   };
 
@@ -39,53 +82,64 @@ export default function EmployeeTable({ results, onOpenDetail, currentPage, setC
             <tr>
               <th style={th}>Code</th>
               <th style={{ ...th, textAlign: 'left' }}>Employee</th>
-              <th style={th}>Present</th>
-              <th style={th}>Absent</th>
-              <th style={th}>Half Days</th>
-              <th style={th}>Late</th>
-              <th style={th}>HD(Late)</th>
-              <th style={th}>Sh.Shift</th>
-              <th style={th}>HD(SS)</th>
-              <th style={th}>Sh.Leave</th>
-              <th style={th}>RL</th>
-              <th style={th}>Holiday</th>
-              <th style={th} title="Work From Ministry Full">WFM</th>
-              <th style={th} title="Work From Ministry Half">WFM½</th>
-              <th style={th} title="Work From Home">WFH</th>
-              <th style={th} title="Work On Site Full">WOS</th>
-              <th style={th} title="Work On Site Half">WOS½</th>
+              <th style={th}>Department</th>
+              {!showMissingDays && <th style={th}>Present</th>}
+              {!showMissingDays && <th style={th}>Absent</th>}
+              {!showMissingDays && <th style={th}>Half</th>}
+              {!showMissingDays && <th style={th}>Late</th>}
+              {!showMissingDays && <th style={th}>HD(L)</th>}
+              {!showMissingDays && <th style={th}>Sh.Sh</th>}
+              {!showMissingDays && <th style={th}>HD(SS)</th>}
+              {!showMissingDays && <th style={th}>Sh.Lv</th>}
+              {!showMissingDays && <th style={th}>RL</th>}
+              {!showMissingDays && <th style={th}>Hol.</th>}
+              {!showMissingDays && <th style={th}>WFM</th>}
+              {!showMissingDays && <th style={th}>WFM½</th>}
+              {!showMissingDays && <th style={th}>WFH</th>}
+              {!showMissingDays && <th style={th}>WOS</th>}
+              {!showMissingDays && <th style={th}>WOS½</th>}
+              {showMissingDays && <th style={th}>Missing Days</th>}
+              <th style={th}>⚠</th>
               <th style={th}>Status</th>
               <th style={th}></th>
             </tr>
           </thead>
           <tbody>
-            {currentData.map((r) => {
+            {currentData.map((r, idx) => {
               const ov = empOverrideCounts(r.code);
               return (
                 <tr
                   key={r.code}
                   onClick={() => onOpenDetail(r)}
-                  style={{ cursor: 'pointer', borderBottom: '1px solid var(--border)', transition: 'background 0.12s' }}
+                  style={{ cursor: 'pointer', borderBottom: '1px solid var(--border)', transition: 'background 0.12s', animation: `fadeIn 0.3s ease ${idx * 0.03}s both` }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
                   onMouseLeave={e => e.currentTarget.style.background = ''}
                 >
                   <td style={{ ...td, color: 'var(--text2)', fontSize: '12px' }}>{r.code}</td>
-                  <td style={{ ...td, textAlign: 'left', fontWeight: 500, color: 'var(--text)' }}>{r.name}</td>
-                  <td style={{ ...td, color: 'var(--green)', fontWeight: 500 }}>{r.present}</td>
-                  <td style={{ ...td, color: r.absent >= 5 ? 'var(--red)' : 'var(--text)', fontWeight: r.absent >= 5 ? 600 : 400 }}>{r.absent}</td>
-                  <td style={td}>{r.halfDay || '—'}</td>
-                  <td style={{ ...td, color: r.late >= 9 ? 'var(--yellow)' : 'var(--text)' }}>{r.late}</td>
-                  <td style={{ ...td, color: r.lateHD > 0 ? 'var(--yellow)' : 'var(--text2)' }}>{r.lateHD || '—'}</td>
-                  <td style={{ ...td, color: r.shortShift >= 9 ? 'var(--orange)' : 'var(--text)' }}>{r.shortShift}</td>
-                  <td style={{ ...td, color: r.ssHD > 0 ? 'var(--red)' : 'var(--text2)' }}>{r.ssHD || '—'}</td>
-                  <td style={{ ...td, color: r.shortLeave > 0 ? 'var(--blue)' : 'var(--text2)' }}>{r.shortLeave || '—'}</td>
-                  <td style={{ ...td, color: r.rl > 0 ? 'var(--purple)' : 'var(--text2)' }}>{r.rl || '—'}</td>
-                  <td style={td}>{r.holi || '—'}</td>
-                  <td style={{ ...td, color: ov.wfm > 0 ? 'var(--green)' : 'var(--text2)', fontWeight: ov.wfm > 0 ? 600 : 400 }}>{ov.wfm || '—'}</td>
-                  <td style={{ ...td, color: ov.wfmhd > 0 ? 'var(--green)' : 'var(--text2)' }}>{ov.wfmhd || '—'}</td>
-                  <td style={{ ...td, color: ov.wfh > 0 ? 'var(--purple)' : 'var(--text2)' }}>{ov.wfh || '—'}</td>
-                  <td style={{ ...td, color: ov.wos > 0 ? 'var(--teal)' : 'var(--text2)' }}>{ov.wos || '—'}</td>
-                  <td style={{ ...td, color: ov.woshd > 0 ? 'var(--teal)' : 'var(--text2)' }}>{ov.woshd || '—'}</td>
+                  <td style={{ ...td, textAlign: 'left', fontWeight: 500, color: 'var(--text)', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</td>
+                  <td style={{ ...td, color: 'var(--text2)', fontSize: '12px', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.department || '—'}</td>
+                  {!showMissingDays && <td style={{ ...td, color: 'var(--green)', fontWeight: 500 }}>{r.present}</td>}
+                  {!showMissingDays && <td style={{ ...td, color: r.absent >= 5 ? 'var(--red)' : 'var(--text)', fontWeight: r.absent >= 5 ? 600 : 400 }}>{r.absent}</td>}
+                  {!showMissingDays && <td style={td}>{r.halfDay || '—'}</td>}
+                  {!showMissingDays && <td style={{ ...td, color: r.late >= 9 ? 'var(--yellow)' : 'var(--text)' }}>{r.late}</td>}
+                  {!showMissingDays && <td style={{ ...td, color: r.lateHD > 0 ? 'var(--yellow)' : 'var(--text2)' }}>{r.lateHD || '—'}</td>}
+                  {!showMissingDays && <td style={{ ...td, color: r.shortShift >= 9 ? 'var(--orange)' : 'var(--text)' }}>{r.shortShift}</td>}
+                  {!showMissingDays && <td style={{ ...td, color: r.ssHD > 0 ? 'var(--red)' : 'var(--text2)' }}>{r.ssHD || '—'}</td>}
+                  {!showMissingDays && <td style={{ ...td, color: r.shortLeave > 0 ? 'var(--blue)' : 'var(--text2)' }}>{r.shortLeave || '—'}</td>}
+                  {!showMissingDays && <td style={{ ...td, color: r.rl > 0 ? 'var(--purple)' : 'var(--text2)' }}>{r.rl || '—'}</td>}
+                  {!showMissingDays && <td style={td}>{r.holi || '—'}</td>}
+                  {!showMissingDays && <td style={{ ...td, color: ov.wfm > 0 ? 'var(--green)' : 'var(--text2)', fontWeight: ov.wfm > 0 ? 600 : 400 }}>{ov.wfm || '—'}</td>}
+                  {!showMissingDays && <td style={{ ...td, color: ov.wfmhd > 0 ? 'var(--green)' : 'var(--text2)' }}>{ov.wfmhd || '—'}</td>}
+                  {!showMissingDays && <td style={{ ...td, color: ov.wfh > 0 ? 'var(--purple)' : 'var(--text2)' }}>{ov.wfh || '—'}</td>}
+                  {!showMissingDays && <td style={{ ...td, color: ov.wos > 0 ? 'var(--teal)' : 'var(--text2)' }}>{ov.wos || '—'}</td>}
+                  {!showMissingDays && <td style={{ ...td, color: ov.woshd > 0 ? 'var(--teal)' : 'var(--text2)' }}>{ov.woshd || '—'}</td>}
+                  {showMissingDays && <td style={td}><MissingDayPills days={r.punchMissingDays} /></td>}
+                  <td style={{ ...td, color: r.punchMissing > 0 ? 'var(--orange)' : 'var(--text2)', fontWeight: r.punchMissing > 0 ? 600 : 400, position: 'relative' }}
+                      onMouseEnter={e => { const t = e.currentTarget.querySelector('.pm-tooltip'); if (t) t.style.opacity = '1'; }}
+                      onMouseLeave={e => { const t = e.currentTarget.querySelector('.pm-tooltip'); if (t) t.style.opacity = '0'; }}>
+                    {r.punchMissing || '—'}
+                    <MissingDaysTooltip days={r.punchMissingDays} />
+                  </td>
                   <td style={td}><StatusBadge r={r} ov={ov} /></td>
                   <td style={td}>
                     <span style={{ color: 'var(--blue)', fontSize: '13px', fontWeight: 500 }}>View →</span>

@@ -105,7 +105,13 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
                : '1.5px solid rgba(48,176,199,0.4)';
       } else {
         if (info.type === 'wo') { opacity = 0.4; cursor = 'default'; label = 'WO'; }
-        else if (info.type === 'present') { bg = 'rgba(52,199,89,0.08)'; border = '1px solid rgba(52,199,89,0.25)'; label = 'P'; }
+        else         if (info.type === 'present') {
+          if (info.inT === null) {
+            bg = 'rgba(255,107,53,0.08)'; border = '2px dashed rgba(255,107,53,0.5)'; label = '⚠ P';
+          } else {
+            bg = 'rgba(52,199,89,0.08)'; border = '1px solid rgba(52,199,89,0.25)'; label = 'P';
+          }
+        }
         else if (info.type === 'absent') { bg = 'rgba(255,59,48,0.08)'; border = '1px solid rgba(255,59,48,0.25)'; label = 'A'; }
         else if (info.type === 'holiday') { bg = 'rgba(255,159,10,0.1)'; border = '1px solid rgba(255,159,10,0.3)'; label = '🎉'; cursor = 'default'; }
         else if (info.type === 'rl') { bg = 'rgba(175,82,222,0.08)'; border = '1px solid rgba(175,82,222,0.25)'; label = 'RL'; }

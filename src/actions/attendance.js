@@ -114,24 +114,8 @@ export async function fetchDashboardData(monthYear) {
   });
 
   // Map into our flattened standard result format
-  return records.map(record => ({
-    code: record.employee.code,
-    name: record.employee.name,
-    birthday: record.employee.birthday ?? null,
-    workAnniversary: record.employee.workAnniversary ?? null,
-    employeeType: record.employee.employeeType,
-    present: record.present,
-    absent: record.absent,
-    halfDay: record.halfDay,
-    late: record.late,
-    lateHD: record.lateHD,
-    shortShift: record.shortShift,
-    ssHD: record.ssHD,
-    shortLeave: record.shortLeave,
-    rl: record.rl,
-    holi: record.holi,
-    numDays: record.numDays,
-    days: record.employee.dailyLogs.map(dl => ({
+  return records.map(record => {
+    const days = record.employee.dailyLogs.map(dl => ({
       d: dl.day,
       type: dl.type,
       raw: dl.raw,
@@ -140,12 +124,41 @@ export async function fetchDashboardData(monthYear) {
       isLate: dl.isLate,
       isSS: dl.isSS,
       isSL: dl.isSL
-    })),
-    overrides: record.employee.overrides.reduce((acc, ov) => {
-      acc[`${record.employee.code}_${ov.day}`] = ov.type;
-      return acc;
-    }, {})
-  }));
+    }));
+    const punchMissingDays = days.filter(d => d.type === 'present' && d.inT === null).map(d => ({
+      day: d.d,
+      inT: d.inT,
+      outT: d.outT
+    }));
+    const punchMissing = punchMissingDays.length;
+    return {
+      code: record.employee.code,
+      name: record.employee.name,
+      birthday: record.employee.birthday ?? null,
+      workAnniversary: record.employee.workAnniversary ?? null,
+      employeeType: record.employee.employeeType,
+      department: record.employee.department?.name ?? null,
+      designation: record.employee.designation?.name ?? null,
+      punchMissing,
+      punchMissingDays,
+      present: record.present,
+      absent: record.absent,
+      halfDay: record.halfDay,
+      late: record.late,
+      lateHD: record.lateHD,
+      shortShift: record.shortShift,
+      ssHD: record.ssHD,
+      shortLeave: record.shortLeave,
+      rl: record.rl,
+      holi: record.holi,
+      numDays: record.numDays,
+      days,
+      overrides: record.employee.overrides.reduce((acc, ov) => {
+        acc[`${record.employee.code}_${ov.day}`] = ov.type;
+        return acc;
+      }, {})
+    };
+  });
 }
 
 export async function toggleOverride(employeeCode, monthYear, day, type, performedBy = 'admin') {

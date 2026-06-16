@@ -1,12 +1,14 @@
 "use client";
 
 export default function KPIStrip({ kpis }) {
+  if (!kpis || kpis.length === 0) return null;
+
   return (
     <div
       className="kpi-grid"
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(8, 1fr)',
+        gridTemplateColumns: `repeat(${kpis.length}, 1fr)`,
         gap: 'var(--gap)',
         marginBottom: 'calc(var(--gap) * 1.5)',
       }}
@@ -15,6 +17,7 @@ export default function KPIStrip({ kpis }) {
         <div
           key={i}
           className="card"
+          onClick={k.onClick}
           style={{
             padding: 'clamp(14px, 2vw, 22px)',
             display: 'flex',
@@ -22,17 +25,16 @@ export default function KPIStrip({ kpis }) {
             gap: '10px',
             position: 'relative',
             overflow: 'hidden',
-            cursor: 'default',
+            cursor: k.onClick ? 'pointer' : 'default',
+            animation: `fadeIn 0.4s ease ${i * 0.05}s both`,
           }}
         >
-          {/* Subtle color accent top bar */}
           <div style={{
             position: 'absolute', top: 0, left: 0, right: 0,
             height: '3px', background: k.color, borderRadius: '20px 20px 0 0',
             opacity: 0.7,
           }} />
 
-          {/* Icon */}
           <div style={{
             width: 'clamp(32px, 3vw, 40px)',
             height: 'clamp(32px, 3vw, 40px)',
@@ -45,7 +47,6 @@ export default function KPIStrip({ kpis }) {
             {k.icon}
           </div>
 
-          {/* Value */}
           <div style={{
             fontSize: 'clamp(22px, 2.8vw, 34px)',
             fontWeight: 800,
@@ -56,7 +57,6 @@ export default function KPIStrip({ kpis }) {
             {k.value}
           </div>
 
-          {/* Label + sub */}
           <div>
             <div style={{
               fontSize: 'clamp(11px, 1.1vw, 13px)',

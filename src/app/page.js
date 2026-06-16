@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../components/AuthProvider';
 import UploadSection from '../components/UploadSection';
@@ -8,9 +8,11 @@ import KPIStrip from '../components/KPIStrip';
 import EmployeeTable from '../components/EmployeeTable';
 import * as XLSX from 'xlsx';
 import { parseAndAnalyze } from '../utils/attendanceParser';
-import { getMonths, uploadMonthData, fetchDashboardData, toggleOverride, clearAllOverrides } from '../actions/attendance';
+import { getMonths, uploadMonthData, fetchDashboardData } from '../actions/attendance';
 import { getActiveShiftPolicy } from '../actions/shiftPolicy';
 import { getHolidays } from '../actions/holidays';
+import { getDepartments } from '../actions/departments';
+import { FiSearch, FiDownload, FiUpload, FiLogOut, FiChevronDown } from 'react-icons/fi';
 
 export default function DashboardHome() {
   const { isAuthenticated, isAdmin, user, loading: authLoading, logout } = useAuth();
@@ -21,23 +23,30 @@ export default function DashboardHome() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [allResults, setAllResults] = useState([]);
-  const [filteredResults, setFilteredResults] = useState([]);
   const [overrides, setOverrides] = useState({});
+  const [filteredResults, setFilteredResults] = useState([]);
   const [uploadView, setUploadView] = useState(false);
-  const [currentFilter, setCurrentFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
+  // Filters
+  const [departments, setDepartments] = useState([]);
+  const [selectedDept, setSelectedDept] = useState('');
+  const [selectedSubDept, setSelectedSubDept] = useState('');
+  const [currentFilter, setCurrentFilter] = useState('all');
+
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
-    // Employees with a linked code go straight to their profile
     if (!authLoading && isAuthenticated && !isAdmin && user?.employeeCode) {
       router.push(`/employee/${user.employeeCode}`);
     }
   }, [isAuthenticated, isAdmin, user, authLoading, router]);
 
   useEffect(() => {
-    if (isAuthenticated) loadMonthsList();
+    if (isAuthenticated) {
+      getDepartments().then(setDepartments);
+      loadMonthsList();
+    }
   }, [isAuthenticated]);
 
   const loadMonthsList = async () => {
@@ -60,6 +69,11 @@ export default function DashboardHome() {
     let ov = {};
     data.forEach(r => { ov = { ...ov, ...r.overrides }; });
     setOverrides(ov);
+    setSelectedDept('');
+    setSelectedSubDept('');
+    setCurrentFilter('all');
+    setSearchQuery('');
+    setCurrentPage(1);
     setLoading(false);
     setUploadView(false);
   };
@@ -70,11 +84,25 @@ export default function DashboardHome() {
     await loadDashboardData(val);
   };
 
+  // Compute unique sub-departments for selected department
+  const subDepartments = useMemo(() => {
+    if (!selectedDept) return [];
+    const subs = new Set();
+    allResults.forEach(r => {
+      if (r.department === selectedDept && r.subDepartment) subs.add(r.subDepartment);
+    });
+    return [...subs].sort();
+  }, [selectedDept, allResults]);
+
+  // Filter logic
   useEffect(() => {
     if (!allResults.length) { setFilteredResults([]); return; }
     const q = searchQuery.toLowerCase();
     const filtered = allResults.filter(r => {
       const matchSearch = !q || r.name.toLowerCase().includes(q) || String(r.code).includes(q);
+      const matchDept = !selectedDept || r.department === selectedDept;
+      const matchSubDept = !selectedSubDept || r.subDepartment === selectedSubDept;
+
       let wfm = 0, wfmhd = 0, wfh = 0, wos = 0, woshd = 0;
       Object.keys(overrides).forEach(k => {
         if (k.startsWith(r.code + '_')) {
@@ -92,11 +120,12 @@ export default function DashboardHome() {
       if (currentFilter === 'wfm') matchFilter = wfm > 0 || wfmhd > 0;
       if (currentFilter === 'wfh') matchFilter = wfh > 0;
       if (currentFilter === 'wos') matchFilter = wos > 0 || woshd > 0;
-      return matchSearch && matchFilter;
+      if (currentFilter === 'punchmissing') matchFilter = r.punchMissing >= 3;
+      return matchSearch && matchDept && matchSubDept && matchFilter;
     });
     setFilteredResults(filtered);
     setCurrentPage(1);
-  }, [allResults, overrides, currentFilter, searchQuery]);
+  }, [allResults, overrides, currentFilter, searchQuery, selectedDept, selectedSubDept]);
 
   const handleFile = (file) => {
     setUploadView(false);
@@ -108,7 +137,6 @@ export default function DashboardHome() {
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
 
-        // Load active shift policy and DB holidays before parsing
         const [policy, allHolidays] = await Promise.all([
           getActiveShiftPolicy(),
           getHolidays(new Date().getFullYear())
@@ -117,7 +145,6 @@ export default function DashboardHome() {
         const { results, currentMonth: cm, numDays: nd } = parseAndAnalyze(rows, policy, allHolidays);
         const monthYearStr = `${cm.month}_${cm.year}`;
 
-        // Also load holidays for the detected year if different
         const yearHolidays = cm.year !== new Date().getFullYear()
           ? await getHolidays(cm.year)
           : allHolidays;
@@ -138,7 +165,7 @@ export default function DashboardHome() {
   };
 
   const exportCSV = () => {
-    const headers = ['Emp Code','Name','Present','Absent','Half Days','Late','HD(Late)','Short Shifts','HD(SS)','Short Leaves','RL','Holiday','WFM','WFM Half','WFH','WOS','WOS Half'];
+    const headers = ['Emp Code','Name','Department','Present','Absent','Half Days','Late','HD(Late)','Short Shifts','HD(SS)','Short Leaves','RL','Holiday','WFM','WFM Half','WFH','WOS','WOS Half','Punch Missing'];
     const rows = [headers.join(',')];
     filteredResults.forEach(r => {
       let wfm = 0, wfmhd = 0, wfh = 0, wos = 0, woshd = 0;
@@ -151,13 +178,15 @@ export default function DashboardHome() {
           else if (overrides[k] === 'wos-hd') woshd++;
         }
       });
-      rows.push([r.code, `"${r.name}"`, r.present, r.absent, r.halfDay, r.late, r.lateHD, r.shortShift, r.ssHD, r.shortLeave, r.rl, r.holi, wfm, wfmhd, wfh, wos, woshd].join(','));
+      rows.push([r.code, `"${r.name}"`, r.department || '', r.present, r.absent, r.halfDay, r.late, r.lateHD, r.shortShift, r.ssHD, r.shortLeave, r.rl, r.holi, wfm, wfmhd, wfh, wos, woshd, r.punchMissing].join(','));
     });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([rows.join('\n')], { type: 'text/csv' }));
     a.download = `Attendance_${selectedMonth}.csv`;
     a.click();
   };
+
+  const totalPunchMissing = allResults.reduce((s, r) => s + r.punchMissing, 0);
 
   const kpis = () => {
     if (!allResults.length) return [];
@@ -171,7 +200,7 @@ export default function DashboardHome() {
       { label: 'Short Shifts', value: allResults.reduce((s, x) => s + x.shortShift, 0), sub: 'Under 9 hrs', color: '#ff6b35', icon: '⚡' },
       { label: 'WFM Days', value: totalWFM + totalWFMHD, sub: `Full: ${totalWFM} · Half: ${totalWFMHD}`, color: '#34c759', icon: '🏛️' },
       { label: 'WFH Days', value: totalWFH, sub: 'Work from home', color: '#af52de', icon: '🏠' },
-      { label: 'WOS Days', value: Object.values(overrides).filter(v => v === 'wos').length + Object.values(overrides).filter(v => v === 'wos-hd').length, sub: 'Work on site', color: '#30b0c7', icon: '🏢' },
+      { label: 'Missed Punches', value: totalPunchMissing, sub: 'Present days w/o punch', color: '#ff6b35', icon: '⚠️', onClick: () => setCurrentFilter('punchmissing') },
       { label: 'HD Deductions', value: allResults.reduce((s, x) => s + x.lateHD + x.ssHD, 0), sub: 'Late + short shifts', color: '#ff3b30', icon: '📋' },
     ];
   };
@@ -182,13 +211,14 @@ export default function DashboardHome() {
   };
 
   const filters = [
-    { key: 'all', label: 'All' },
-    { key: 'absent', label: 'High Absent' },
-    { key: 'late', label: 'Frequent Late' },
-    { key: 'deduction', label: 'HD Deduction' },
-    { key: 'wfm', label: 'WFM' },
-    { key: 'wfh', label: 'WFH' },
-    { key: 'wos', label: 'WOS' },
+    { key: 'all', label: 'All', count: allResults.length },
+    { key: 'absent', label: 'High Absent', count: allResults.filter(r => r.absent >= 5).length },
+    { key: 'late', label: 'Frequent Late', count: allResults.filter(r => r.late >= 6).length },
+    { key: 'deduction', label: 'HD Deduction', count: allResults.filter(r => r.lateHD > 0 || r.ssHD > 0).length },
+    { key: 'wfm', label: 'WFM', count: allResults.filter(r => { let w=0; Object.keys(overrides).forEach(k => { if(k.startsWith(r.code+'_') && (overrides[k]==='wfm'||overrides[k]==='wfm-hd')) w++; }); return w>0; }).length },
+    { key: 'wfh', label: 'WFH', count: allResults.filter(r => { let w=0; Object.keys(overrides).forEach(k => { if(k.startsWith(r.code+'_') && overrides[k]==='wfh') w++; }); return w>0; }).length },
+    { key: 'wos', label: 'WOS', count: allResults.filter(r => { let w=0; Object.keys(overrides).forEach(k => { if(k.startsWith(r.code+'_') && (overrides[k]==='wos'||overrides[k]==='wos-hd')) w++; }); return w>0; }).length },
+    { key: 'punchmissing', label: '⚠️ Punch Missing', count: allResults.filter(r => r.punchMissing >= 3).length },
   ];
 
   if (authLoading || !isAuthenticated) return null;
@@ -209,10 +239,25 @@ export default function DashboardHome() {
         </div>
       )}
 
-      {/* Loading state */}
+      {/* Loading skeleton */}
       {loading && !uploading && !uploadView && (
-        <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text2)', fontSize: '14px' }}>
-          Loading…
+        <div className="animate-fade-in">
+          {/* KPI skeleton */}
+          <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 'var(--gap)', marginBottom: 'calc(var(--gap) * 1.5)' }}>
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="card" style={{ padding: '22px' }}>
+                <div className="skeleton" style={{ width: '36px', height: '36px', borderRadius: '10px', marginBottom: '12px' }} />
+                <div className="skeleton" style={{ width: '60%', height: '28px', borderRadius: '6px', marginBottom: '8px' }} />
+                <div className="skeleton" style={{ width: '80%', height: '12px', borderRadius: '4px' }} />
+              </div>
+            ))}
+          </div>
+          {/* Table skeleton */}
+          <div className="card" style={{ padding: '16px' }}>
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="skeleton" style={{ width: '100%', height: '36px', borderRadius: '8px', marginBottom: '8px' }} />
+            ))}
+          </div>
         </div>
       )}
 
@@ -225,7 +270,7 @@ export default function DashboardHome() {
                 ← Back to Dashboard
               </button>
             )}
-            <button onClick={logout} className="btn btn-outline">Sign Out</button>
+            <button onClick={logout} className="btn btn-outline"><FiLogOut size={14} /> Sign Out</button>
           </div>
           <UploadSection onFileSelected={handleFile} />
         </>
@@ -239,61 +284,113 @@ export default function DashboardHome() {
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             marginBottom: 'calc(var(--gap) * 1.5)', gap: '12px', flexWrap: 'wrap'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <select
-                value={selectedMonth}
-                onChange={handleMonthChange}
-                className="input-field"
-                style={{ width: 'auto', minWidth: '180px', padding: '8px 14px', fontWeight: 600, fontSize: 'var(--fs-base)' }}
-              >
-                {months.map(m => <option key={m} value={m}>{formatMonth(m)}</option>)}
-              </select>
-              <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text2)', letterSpacing: '-0.01em', fontWeight: 500 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ position: 'relative' }}>
+                <select
+                  value={selectedMonth}
+                  onChange={handleMonthChange}
+                  className="input-field"
+                  style={{ width: 'auto', minWidth: '180px', padding: '8px 32px 8px 14px', fontWeight: 600, fontSize: 'var(--fs-base)', appearance: 'none', cursor: 'pointer' }}
+                >
+                  {months.map(m => <option key={m} value={m}>{formatMonth(m)}</option>)}
+                </select>
+                <FiChevronDown size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text2)', pointerEvents: 'none' }} />
+              </div>
+              <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text2)', letterSpacing: '-0.01em', fontWeight: 500, background: 'var(--surface2)', padding: '4px 12px', borderRadius: '980px' }}>
                 {allResults.length} employees
               </span>
             </div>
-            <div className="toolbar-actions" style={{ display: 'flex', gap: '8px' }}>
-              {isAdmin && <button className="btn btn-secondary" onClick={exportCSV}>Export CSV</button>}
-              {isAdmin && <button className="btn btn-primary" onClick={() => setUploadView(true)}>Upload New</button>}
-              <button className="btn btn-outline" onClick={logout}>Sign Out</button>
+            <div className="toolbar-actions" style={{ display: 'flex', gap: '6px' }}>
+              {isAdmin && <button className="btn btn-secondary" onClick={exportCSV}><FiDownload size={14} /> Export CSV</button>}
+              {isAdmin && <button className="btn btn-primary" onClick={() => setUploadView(true)}><FiUpload size={14} /> Upload New</button>}
+              <button className="btn btn-outline" onClick={logout}><FiLogOut size={14} /> Sign Out</button>
             </div>
           </div>
 
           <KPIStrip kpis={kpis()} />
 
-          {/* Table header row */}
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            marginBottom: 'var(--gap)', gap: '12px', flexWrap: 'wrap'
-          }}>
-            <div className="section-title">Employee Breakdown</div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <input
-                type="text"
-                className="input-field"
-                placeholder="Search employee…"
-                style={{ width: '200px', padding: '8px 14px', fontSize: 'var(--fs-sm)' }}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <div className="filter-bar" style={{ display: 'flex', gap: '3px', background: 'var(--surface3)', borderRadius: '12px', padding: '3px' }}>
-                {filters.map(f => (
+          {/* Filter row */}
+          <div className="card" style={{ padding: '16px 20px', marginBottom: 'var(--gap)' }}>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '10px' }}>
+              {/* Search */}
+              <div style={{ position: 'relative', flex: '1', minWidth: '200px', maxWidth: '320px' }}>
+                <FiSearch size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)', pointerEvents: 'none' }} />
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="Search by name or code…"
+                  style={{ width: '100%', padding: '8px 14px 8px 34px', fontSize: 'var(--fs-sm)' }}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+
+              {/* Department filter */}
+              <div style={{ position: 'relative' }}>
+                <select
+                  className="input-field"
+                  value={selectedDept}
+                  onChange={e => { setSelectedDept(e.target.value); setSelectedSubDept(''); }}
+                  style={{ width: '180px', padding: '8px 32px 8px 12px', fontSize: 'var(--fs-sm)', appearance: 'none', cursor: 'pointer' }}
+                >
+                  <option value="">All Departments</option>
+                  {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                </select>
+                <FiChevronDown size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text2)', pointerEvents: 'none' }} />
+              </div>
+
+              {/* Sub-department filter */}
+              <div style={{ position: 'relative' }}>
+                <select
+                  className="input-field"
+                  value={selectedSubDept}
+                  onChange={e => setSelectedSubDept(e.target.value)}
+                  disabled={!selectedDept}
+                  style={{ width: '180px', padding: '8px 32px 8px 12px', fontSize: 'var(--fs-sm)', appearance: 'none', cursor: selectedDept ? 'pointer' : 'not-allowed', opacity: selectedDept ? 1 : 0.5 }}
+                >
+                  <option value="">All Sub-Depts</option>
+                  {subDepartments.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <FiChevronDown size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text2)', pointerEvents: 'none' }} />
+              </div>
+
+              {/* Result count */}
+              <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--text2)', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                {filteredResults.length} of {allResults.length}
+              </div>
+            </div>
+
+            {/* Filter pills */}
+            <div className="filter-bar" style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+              {filters.map(f => {
+                const active = currentFilter === f.key;
+                return (
                   <button
                     key={f.key}
                     onClick={() => setCurrentFilter(f.key)}
                     style={{
-                      padding: '5px 13px', borderRadius: '9px', fontSize: 'var(--fs-xs)', fontWeight: 500,
-                      border: 'none', cursor: 'pointer', letterSpacing: '-0.01em',
-                      background: currentFilter === f.key ? 'var(--surface)' : 'transparent',
-                      color: currentFilter === f.key ? 'var(--text)' : 'var(--text2)',
-                      boxShadow: currentFilter === f.key ? 'var(--shadow-sm)' : 'none',
+                      padding: '6px 14px', borderRadius: '9px', fontSize: 'var(--fs-xs)', fontWeight: 500,
+                      border: active ? '1px solid var(--blue)' : '1px solid transparent',
+                      cursor: 'pointer', letterSpacing: '-0.01em',
+                      background: active ? 'var(--blue-light)' : 'transparent',
+                      color: active ? 'var(--blue)' : 'var(--text2)',
                       transition: 'all 0.15s', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                      display: 'inline-flex', alignItems: 'center', gap: '6px',
                     }}
+                    onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'var(--surface2)'; e.currentTarget.style.color = 'var(--text)'; }}}
+                    onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text2)'; }}}
                   >
                     {f.label}
+                    <span style={{
+                      background: active ? 'var(--blue)' : 'var(--surface3)',
+                      color: active ? '#fff' : 'var(--text2)',
+                      borderRadius: '980px', padding: '1px 7px', fontSize: '10px', fontWeight: 700,
+                    }}>
+                      {f.count}
+                    </span>
                   </button>
-                ))}
-              </div>
+                );
+              })}
             </div>
           </div>
 
@@ -303,10 +400,11 @@ export default function DashboardHome() {
             currentPage={currentPage}
             setCurrentPage={setCurrentPage}
             onOpenDetail={(r) => router.push(`/employee/${r.code}`)}
+            showMissingDays={currentFilter === 'punchmissing'}
           />
 
           <div style={{ fontSize: '12px', color: 'var(--text3)', textAlign: 'right', marginTop: '8px', letterSpacing: '-0.01em' }}>
-            Click any row to open the employee's detailed dashboard.
+            Click any row to open the employee&apos;s detailed dashboard.
           </div>
         </>
       )}
