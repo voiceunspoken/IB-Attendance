@@ -1,6 +1,6 @@
 import './globals.css';
 import { AuthProvider } from '../components/AuthProvider';
-import HeaderNav from '../components/HeaderNav';
+import AppShell from '../components/AppShell';
 
 export const metadata = {
   title: 'Interactive Bees — Attendance',
@@ -12,8 +12,7 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body>
         <AuthProvider>
-          <HeaderNav />
-          {children}
+          <AppShell>{children}</AppShell>
         </AuthProvider>
       </body>
     </html>

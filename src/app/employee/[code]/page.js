@@ -19,7 +19,7 @@ export default function EmployeeDashboard({ params }) {
   const unwrappedParams = use(params);
   const code = unwrappedParams.code;
 
-  const { isAuthenticated, isAdmin, user, loading: authLoading, logout } = useAuth();
+  const { isAuthenticated, isAdmin, user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
@@ -341,15 +341,6 @@ export default function EmployeeDashboard({ params }) {
 
   return (
     <div style={{ padding: '24px 28px', maxWidth: '1200px', margin: '0 auto' }} className="animate-fade-in">
-
-      {/* Nav */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        {isAdmin
-          ? <button className="btn btn-secondary" onClick={() => router.push('/')}>← Dashboard</button>
-          : <div />
-        }
-        {!isAdmin && <button className="btn btn-outline" onClick={logout}>Sign Out</button>}
-      </div>
 
       {/* Profile header */}
       <div className="card" style={{ padding: '24px 28px', marginBottom: '20px' }}>

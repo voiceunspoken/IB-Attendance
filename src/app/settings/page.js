@@ -225,8 +225,6 @@ export default function SettingsPage() {
 
   return (
     <div style={{ padding: '24px 28px', maxWidth: '1000px', margin: '0 auto' }} className="animate-fade-in">
-      <button className="btn btn-secondary" style={{ marginBottom: '20px' }} onClick={() => router.push('/')}>← Dashboard</button>
-
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '-0.04em' }}>Settings</h1>
         <p style={{ color: 'var(--text2)', fontSize: '14px', marginTop: '4px' }}>Holidays, shift policy, employees, notifications and security.</p>
@@ -425,10 +423,11 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
+            </div>
           </div>
         </div>
+        )}
 
-        {/* Pending policies — super admin approval */}
         {isSuperAdmin && pendingPolicies.length > 0 && (
           <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
             <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
@@ -458,8 +457,7 @@ export default function SettingsPage() {
             ))}
           </div>
         )}
-      )}
-
+        
       {/* ── EMPLOYEES ── */}
       {!loading && tab === 'employees' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

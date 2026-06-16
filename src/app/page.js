@@ -15,10 +15,10 @@ import { getDepartments } from '../actions/departments';
 import { getPendingPolicies } from '../actions/shiftPolicy';
 import { getPendingAttendanceCorrections } from '../actions/attendanceChanges';
 import { getPendingSuperRegularizations } from '../actions/leave';
-import { FiSearch, FiDownload, FiUpload, FiLogOut, FiChevronDown } from 'react-icons/fi';
+import { FiSearch, FiDownload, FiUpload, FiChevronDown } from 'react-icons/fi';
 
 export default function DashboardHome() {
-  const { isAuthenticated, isAdmin, isSuperAdmin, user, loading: authLoading, logout } = useAuth();
+  const { isAuthenticated, isAdmin, isSuperAdmin, user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [months, setMonths] = useState([]);
@@ -285,7 +285,6 @@ export default function DashboardHome() {
                 ← Back to Dashboard
               </button>
             )}
-            <button onClick={logout} className="btn btn-outline"><FiLogOut size={14} /> Sign Out</button>
           </div>
           <UploadSection onFileSelected={handleFile} />
         </>
@@ -318,7 +317,6 @@ export default function DashboardHome() {
             <div className="toolbar-actions" style={{ display: 'flex', gap: '6px' }}>
               {isAdmin && <button className="btn btn-secondary" onClick={exportCSV}><FiDownload size={14} /> Export CSV</button>}
               {isAdmin && <button className="btn btn-primary" onClick={() => setUploadView(true)}><FiUpload size={14} /> Upload New</button>}
-              <button className="btn btn-outline" onClick={logout}><FiLogOut size={14} /> Sign Out</button>
             </div>
           </div>
 
