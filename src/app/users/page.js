@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
 import { getUsers, createUser, deleteUser, updateUser, toggleDisableUser, promoteToAdmin, getPendingChanges, reviewPendingChange } from '../../actions/auth';
+import Modal from '../../components/Modal';
 import ConfirmModal from '../../components/ConfirmModal';
 import { FiSearch } from 'react-icons/fi';
 
@@ -34,33 +35,6 @@ function RoleBadge({ role }) {
 function DisabledBadge() {
   return (
     <span style={{ display: 'inline-flex', padding: '1px 7px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, background: 'rgba(255,59,48,0.1)', color: 'var(--red)' }}>Disabled</span>
-  );
-}
-
-function Modal({ open, onClose, title, children }) {
-  if (!open) return null;
-  return (
-    <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200,
-      display: 'grid', placeItems: 'center', backdropFilter: 'blur(10px)',
-      WebkitBackdropFilter: 'blur(10px)', padding: '24px',
-    }}>
-      <div onClick={e => e.stopPropagation()} className="card" style={{
-        width: '440px', maxWidth: '92vw', padding: '28px',
-        animation: 'fadeIn 0.2s ease', maxHeight: '85vh', overflowY: 'auto',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 700, letterSpacing: '-0.03em' }}>{title}</div>
-          <button onClick={onClose} style={{
-            width: '30px', height: '30px', borderRadius: '50%', border: 'none',
-            background: 'var(--surface3)', cursor: 'pointer', fontSize: '14px',
-            fontFamily: 'inherit', display: 'grid', placeItems: 'center',
-            color: 'var(--text2)', transition: 'all 0.15s',
-          }}>✕</button>
-        </div>
-        {children}
-      </div>
-    </div>
   );
 }
 
@@ -107,6 +81,7 @@ export default function UsersPage() {
   const [userPage, setUserPage] = useState(1);
   const pageSize = 20;
   const [confirmState, setConfirmState] = useState({ show: false, message: '', onConfirm: null, confirmLabel: null, confirmLoadingLabel: null, variant: null });
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPromoteModal, setShowPromoteModal] = useState(false);
   const [promoteUserId, setPromoteUserId] = useState('');
   const [promoteRole, setPromoteRole] = useState('admin');
@@ -297,101 +272,6 @@ export default function UsersPage() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
 
-            {/* Create form */}
-            <div className="card" style={{ padding: 'clamp(16px, 2vw, 22px)' }}>
-              <div style={{ fontSize: 'var(--fs-md)', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '16px' }}>
-                Create Account
-              </div>
-              <form onSubmit={handleCreate}>
-                {form.role === 'admin' || form.role === 'super_admin' ? (
-                  <>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                      <div>
-                        <label className="input-label">Role</label>
-                        <select className="input-field" value={form.role}
-                          onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
-                          {availableRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="input-label">Select Employee</label>
-                        <select className="input-field" value={promoteTarget}
-                          onChange={e => setPromoteTarget(e.target.value)}>
-                          <option value="">— Select employee to promote —</option>
-                          {promotableEmployees.map(emp => (
-                            <option key={emp.id} value={emp.id}>{emp.name || emp.username} ({emp.code})</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    {promoteTarget && (() => {
-                      const emp = promotableEmployees.find(x => x.id === promoteTarget);
-                      const s = ROLE_STYLES[form.role];
-                      return (
-                        <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '10px 14px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <span style={{ fontSize: '16px' }}>●</span>
-                          <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text2)' }}>
-                            "<strong>{emp?.name || emp?.username}</strong>" will be promoted to <strong style={{ color: s.color }}>{s.label}</strong>.
-                            They can login with their existing credentials.
-                          </span>
-                        </div>
-                      );
-                    })()}
-                  </>
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                    <div>
-                      <label className="input-label">Username</label>
-                      <input className="input-field" placeholder="e.g. john.doe" value={form.username}
-                        onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="input-label">Password</label>
-                      <input className="input-field" type="password" placeholder="Set a password" value={form.password}
-                        onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="input-label">Role</label>
-                      <select className="input-field" value={form.role}
-                        onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
-                        {availableRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="input-label">Employee Code</label>
-                      <input className="input-field" placeholder="e.g. 1042" value={form.code}
-                        onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="input-label">Full Name</label>
-                      <input className="input-field" placeholder="e.g. John Doe" value={form.name}
-                        onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-                    </div>
-                  </div>
-                )}
-                {/* Role preview */}
-                {form.role === 'employee' && form.role && (() => {
-                  const s = ROLE_STYLES[form.role];
-                  return (
-                    <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '10px 14px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ fontSize: '16px' }}>●</span>
-                      <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text2)' }}>
-                        Will be created as <strong style={{ color: s.color }}>{s.label}</strong>.
-                      </span>
-                    </div>
-                  );
-                })()}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                  <button type="submit" className="btn btn-primary" disabled={submitting}
-                    style={{ opacity: submitting ? 0.7 : 1 }}>
-                    {submitting ? 'Processing…' : (form.role === 'admin' || form.role === 'super_admin' ? 'Promote to ' + (form.role === 'super_admin' ? 'Super Admin' : 'Admin') : 'Create Account')}
-                  </button>
-                  {formError && <span style={{ color: 'var(--red)', fontSize: 'var(--fs-sm)' }}>{formError}</span>}
-                  {formSuccess && <span style={{ color: 'var(--green)', fontSize: 'var(--fs-sm)' }}>{formSuccess}</span>}
-                </div>
-              </form>
-            </div>
-
             {/* Users table */}
             <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
               <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
@@ -402,6 +282,10 @@ export default function UsersPage() {
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button onClick={() => { setForm({ username: '', password: '', role: 'employee', code: '', name: '' }); setFormError(''); setFormSuccess(''); setPromoteTarget(''); setShowCreateModal(true); }}
+                    style={{ padding: '6px 12px', borderRadius: '980px', border: '1px solid rgba(52,199,89,0.2)', background: 'rgba(52,199,89,0.06)', color: 'var(--green)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, fontSize: 'var(--fs-xs)', whiteSpace: 'nowrap', transition: 'all 0.15s' }}>
+                    + Create Account
+                  </button>
                   <button onClick={() => { setPromoteUserId(''); setPromoteRole('admin'); setPromoteResult(''); setShowPromoteModal(true); }}
                     style={{ padding: '6px 12px', borderRadius: '980px', border: '1px solid rgba(0,113,227,0.2)', background: 'rgba(0,113,227,0.06)', color: 'var(--blue)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, fontSize: 'var(--fs-xs)', whiteSpace: 'nowrap', transition: 'all 0.15s' }}>
                     + Promote
@@ -617,6 +501,98 @@ export default function UsersPage() {
           <div style={{ display: 'flex', gap: '8px', paddingTop: '4px' }}>
             <button type="submit" className="btn btn-primary">Save Changes</button>
             <button type="button" className="btn btn-secondary" onClick={() => setEditUser(null)}>Cancel</button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Create Account modal */}
+      <Modal open={showCreateModal} onClose={() => setShowCreateModal(false)} title="Create Account">
+        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {form.role === 'admin' || form.role === 'super_admin' ? (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label className="input-label">Role</label>
+                  <select className="input-field" value={form.role}
+                    onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+                    {availableRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">Select Employee</label>
+                  <select className="input-field" value={promoteTarget}
+                    onChange={e => setPromoteTarget(e.target.value)}>
+                    <option value="">— Select employee to promote —</option>
+                    {promotableEmployees.map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.name || emp.username} ({emp.code})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {promoteTarget && (() => {
+                const emp = promotableEmployees.find(x => x.id === promoteTarget);
+                const s = ROLE_STYLES[form.role];
+                return (
+                  <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '16px' }}>●</span>
+                    <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text2)' }}>
+                      "<strong>{emp?.name || emp?.username}</strong>" will be promoted to <strong style={{ color: s.color }}>{s.label}</strong>.
+                      They can login with their existing credentials.
+                    </span>
+                  </div>
+                );
+              })()}
+            </>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label className="input-label">Username</label>
+                <input className="input-field" placeholder="e.g. john.doe" value={form.username}
+                  onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
+              </div>
+              <div>
+                <label className="input-label">Password</label>
+                <input className="input-field" type="password" placeholder="Set a password" value={form.password}
+                  onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
+              </div>
+              <div>
+                <label className="input-label">Role</label>
+                <select className="input-field" value={form.role}
+                  onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+                  {availableRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="input-label">Employee Code</label>
+                <input className="input-field" placeholder="e.g. 1042" value={form.code}
+                  onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
+              </div>
+              <div>
+                <label className="input-label">Full Name</label>
+                <input className="input-field" placeholder="e.g. John Doe" value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+              </div>
+            </div>
+          )}
+          {form.role === 'employee' && (() => {
+            const s = ROLE_STYLES[form.role];
+            return (
+              <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '16px' }}>●</span>
+                <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text2)' }}>
+                  Will be created as <strong style={{ color: s.color }}>{s.label}</strong>.
+                </span>
+              </div>
+            );
+          })()}
+          {formError && <div style={{ color: 'var(--red)', fontSize: 'var(--fs-sm)' }}>{formError}</div>}
+          {formSuccess && <div style={{ color: 'var(--green)', fontSize: 'var(--fs-sm)' }}>{formSuccess}</div>}
+          <div style={{ display: 'flex', gap: '8px', paddingTop: '4px' }}>
+            <button type="submit" className="btn btn-primary" disabled={submitting}
+              style={{ opacity: submitting ? 0.7 : 1 }}>
+              {submitting ? 'Processing…' : (form.role === 'admin' || form.role === 'super_admin' ? 'Promote to ' + (form.role === 'super_admin' ? 'Super Admin' : 'Admin') : 'Create Account')}
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>Cancel</button>
           </div>
         </form>
       </Modal>

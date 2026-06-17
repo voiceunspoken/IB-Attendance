@@ -11,6 +11,7 @@ import {
 import { getUpcomingHolidays, getHolidays } from '../../../actions/holidays';
 import { requestAttendanceCorrection } from '../../../actions/attendanceChanges';
 import EmployeeModal from '../../../components/EmployeeModal';
+import Modal from '../../../components/Modal';
 import { useToast } from '../../../components/Toast';
 import { FiCalendar, FiFileText, FiTool, FiDownload } from 'react-icons/fi';
 
@@ -119,16 +120,6 @@ export default function EmployeeDashboard({ params }) {
       setSandwichWarning('');
     }
   }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.leaveType]);
-
-  // Lock body scroll when bulk override modal is open
-  useEffect(() => {
-    if (bulkOverrideModal) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
-  }, [bulkOverrideModal]);
 
   const handleSubmitLeave = async (e) => {
     e.preventDefault();
@@ -503,30 +494,7 @@ export default function EmployeeDashboard({ params }) {
           </div>
 
           {/* Bulk Override modal */}
-          {bulkOverrideModal && (
-            <div style={{
-              position: 'fixed', inset: 0, zIndex: 99998,
-              background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
-              display: 'grid', placeItems: 'center', padding: '24px',
-              animation: 'fadeIn 0.15s ease'
-            }}
-              onClick={() => setBulkOverrideModal(false)}
-            >
-              <div onClick={e => e.stopPropagation()}
-                style={{
-                  background: 'var(--surface)', borderRadius: '16px',
-                  border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)',
-                  padding: '24px', maxWidth: '420px', width: '100%',
-                  maxHeight: 'min(85vh, 500px)', overflowY: 'auto',
-                  animation: 'slideUp 0.2s ease'
-                }}
-              >
-                <div style={{
-                  fontSize: 'var(--fs-md)', fontWeight: 700, letterSpacing: '-0.02em',
-                  marginBottom: '16px'
-                }}>
-                  Manual Override
-                </div>
+          <Modal open={bulkOverrideModal} onClose={() => setBulkOverrideModal(false)} title="Manual Override" width="420px">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                     <div>
@@ -560,9 +528,7 @@ export default function EmployeeDashboard({ params }) {
                       onClick={() => { setBulkOverrideModal(false); }}>Cancel</button>
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
+      </Modal>
         </div>
       )}
 

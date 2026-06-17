@@ -7,6 +7,7 @@ import { getAllEmployees, addEmployee, deleteEmployee, deleteMonthRecord, update
 import { updateEmployeeDetails } from '../../actions/employees';
 import { getDepartments, addDepartment, deleteDepartment, getDesignations, addDesignation, deleteDesignation, setEmployeeManagers, getEmployeeManagers } from '../../actions/departments';
 import { useToast } from '../../components/Toast';
+import Modal from '../../components/Modal';
 import ConfirmModal from '../../components/ConfirmModal';
 import { FiPlus, FiTrash2 } from 'react-icons/fi';
 
@@ -504,17 +505,9 @@ export default function EmployeesPage() {
       )}
 
       {/* ── EDIT EMPLOYEE MODAL ── */}
-      {editEmp && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'grid', placeItems: 'center', padding: '20px' }} onClick={() => setEditEmp(null)}>
-          <div className="card" style={{ padding: '24px', maxWidth: '520px', width: '100%', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div>
-                <div style={{ fontSize: '16px', fontWeight: 700 }}>Edit Employee</div>
-                <div style={{ fontSize: '13px', color: 'var(--text2)', marginTop: '2px' }}>{editEmp.name} (#{editEmp.code})</div>
-              </div>
-              <button onClick={() => setEditEmp(null)} style={{ border: 'none', background: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--text2)', padding: '4px' }}>✕</button>
-            </div>
-            <form onSubmit={handleEditEmployee} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <Modal open={!!editEmp} onClose={() => setEditEmp(null)} title={`Edit — ${editEmp?.name || ''}`} width="520px">
+        <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '16px' }}>{editEmp?.name} (#{editEmp?.code})</div>
+        <form onSubmit={handleEditEmployee} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
                 <label className="input-label">Full Name</label>
                 <input className="input-field" value={editEmpForm.name} onChange={e => setEditEmpForm(f => ({ ...f, name: e.target.value }))} />
@@ -577,9 +570,7 @@ export default function EmployeesPage() {
                 <button type="button" className="btn btn-secondary" onClick={() => setEditEmp(null)}>Cancel</button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Confirm modal */}
       {confirmState.show && (
