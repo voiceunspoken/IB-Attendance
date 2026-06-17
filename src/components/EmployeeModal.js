@@ -20,11 +20,10 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
   // Lock body scroll when day detail modal is open
   useEffect(() => {
     if (popupDay) {
+      const prev = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
+      return () => { document.body.style.overflow = prev; };
     }
-    return () => { document.body.style.overflow = ''; };
   }, [popupDay]);
 
   if (!employee) return null;
@@ -491,20 +490,20 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
 
         {/* Day detail modal — centered overlay */}
         {popupContent && (
-          <div style={{
+          <div onClick={() => { setSelectedDay(null); setPopupDay(null); }}
+            onWheel={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()}
+            style={{
             position: 'fixed', inset: 0, zIndex: 99998,
             background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
             display: 'grid', placeItems: 'center', padding: '24px',
-            animation: 'fadeIn 0.15s ease'
-          }}
-            onClick={() => { setSelectedDay(null); setPopupDay(null); }}
-          >
+            overflow: 'hidden', animation: 'fadeIn 0.15s ease'
+          }}>
             <div onClick={e => e.stopPropagation()}
               style={{
                 background: 'var(--surface)', borderRadius: '16px',
                 border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)',
                 padding: '16px', maxWidth: '380px', width: '100%',
-                maxHeight: 'min(85vh, 600px)', overflowY: 'auto',
+                maxHeight: '100%', overflow: 'hidden',
                 animation: 'slideUp 0.2s ease',
               }}
             >
