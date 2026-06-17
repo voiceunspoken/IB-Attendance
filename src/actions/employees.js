@@ -2,6 +2,11 @@
 
 import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
+import sharp from 'sharp';
+import fs from 'fs';
+import path from 'path';
+
+const AVATAR_DIR = path.join(process.cwd(), 'public', 'uploads', 'avatars');
 
 export async function getEmployeeDetails(code) {
   return prisma.user.findUnique({
@@ -30,4 +35,28 @@ export async function updateEmployeeDetails(code, fields) {
   await prisma.user.update({ where: { code }, data });
   revalidatePath('/');
   return { success: true };
+}
+
+export async function uploadAvatar(code, base64Data) {
+  if (!base64Data) return { error: 'No image data provided.' };
+
+  const matches = base64Data.match(/^data:image\/(png|jpe?g|webp|gif);base64,(.+)$/);
+  if (!matches) return { error: 'Invalid image format. Use PNG, JPEG, WebP, or GIF.' };
+
+  const buffer = Buffer.from(matches[2], 'base64');
+  if (buffer.length > 5 * 1024 * 1024) return { error: 'Image too large. Max 5MB.' };
+
+  if (!fs.existsSync(AVATAR_DIR)) fs.mkdirSync(AVATAR_DIR, { recursive: true });
+
+  const outputPath = path.join(AVATAR_DIR, `${code}.webp`);
+  await sharp(buffer).resize(400, 400, { fit: 'cover', position: 'center' }).webp({ quality: 80 }).toFile(outputPath);
+
+  revalidatePath('/');
+  return { success: true, url: `/uploads/avatars/${code}.webp` };
+}
+
+export async function getAvatarUrl(code) {
+  const filePath = path.join(AVATAR_DIR, `${code}.webp`);
+  if (fs.existsSync(filePath)) return `/uploads/avatars/${code}.webp`;
+  return null;
 }

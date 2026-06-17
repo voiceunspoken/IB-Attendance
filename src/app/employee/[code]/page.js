@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../../components/AuthProvider';
 import { getEmployeeHistory, toggleOverride, clearAllOverrides } from '../../../actions/attendance';
+import { updateEmployeeDetails, uploadAvatar, getAvatarUrl } from '../../../actions/employees';
 import {
   getLeaveBalance, getLeaveRequests, submitLeaveRequest,
   getRegularizations, submitRegularization
@@ -14,7 +15,7 @@ import { requestAttendanceCorrection } from '../../../actions/attendanceChanges'
 import EmployeeModal from '../../../components/EmployeeModal';
 import Modal from '../../../components/Modal';
 import { useToast } from '../../../components/Toast';
-import { FiCalendar, FiFileText, FiTool, FiDownload, FiSearch, FiArrowLeft } from 'react-icons/fi';
+import { FiCalendar, FiFileText, FiTool, FiDownload, FiSearch, FiArrowLeft, FiUser, FiUpload, FiCamera } from 'react-icons/fi';
 
 const LEAVE_LABELS = { cl: 'Casual Leave', sl: 'Sick Leave', el: 'Earned Leave', rl: 'Restricted Leave', sh: 'Short Leave', ul: 'Unpaid Leave' };
 const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b', ul: '#8e8e93' };
@@ -50,6 +51,12 @@ export default function EmployeeDashboard({ params }) {
   const [rlHolidays, setRlHolidays] = useState([]);
   const [leaveBalanceDetail, setLeaveBalanceDetail] = useState(null);
   const [fetchTrigger, setFetchTrigger] = useState(0);
+  const [avatarUrl, setAvatarUrl] = useState(null);
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [profileBirthday, setProfileBirthday] = useState('');
+  const [savingBirthday, setSavingBirthday] = useState(false);
 
   // Bulk override state
   const [bulkOverrideFrom, setBulkOverrideFrom] = useState('');
@@ -69,8 +76,7 @@ export default function EmployeeDashboard({ params }) {
     if (!authLoading && isAuthenticated && !isAdmin && user?.code && user.code !== code) {
       router.push(`/employee/${user.code}`);
     }
-    if (isAdmin && tab !== 'attendance') setTab('attendance');
-  }, [isAuthenticated, isAdmin, user, authLoading, router, code, tab]);
+  }, [isAuthenticated, isAdmin, user, authLoading, router, code]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -88,6 +94,7 @@ export default function EmployeeDashboard({ params }) {
       ]);
       if (data) {
         setEmp(data);
+        setProfileBirthday(data.birthday ? new Date(data.birthday).toISOString().split('T')[0] : '');
         let ov = {};
         data.overrides.forEach(o => { ov[`${data.code}_${o.day}`] = o.type; });
         setOverrides(ov);
@@ -102,6 +109,7 @@ export default function EmployeeDashboard({ params }) {
       setLeaveRequests(requests);
       setRegularizations(regs);
       setUpcomingHolidays(holidays);
+      try { const url = await getAvatarUrl(code); setAvatarUrl(url); } catch { setAvatarUrl(null); }
     } catch {
       setEmp(null);
       setOverrides({});
@@ -255,6 +263,32 @@ export default function EmployeeDashboard({ params }) {
     setBulkOverrideFrom('');
     setBulkOverrideTo('');
     setBulkOverrideModal(false);
+  };
+
+  const handleSaveBirthday = async () => {
+    setSavingBirthday(true);
+    const result = await updateEmployeeDetails(code, { birthday: profileBirthday || null });
+    setSavingBirthday(false);
+    if (result.error) return toast.error(result.error);
+    toast.success('Birthday saved.');
+    setAvatarPreview(null);
+    setAvatarFile(null);
+  };
+
+  const handleUploadAvatar = async () => {
+    if (!avatarFile) return;
+    setUploadingAvatar(true);
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const result = await uploadAvatar(code, e.target.result);
+      setUploadingAvatar(false);
+      if (result.error) return toast.error(result.error);
+      setAvatarUrl(result.url);
+      setAvatarPreview(null);
+      setAvatarFile(null);
+      toast.success('Profile picture updated.');
+    };
+    reader.readAsDataURL(avatarFile);
   };
 
   const formatMonth = (my) => {
@@ -423,8 +457,8 @@ export default function EmployeeDashboard({ params }) {
       {/* Compact employee header */}
       <div style={{ padding: '10px 0', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: 'var(--surface3)', display: 'grid', placeItems: 'center', fontSize: '12px', fontWeight: 700, color: 'var(--text2)', flexShrink: 0 }}>
-            {emp.name.charAt(0)}
+          <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: 'var(--surface3)', display: 'grid', placeItems: 'center', fontSize: '12px', fontWeight: 700, color: 'var(--text2)', flexShrink: 0, overflow: 'hidden' }}>
+            {avatarUrl ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : emp.name.charAt(0)}
           </div>
           <span style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '-0.03em' }}>{emp.name}</span>
           <span style={{ fontSize: '10px', color: 'var(--text2)', fontFamily: 'monospace' }}>#{emp.code}</span>
@@ -460,109 +494,14 @@ export default function EmployeeDashboard({ params }) {
       </div>
       
 
-      {/* ── ATTENDANCE CONTENT ── */}
-      {tab === 'attendance' && (
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-          {/* Calendar header bar — month nav + KPIs + actions */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', flexShrink: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <button onClick={() => setSelectedMonthIndex(Math.max(0, selectedMonthIndex - 1))}
-                style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text2)', fontSize: '12px', lineHeight: 1 }}
-                disabled={selectedMonthIndex === 0}>◀</button>
-              <span style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '-0.03em' }}>
-                {formatMonth(currentRecord.monthYear)}
-              </span>
-              <button onClick={() => setSelectedMonthIndex(Math.min(emp.records.length - 1, selectedMonthIndex + 1))}
-                style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text2)', fontSize: '12px', lineHeight: 1 }}
-                disabled={selectedMonthIndex === emp.records.length - 1}>▶</button>
-            </div>
-            <div style={{ flex: 1, display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-evenly', fontSize: '11px', color: 'var(--text2)' }}>
-              {kpiStats.map(s => (
-                <span key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                  <span style={{ fontWeight: 700, color: s.color }}>{s.val}</span>
-                  <span>{s.label}</span>
-                </span>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-              {isAdmin && (
-                <button className="btn btn-secondary" style={{ fontSize: '10px', padding: '4px 10px' }}
-                  onClick={() => setBulkOverrideModal(true)}>
-                  Override
-                </button>
-              )}
-              <button className="btn btn-outline" style={{ fontSize: '10px', padding: '4px 10px' }}
-                onClick={() => downloadPDF(currentRecord, emp, currentMonthOverrides)}>
-                <FiDownload size={10} /> PDF
-              </button>
-            </div>
-          </div>
-
-          {/* Calendar */}
-          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-            <EmployeeModal
-              employee={formattedEmployee}
-              currentMonth={modalCurrentMonth}
-              overrides={currentMonthOverrides}
-              onClose={() => {}}
-              onApplyOverride={handleApplyOverride}
-              onRemoveOverride={handleRemoveOverride}
-              onClearAllOverrides={handleClearAllOverrides}
-              readOnly={!isAdmin}
-              onProposeCorrection={isAdmin ? handleProposeCorrection : undefined}
-              rlEligibleDays={rlHolidays}
-              mode="inline"
-            />
-          </div>
-
-          {/* Bulk Override modal */}
-          <Modal open={bulkOverrideModal} onClose={() => setBulkOverrideModal(false)} title="Manual Override" width="420px">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <div>
-                      <label className="input-label">From Date</label>
-                      <input type="number" min="1" max="31" placeholder="5" value={bulkOverrideFrom}
-                        onChange={e => setBulkOverrideFrom(e.target.value)} className="input-field"
-                        style={{ padding: '8px 10px' }} />
-                    </div>
-                    <div>
-                      <label className="input-label">To Date</label>
-                      <input type="number" min="1" max="31" placeholder="same" value={bulkOverrideTo}
-                        onChange={e => setBulkOverrideTo(e.target.value)} className="input-field"
-                        style={{ padding: '8px 10px' }} />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="input-label">Type</label>
-                    <select value={bulkOverrideType} onChange={e => setBulkOverrideType(e.target.value)}
-                      className="input-field" style={{ padding: '8px 10px' }}>
-                      <option value="wfm">WFM — Full Day</option>
-                      <option value="wfm-hd">WFM — Half Day</option>
-                      <option value="wfh">WFH</option>
-                      <option value="wos">WOS — Full Day</option>
-                      <option value="wos-hd">WOS — Half Day</option>
-                    </select>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                    <button className="btn btn-primary" style={{ flex: 1, padding: '9px', opacity: bulkLoading ? 0.7 : 1 }}
-                      disabled={bulkLoading}
-                      onClick={() => handleBulkOverride()}>{bulkLoading ? 'Applying…' : 'Apply'}</button>
-                    <button className="btn btn-secondary" style={{ flex: 1, padding: '9px' }}
-                      onClick={() => { setBulkOverrideModal(false); }}>Cancel</button>
-                  </div>
-                </div>
-      </Modal>
-        </div>
-      )}
-
-      {/* ── NON-ADMIN: sidebar tabs + content ── */}
-      {!isAdmin && (
+      {/* ── SIDEBAR + CONTENT ── */}
         <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '18px', alignItems: 'start', marginTop: '20px' }}>
           <div className="card" style={{ padding: '6px' }}>
             {[
               { key: 'attendance', label: 'Attendance', icon: <FiCalendar size={14} /> },
               { key: 'leaves', label: 'Leave Requests', icon: <FiFileText size={14} /> },
               { key: 'regularize', label: 'Regularization', icon: <FiTool size={14} /> },
+              { key: 'profile', label: 'Profile', icon: <FiUser size={14} /> },
             ].map(t => (
               <button key={t.key} onClick={() => setTab(t.key)} style={{
                 width: '100%', padding: '10px 14px', borderRadius: '7px', fontSize: '13px',
@@ -577,6 +516,98 @@ export default function EmployeeDashboard({ params }) {
           </div>
 
           <div>
+            {/* ── ATTENDANCE TAB ── */}
+            {tab === 'attendance' && (
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <button onClick={() => setSelectedMonthIndex(Math.max(0, selectedMonthIndex - 1))}
+                      style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text2)', fontSize: '12px', lineHeight: 1 }}
+                      disabled={selectedMonthIndex === 0}>◀</button>
+                    <span style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '-0.03em' }}>
+                      {formatMonth(currentRecord.monthYear)}
+                    </span>
+                    <button onClick={() => setSelectedMonthIndex(Math.min(emp.records.length - 1, selectedMonthIndex + 1))}
+                      style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text2)', fontSize: '12px', lineHeight: 1 }}
+                      disabled={selectedMonthIndex === emp.records.length - 1}>▶</button>
+                  </div>
+                  <div style={{ flex: 1, display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-evenly', fontSize: '11px', color: 'var(--text2)' }}>
+                    {kpiStats.map(s => (
+                      <span key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                        <span style={{ fontWeight: 700, color: s.color }}>{s.val}</span>
+                        <span>{s.label}</span>
+                      </span>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    {isAdmin && (
+                      <button className="btn btn-secondary" style={{ fontSize: '10px', padding: '4px 10px' }}
+                        onClick={() => setBulkOverrideModal(true)}>
+                        Override
+                      </button>
+                    )}
+                    <button className="btn btn-outline" style={{ fontSize: '10px', padding: '4px 10px' }}
+                      onClick={() => downloadPDF(currentRecord, emp, currentMonthOverrides)}>
+                      <FiDownload size={10} /> PDF
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                  <EmployeeModal
+                    employee={formattedEmployee}
+                    currentMonth={modalCurrentMonth}
+                    overrides={currentMonthOverrides}
+                    onClose={() => {}}
+                    onApplyOverride={handleApplyOverride}
+                    onRemoveOverride={handleRemoveOverride}
+                    onClearAllOverrides={handleClearAllOverrides}
+                    readOnly={!isAdmin}
+                    onProposeCorrection={isAdmin ? handleProposeCorrection : undefined}
+                    rlEligibleDays={rlHolidays}
+                    mode="inline"
+                  />
+                </div>
+
+                <Modal open={bulkOverrideModal} onClose={() => setBulkOverrideModal(false)} title="Manual Override" width="420px">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <div>
+                        <label className="input-label">From Date</label>
+                        <input type="number" min="1" max="31" placeholder="5" value={bulkOverrideFrom}
+                          onChange={e => setBulkOverrideFrom(e.target.value)} className="input-field"
+                          style={{ padding: '8px 10px' }} />
+                      </div>
+                      <div>
+                        <label className="input-label">To Date</label>
+                        <input type="number" min="1" max="31" placeholder="same" value={bulkOverrideTo}
+                          onChange={e => setBulkOverrideTo(e.target.value)} className="input-field"
+                          style={{ padding: '8px 10px' }} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="input-label">Type</label>
+                      <select value={bulkOverrideType} onChange={e => setBulkOverrideType(e.target.value)}
+                        className="input-field" style={{ padding: '8px 10px' }}>
+                        <option value="wfm">WFM — Full Day</option>
+                        <option value="wfm-hd">WFM — Half Day</option>
+                        <option value="wfh">WFH</option>
+                        <option value="wos">WOS — Full Day</option>
+                        <option value="wos-hd">WOS — Half Day</option>
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                      <button className="btn btn-primary" style={{ flex: 1, padding: '9px', opacity: bulkLoading ? 0.7 : 1 }}
+                        disabled={bulkLoading}
+                        onClick={() => handleBulkOverride()}>{bulkLoading ? 'Applying…' : 'Apply'}</button>
+                      <button className="btn btn-secondary" style={{ flex: 1, padding: '9px' }}
+                        onClick={() => { setBulkOverrideModal(false); }}>Cancel</button>
+                    </div>
+                  </div>
+                </Modal>
+              </div>
+            )}
+
             {/* ── LEAVE REQUESTS TAB ── */}
             {tab === 'leaves' && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}>
@@ -824,9 +855,72 @@ export default function EmployeeDashboard({ params }) {
                   </div>
                 </div>
               )}
+              {tab === 'profile' && (
+                <div className="card" style={{ padding: '22px 24px', maxWidth: '500px' }}>
+                  <div style={{ fontSize: '15px', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '16px' }}>My Profile</div>
+
+                  {/* Read-only info */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', background: 'var(--surface2)', borderRadius: '10px', padding: '14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                      <span style={{ color: 'var(--text2)' }}>Name</span>
+                      <span style={{ fontWeight: 600 }}>{emp.name}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                      <span style={{ color: 'var(--text2)' }}>Code</span>
+                      <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>#{emp.code}</span>
+                    </div>
+                    {emp.department && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                      <span style={{ color: 'var(--text2)' }}>Department</span>
+                      <span style={{ fontWeight: 600 }}>{emp.department.name}</span>
+                    </div>}
+                    {emp.designation && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                      <span style={{ color: 'var(--text2)' }}>Designation</span>
+                      <span style={{ fontWeight: 600 }}>{emp.designation.name}</span>
+                    </div>}
+                  </div>
+
+                  {/* Birthday */}
+                  <div style={{ marginBottom: '20px' }}>
+                    <label className="input-label">Birthday</label>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '6px' }}>
+                      <input className="input-field" type="date" style={{ flex: 1, padding: '8px 12px' }}
+                        value={profileBirthday}
+                        onChange={e => setProfileBirthday(e.target.value)} />
+                      <button className="btn btn-primary" style={{ padding: '8px 18px', fontSize: '13px', opacity: savingBirthday ? 0.7 : 1 }}
+                        disabled={savingBirthday}
+                        onClick={handleSaveBirthday}>{savingBirthday ? 'Saving…' : 'Save'}</button>
+                    </div>
+                  </div>
+
+                  {/* Avatar upload */}
+                  <div>
+                    <label className="input-label">Profile Picture</label>
+                    <div style={{ display: 'flex', gap: '14px', alignItems: 'center', marginTop: '8px' }}>
+                      <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'var(--surface3)', display: 'grid', placeItems: 'center', fontSize: '20px', fontWeight: 700, color: 'var(--text2)', overflow: 'hidden', flexShrink: 0 }}>
+                        {avatarUrl ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <FiCamera size={20} />}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <input type="file" accept="image/png,image/jpeg,image/webp" style={{ fontSize: '12px', marginBottom: '8px', display: 'block' }}
+                          onChange={e => {
+                            const f = e.target.files?.[0];
+                            if (f) {
+                              setAvatarFile(f);
+                              const reader = new FileReader();
+                              reader.onload = () => setAvatarPreview(reader.result);
+                              reader.readAsDataURL(f);
+                            }
+                          }} />
+                        {avatarPreview && <div style={{ fontSize: '11px', color: 'var(--text2)', marginBottom: '6px' }}>Preview ready</div>}
+                        <button className="btn btn-outline" style={{ padding: '6px 14px', fontSize: '12px', opacity: uploadingAvatar ? 0.7 : 1 }}
+                          disabled={!avatarFile || uploadingAvatar}
+                          onClick={handleUploadAvatar}>{uploadingAvatar ? 'Uploading…' : <><FiUpload size={12} style={{ marginRight: '4px' }} /> Upload</>}</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        )}
-    </div>
+        </div>
   );
 }
