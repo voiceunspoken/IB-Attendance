@@ -1,4 +1,5 @@
 "use client";
+import { FiCheck } from 'react-icons/fi';
 
 const getMonthSuffix = (d) => {
   if (d > 3 && d < 21) return 'th';
@@ -81,7 +82,7 @@ export default function EmployeeTable({ results, onOpenDetail, currentPage, setC
     if (r.punchMissing >= 3) return s('rgba(255,107,53,0.12)', '#c04a1a', 'No Punch', '⚠');
     if (r.absent >= 8) return s('rgba(255,59,48,0.1)', '#c0392b', 'High Absent', '🔴');
     if (r.lateHD + r.ssHD > 1) return s('rgba(255,159,10,0.12)', '#b36200', 'HD Ded', '🟡');
-    if (r.absent === 0 && r.lateHD === 0 && r.punchMissing === 0) return s('rgba(52,199,89,0.1)', '#1a7f37', 'Clean', '✅');
+    if (r.absent === 0 && r.lateHD === 0 && r.punchMissing === 0) return s('rgba(52,199,89,0.1)', '#1a7f37', 'Clean', <FiCheck size={10} />);
     return s('rgba(0,0,0,0.05)', 'var(--text2)', 'Normal', '—');
   };
 

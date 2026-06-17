@@ -3,6 +3,7 @@
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useAuth } from '../../../components/AuthProvider';
 import { getEmployeeHistory, toggleOverride, clearAllOverrides } from '../../../actions/attendance';
 import { updateEmployeeDetails, uploadAvatar, getAvatarUrl } from '../../../actions/employees';
@@ -15,7 +16,7 @@ import { requestAttendanceCorrection } from '../../../actions/attendanceChanges'
 import EmployeeModal from '../../../components/EmployeeModal';
 import Modal from '../../../components/Modal';
 import { useToast } from '../../../components/Toast';
-import { FiCalendar, FiFileText, FiTool, FiDownload, FiSearch, FiArrowLeft, FiUser, FiUpload, FiCamera } from 'react-icons/fi';
+import { FiCalendar, FiFileText, FiTool, FiDownload, FiSearch, FiArrowLeft, FiUser, FiUpload, FiCamera, FiAlertTriangle, FiSun } from 'react-icons/fi';
 
 const LEAVE_LABELS = { cl: 'Casual Leave', sl: 'Sick Leave', el: 'Earned Leave', rl: 'Restricted Leave', sh: 'Short Leave', ul: 'Unpaid Leave' };
 const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b', ul: '#8e8e93' };
@@ -101,7 +102,7 @@ export default function EmployeeDashboard({ params }) {
         const restricted = allHolidays.filter(h => h.isRestricted || h.type === 'optional');
         const empBirthday = data.birthday ? { month: new Date(data.birthday).getMonth() + 1, day: new Date(data.birthday).getDate() } : null;
         setRlHolidays(restricted.map(h => ({ ...h, isBirthday: false })).concat(
-          empBirthday ? [{ month: empBirthday.month, day: empBirthday.day, name: '🎂 Birthday', type: 'optional', isBirthday: true }] : []
+          empBirthday ? [{ month: empBirthday.month, day: empBirthday.day, name: 'Birthday', type: 'optional', isBirthday: true }] : []
         ));
       }
       setLeaveBalance(balance);
@@ -458,7 +459,7 @@ export default function EmployeeDashboard({ params }) {
       <div style={{ padding: '10px 0', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: 'var(--surface3)', display: 'grid', placeItems: 'center', fontSize: '12px', fontWeight: 700, color: 'var(--text2)', flexShrink: 0, overflow: 'hidden' }}>
-            {avatarUrl ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : emp.name.charAt(0)}
+            {avatarUrl ? <Image src={avatarUrl} alt="" fill style={{ objectFit: 'cover' }} sizes="28px" /> : emp.name.charAt(0)}
           </div>
           <span style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '-0.03em' }}>{emp.name}</span>
           <span style={{ fontSize: '10px', color: 'var(--text2)', fontFamily: 'monospace' }}>#{emp.code}</span>
@@ -692,7 +693,7 @@ export default function EmployeeDashboard({ params }) {
                       }}>
                         <input type="radio" name="shiftSlot" value={slot} checked={leaveForm.shiftSlot === slot}
                           onChange={e => setLeaveForm(f => ({ ...f, shiftSlot: e.target.value }))} style={{ display: 'none' }} />
-                        <div>{slot === '10-12' ? '🌅 10:00 AM – 12:00 PM' : '🌆 5:00 PM – 7:00 PM'}</div>
+                        <div>{slot === '10-12' ? <><FiSun size={11} style={{ verticalAlign: 'middle', marginRight: '2px' }} /> 10:00 AM – 12:00 PM</> : <><FiSun size={11} style={{ verticalAlign: 'middle', marginRight: '2px' }} /> 5:00 PM – 7:00 PM</>}</div>
                       </label>
                     ))}
                   </div>
@@ -780,7 +781,7 @@ export default function EmployeeDashboard({ params }) {
                     </div>
                     {r.sandwichCount > 0 && (
                       <div style={{ fontSize: '11px', color: 'var(--orange)', marginBottom: '2px', fontWeight: 500 }}>
-                        🥪 {r.sandwichCount === 1 ? '1st sandwich' : `${r.sandwichCount} sandwich`} leave
+                        <FiAlertTriangle size={11} style={{ marginRight: '2px', verticalAlign: 'middle' }} /> {r.sandwichCount === 1 ? '1st sandwich' : `${r.sandwichCount} sandwich`} leave
                       </div>
                     )}
                     <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
@@ -897,7 +898,7 @@ export default function EmployeeDashboard({ params }) {
                     <label className="input-label">Profile Picture</label>
                     <div style={{ display: 'flex', gap: '14px', alignItems: 'center', marginTop: '8px' }}>
                       <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'var(--surface3)', display: 'grid', placeItems: 'center', fontSize: '20px', fontWeight: 700, color: 'var(--text2)', overflow: 'hidden', flexShrink: 0 }}>
-                        {avatarUrl ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <FiCamera size={20} />}
+                        {avatarUrl ? <Image src={avatarUrl} alt="" fill style={{ objectFit: 'cover' }} sizes="56px" /> : <FiCamera size={20} />}
                       </div>
                       <div style={{ flex: 1 }}>
                         <input type="file" accept="image/png,image/jpeg,image/webp" style={{ fontSize: '12px', marginBottom: '8px', display: 'block' }}

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
 import { useToast } from '../../components/Toast';
-import { FiClipboard } from 'react-icons/fi';
+import { FiClipboard, FiAlertTriangle } from 'react-icons/fi';
 import {
   getAllLeaveRequests, reviewLeaveRequest,
   getAllPendingRegularizations, reviewRegularization,
@@ -281,7 +281,7 @@ export default function LeavesPage() {
                   </div>
                   {r.sandwichCount > 0 && (
                     <div style={{ fontSize: '11px', color: 'var(--orange)', marginBottom: '2px', fontWeight: 500 }}>
-                      🥪 {r.sandwichCount === 1 ? '1st sandwich' : `${r.sandwichCount} sandwich`} leave
+                      <FiAlertTriangle size={11} style={{ marginRight: '2px', verticalAlign: 'middle' }} /> {r.sandwichCount === 1 ? '1st sandwich' : `${r.sandwichCount} sandwich`} leave
                     </div>
                   )}
                   <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
@@ -320,7 +320,7 @@ export default function LeavesPage() {
                     </div>
                     {r.sandwichCount > 0 && (
                       <div style={{ fontSize: '11px', color: 'var(--orange)', marginBottom: '2px', fontWeight: 500 }}>
-                        🥪 {r.sandwichCount === 1 ? '1st sandwich' : `${r.sandwichCount} sandwich`} leave
+                        <FiAlertTriangle size={11} style={{ marginRight: '2px', verticalAlign: 'middle' }} /> {r.sandwichCount === 1 ? '1st sandwich' : `${r.sandwichCount} sandwich`} leave
                       </div>
                     )}
                     <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
@@ -371,7 +371,7 @@ export default function LeavesPage() {
                       </div>
                       {r.sandwichCount > 0 && (
                         <div style={{ fontSize: '11px', color: 'var(--orange)', marginBottom: '2px', fontWeight: 500 }}>
-                          🥪 {r.sandwichCount === 1 ? '1st sandwich' : `${r.sandwichCount} sandwich`} leave
+                          <FiAlertTriangle size={11} style={{ marginRight: '2px', verticalAlign: 'middle' }} /> {r.sandwichCount === 1 ? '1st sandwich' : `${r.sandwichCount} sandwich`} leave
                         </div>
                       )}
                       <div style={{ fontSize: '12px', color: 'var(--text2)' }}>

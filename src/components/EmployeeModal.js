@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { FiX, FiMonitor, FiHome, FiBriefcase, FiClock } from 'react-icons/fi';
+import { FiX, FiMonitor, FiHome, FiBriefcase, FiClock, FiGift, FiCheck } from 'react-icons/fi';
 import { useToast } from './Toast';
 
 export default function EmployeeModal({ employee, currentMonth, overrides, onClose, onApplyOverride, onRemoveOverride, onClearAllOverrides, readOnly = false, onProposeCorrection, rlEligibleDays = [], mode = 'modal' }) {
@@ -161,14 +161,15 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
 
         if (rlDay && info.type !== 'rl' && info.type !== 'holiday' && info.type !== 'wo') {
           outline = '2px dashed rgba(175,82,222,0.5)';
-          if (rlDay.isBirthday) label = label ? `${label} 🎂` : '🎂';
-          else label = label ? `${label} ✅` : '✅';
+          if (rlDay.isBirthday) label = label ? `${label} ` : '';
+          else label = label ? `${label} ` : '';
         }
       }
 
       const isSelected = d === selectedDay;
       const isInteractive = cursor === 'pointer';
-      const ariaLabel = `Day ${d}, ${label || (info?.type || '')}, ${isSelected ? 'selected' : ''}`.trim();
+      const ariaLabelSuffix = isSelected ? ', selected' : '';
+      const ariaLabel = rlDay?.isBirthday ? `Day ${d}, Birthday${ariaLabelSuffix}` : `Day ${d}, ${label || (info?.type || '')}${ariaLabelSuffix}`.trim();
 
       cells.push(
         <button
@@ -205,7 +206,10 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
             }} />
           )}
           <span style={{ fontWeight: 700, fontSize: '11px', color: 'var(--text)' }}>{d}</span>
-          <span style={{ fontSize: '8px', fontWeight: 600, color: 'var(--text2)', letterSpacing: '0.01em' }}>{label}</span>
+          <span style={{ fontSize: '8px', fontWeight: 600, color: 'var(--text2)', letterSpacing: '0.01em', display: 'flex', alignItems: 'center', gap: '2px' }}>
+            {rlDay?.isBirthday ? <FiGift size={8} /> : rlDay && !rlDay.isBirthday ? <FiCheck size={8} /> : null}
+            {label}
+          </span>
         </button>
       );
     }

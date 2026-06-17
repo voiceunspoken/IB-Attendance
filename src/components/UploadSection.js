@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import { FiClock, FiZap, FiHome, FiCalendar, FiFolder, FiBarChart2 } from 'react-icons/fi';
 
 export default function UploadSection({ onFileSelected }) {
   const [isDragOver, setIsDragOver] = useState(false);
@@ -33,28 +34,28 @@ export default function UploadSection({ onFileSelected }) {
 
   const rules = [
     {
-      icon: '⏰',
+      icon: <FiClock size={18} />,
       color: '#ff9f0a',
       bg: 'rgba(255,159,10,0.1)',
       title: 'Shift Timing',
       desc: '10:00 AM – 7:00 PM with a 15-min grace window. Marked late after 10:15 AM. Every 3 lates = 1 HD deduction.',
     },
     {
-      icon: '⚡',
+      icon: <FiZap size={18} />,
       color: '#af52de',
       bg: 'rgba(175,82,222,0.1)',
       title: 'Short Shift',
       desc: 'Minimum 9 hrs required per day. Every 3 short shifts = 1 HD deduction. Not counted if already marked Late.',
     },
     {
-      icon: '🏛️',
+      icon: <FiHome size={18} />,
       color: '#34c759',
       bg: 'rgba(52,199,89,0.1)',
       title: 'WFM / WFH / WOS',
       desc: 'Override any day as Work From Ministry, Work From Home, or Work On Site — full or half day.',
     },
     {
-      icon: '📅',
+      icon: <FiCalendar size={18} />,
       color: '#0071e3',
       bg: 'rgba(0,113,227,0.1)',
       title: 'Holidays & RL',
@@ -94,7 +95,7 @@ export default function UploadSection({ onFileSelected }) {
               fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--blue)',
               letterSpacing: '0.04em', textTransform: 'uppercase',
             }}>
-              <span>📂</span> Monthly Upload
+              <FiFolder size={14} style={{ marginRight: '4px' }} /> Monthly Upload
             </div>
             <h1 style={{
               fontSize: 'clamp(26px, 3.5vw, 44px)',
@@ -162,7 +163,7 @@ export default function UploadSection({ onFileSelected }) {
               boxShadow: isDragOver ? '0 8px 24px rgba(0,113,227,0.3)' : 'var(--shadow-sm)',
               transform: isDragOver ? 'scale(1.08) translateY(-2px)' : 'scale(1)',
             }}>
-              📊
+              <FiBarChart2 size={32} />
             </div>
 
             <div style={{
@@ -229,7 +230,7 @@ export default function UploadSection({ onFileSelected }) {
                 display: 'grid', placeItems: 'center',
                 fontSize: '17px',
               }}>
-                {item.icon}
+                  {item.icon}
               </div>
               <div>
                 <div style={{
