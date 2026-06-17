@@ -2,18 +2,30 @@
 
 import { useAuth } from './AuthProvider';
 import { useRouter, usePathname } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { checkIsManager } from '../actions/manager';
 
 export default function Sidebar({ open, onClose, isMobile }) {
   const { user, isAdmin, isSuperAdmin, logout } = useAuth();
+  const [isManager, setIsManager] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
-  const navLinks = isAdmin ? [
+  useEffect(() => {
+    if (!user?.code || isAdmin) return;
+    checkIsManager(user.code).then(setIsManager);
+  }, [user?.code, isAdmin]);
+
+  const baseLinks = isAdmin ? [
     { label: 'Dashboard', path: '/' },
     { label: 'Attendance', path: '/attendance' },
     { label: 'Team', path: '/team' },
     { label: 'Leaves', path: '/leaves' },
     { label: 'Settings', path: '/settings' },
+  ] : isManager ? [
+    { label: 'Dashboard', path: '/' },
+    { label: 'My Team', path: '/team/manage' },
+    { label: 'Leaves', path: '/leaves' },
   ] : [];
 
   const roleLabel = isSuperAdmin ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'Employee';
@@ -78,7 +90,7 @@ export default function Sidebar({ open, onClose, isMobile }) {
 
         {/* Nav links */}
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '12px 12px', flex: 1 }}>
-          {navLinks.map(link => {
+          {baseLinks.map(link => {
             const active = pathname === link.path;
             return (
               <button
