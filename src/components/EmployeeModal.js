@@ -504,6 +504,7 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
                 background: 'var(--surface)', borderRadius: '16px',
                 border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)',
                 padding: '16px', maxWidth: '380px', width: '100%',
+                maxHeight: 'min(85vh, 600px)', overflowY: 'auto',
                 animation: 'slideUp 0.2s ease',
               }}
             >

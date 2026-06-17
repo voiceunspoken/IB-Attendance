@@ -38,6 +38,13 @@ export default function EmployeesPage() {
   const [editRecord, setEditRecord] = useState({ empCode: '', monthYear: '', present: '', absent: '', late: '', lateHD: '', shortShift: '', ssHD: '', rl: '', holi: '' });
   const [editRecordMsg, setEditRecordMsg] = useState('');
 
+  // Pagination
+  const [empPage, setEmpPage] = useState(1);
+  const pageSize = 20;
+  const paginatedEmployees = employees.slice((empPage - 1) * pageSize, empPage * pageSize);
+  const totalEmpPages = Math.ceil(employees.length / pageSize);
+  useEffect(() => { setEmpPage(1); }, [employees.length]);
+
   // Department form
   const [deptForm, setDeptForm] = useState({ name: '' });
   const [deptMsg, setDeptMsg] = useState('');
@@ -295,7 +302,7 @@ export default function EmployeesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {employees.map(emp => (
+                  {paginatedEmployees.map(emp => (
                     <tr key={emp.code} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td style={{ ...tblCell, color: 'var(--text2)', fontSize: '12px', fontFamily: 'monospace' }}>{emp.code}</td>
                       <td style={{ ...tblCell, fontWeight: 500 }}>{emp.name}</td>
@@ -318,6 +325,21 @@ export default function EmployeesPage() {
                 </tbody>
               </table>
             </div>
+            {totalEmpPages > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '4px', padding: '12px 18px', borderTop: '1px solid var(--border)' }}>
+                <button disabled={empPage <= 1} onClick={() => setEmpPage(p => Math.max(1, p - 1))}
+                  style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: empPage <= 1 ? 'var(--text3)' : 'var(--text)', cursor: empPage <= 1 ? 'default' : 'pointer', fontFamily: 'inherit', fontSize: '12px' }}>Prev</button>
+                {Array.from({ length: Math.min(totalEmpPages, 10) }, (_, i) => {
+                  const start = Math.max(1, Math.min(empPage - 5, totalEmpPages - 9));
+                  return start + i;
+                }).map(p => (
+                  <button key={p} onClick={() => setEmpPage(p)}
+                    style={{ padding: '4px 10px', borderRadius: '6px', border: p === empPage ? '1px solid var(--blue)' : '1px solid var(--border)', background: p === empPage ? 'rgba(0,113,227,0.1)' : 'transparent', color: p === empPage ? 'var(--blue)' : 'var(--text2)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: p === empPage ? 600 : 400 }}>{p}</button>
+                ))}
+                <button disabled={empPage >= totalEmpPages} onClick={() => setEmpPage(p => Math.min(totalEmpPages, p + 1))}
+                  style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: empPage >= totalEmpPages ? 'var(--text3)' : 'var(--text)', cursor: empPage >= totalEmpPages ? 'default' : 'pointer', fontFamily: 'inherit', fontSize: '12px' }}>Next</button>
+              </div>
+            )}
           </div>
         </div>
       )}

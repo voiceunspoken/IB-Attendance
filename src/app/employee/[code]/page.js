@@ -517,6 +517,7 @@ export default function EmployeeDashboard({ params }) {
                   background: 'var(--surface)', borderRadius: '16px',
                   border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)',
                   padding: '24px', maxWidth: '420px', width: '100%',
+                  maxHeight: 'min(85vh, 500px)', overflowY: 'auto',
                   animation: 'slideUp 0.2s ease'
                 }}
               >

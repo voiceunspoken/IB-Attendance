@@ -43,7 +43,7 @@ function Modal({ open, onClose, title, children }) {
     <div onClick={onClose} style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200,
       display: 'grid', placeItems: 'center', backdropFilter: 'blur(10px)',
-      WebkitBackdropFilter: 'blur(10px)',
+      WebkitBackdropFilter: 'blur(10px)', padding: '24px',
     }}>
       <div onClick={e => e.stopPropagation()} className="card" style={{
         width: '440px', maxWidth: '92vw', padding: '28px',
@@ -104,7 +104,14 @@ export default function UsersPage() {
 
   const [userSearch, setUserSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+  const [userPage, setUserPage] = useState(1);
+  const pageSize = 20;
   const [confirmState, setConfirmState] = useState({ show: false, message: '', onConfirm: null, confirmLabel: null, confirmLoadingLabel: null, variant: null });
+  const [showPromoteModal, setShowPromoteModal] = useState(false);
+  const [promoteUserId, setPromoteUserId] = useState('');
+  const [promoteRole, setPromoteRole] = useState('admin');
+  const [promoteResult, setPromoteResult] = useState('');
+  const [promoting, setPromoting] = useState(false);
   const [fetchTrigger, setFetchTrigger] = useState(0);
 
   useEffect(() => {
@@ -127,6 +134,7 @@ export default function UsersPage() {
     })();
   }, [isAdmin, isSuperAdmin, fetchTrigger]);
 
+  useEffect(() => { setUserPage(1); }, [userSearch, roleFilter]);
   const filteredUsers = useMemo(() => {
     return users.filter(u => {
       const q = userSearch.toLowerCase();
@@ -135,6 +143,8 @@ export default function UsersPage() {
       return true;
     });
   }, [users, userSearch, roleFilter]);
+  const paginatedUsers = filteredUsers.slice((userPage - 1) * pageSize, userPage * pageSize);
+  const totalUserPages = Math.ceil(filteredUsers.length / pageSize);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -218,6 +228,20 @@ export default function UsersPage() {
 
   const handleReview = async (changeId, approve) => {
     await reviewPendingChange(changeId, user.username, approve);
+    setFetchTrigger(t => t + 1);
+  };
+
+  const handleQuickPromote = async (e) => {
+    e.preventDefault();
+    if (!promoteUserId) return;
+    setPromoting(true);
+    setPromoteResult('');
+    const target = users.find(x => x.id === promoteUserId);
+    const result = await promoteToAdmin(promoteUserId, promoteRole, user.username);
+    setPromoting(false);
+    if (result.error) return setPromoteResult(result.error);
+    setPromoteResult(`"${target?.name || target?.username}" promoted to ${promoteRole === 'super_admin' ? 'Super Admin' : 'Admin'}.`);
+    setPromoteUserId('');
     setFetchTrigger(t => t + 1);
   };
 
@@ -378,6 +402,10 @@ export default function UsersPage() {
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button onClick={() => { setPromoteUserId(''); setPromoteRole('admin'); setPromoteResult(''); setShowPromoteModal(true); }}
+                    style={{ padding: '6px 12px', borderRadius: '980px', border: '1px solid rgba(0,113,227,0.2)', background: 'rgba(0,113,227,0.06)', color: 'var(--blue)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, fontSize: 'var(--fs-xs)', whiteSpace: 'nowrap', transition: 'all 0.15s' }}>
+                    + Promote
+                  </button>
                   <select className="input-field" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}
                     style={{ width: 'auto', minWidth: '110px', padding: '6px 10px', fontSize: 'var(--fs-xs)' }}>
                     <option value="all">All roles</option>
@@ -399,7 +427,7 @@ export default function UsersPage() {
               ) : filteredUsers.length === 0 ? (
                 <div style={{ padding: '36px', textAlign: 'center', color: 'var(--text2)', fontSize: 'var(--fs-sm)' }}>No accounts match your search.</div>
               ) : (
-                <div style={{ overflowX: 'auto' }}>
+                <><div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr>
@@ -409,7 +437,7 @@ export default function UsersPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredUsers.map(u => (
+                      {paginatedUsers.map(u => (
                         <tr key={u.id}
                           onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
                           onMouseLeave={e => e.currentTarget.style.background = ''}>
@@ -457,6 +485,18 @@ export default function UsersPage() {
                     </tbody>
                   </table>
                 </div>
+                {totalUserPages > 1 && (
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '4px', padding: '12px 18px', borderTop: '1px solid var(--border)' }}>
+                    <button disabled={userPage <= 1} onClick={() => setUserPage(p => Math.max(1, p - 1))}
+                      style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: userPage <= 1 ? 'var(--text3)' : 'var(--text)', cursor: userPage <= 1 ? 'default' : 'pointer', fontFamily: 'inherit', fontSize: '12px' }}>Prev</button>
+                    {Array.from({ length: totalUserPages }, (_, i) => i + 1).map(p => (
+                      <button key={p} onClick={() => setUserPage(p)}
+                        style={{ padding: '4px 10px', borderRadius: '6px', border: p === userPage ? '1px solid var(--blue)' : '1px solid var(--border)', background: p === userPage ? 'rgba(0,113,227,0.1)' : 'transparent', color: p === userPage ? 'var(--blue)' : 'var(--text2)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: p === userPage ? 600 : 400 }}>{p}</button>
+                    ))}
+                    <button disabled={userPage >= totalUserPages} onClick={() => setUserPage(p => Math.min(totalUserPages, p + 1))}
+                      style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: userPage >= totalUserPages ? 'var(--text3)' : 'var(--text)', cursor: userPage >= totalUserPages ? 'default' : 'pointer', fontFamily: 'inherit', fontSize: '12px' }}>Next</button>
+                  </div>
+                )}</>
               )}
             </div>
           </div>
@@ -566,17 +606,53 @@ export default function UsersPage() {
           <div>
             <label className="input-label">Employee Code</label>
             <input className="input-field" placeholder="e.g. 1042" value={editFields.code}
-              onChange={e => setEditFields(f => ({ ...f, code: e.target.value }))} />
+              disabled style={{ opacity: 0.6, cursor: 'not-allowed' }} />
           </div>
           <div>
             <label className="input-label">Full Name</label>
             <input className="input-field" placeholder="e.g. John Doe" value={editFields.name}
-              onChange={e => setEditFields(f => ({ ...f, name: e.target.value }))} />
+              disabled style={{ opacity: 0.6, cursor: 'not-allowed' }} />
           </div>
           {editError && <div style={{ color: 'var(--red)', fontSize: 'var(--fs-sm)' }}>{editError}</div>}
           <div style={{ display: 'flex', gap: '8px', paddingTop: '4px' }}>
             <button type="submit" className="btn btn-primary">Save Changes</button>
             <button type="button" className="btn btn-secondary" onClick={() => setEditUser(null)}>Cancel</button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Quick promote modal */}
+      <Modal open={showPromoteModal} onClose={() => setShowPromoteModal(false)} title="Promote Employee">
+        <form onSubmit={handleQuickPromote} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div>
+            <label className="input-label">Select Employee</label>
+            <select className="input-field" value={promoteUserId}
+              onChange={e => setPromoteUserId(e.target.value)} required>
+              <option value="">— Choose an employee —</option>
+              {users.filter(x => x.code && x.role === 'employee').map(emp => (
+                <option key={emp.id} value={emp.id}>{emp.name || emp.username} ({emp.code})</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="input-label">Promote to</label>
+            <select className="input-field" value={promoteRole}
+              onChange={e => setPromoteRole(e.target.value)}>
+              <option value="admin">Admin</option>
+              {isSuperAdmin && <option value="super_admin">Super Admin</option>}
+            </select>
+          </div>
+          {promoteResult && (
+            <div style={{ padding: '10px 14px', borderRadius: '8px', fontSize: 'var(--fs-sm)', background: promoteResult.includes('error') ? 'rgba(255,59,48,0.06)' : 'rgba(52,199,89,0.06)', color: promoteResult.includes('error') ? 'var(--red)' : 'var(--green)' }}>
+              {promoteResult}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '8px', paddingTop: '4px' }}>
+            <button type="submit" className="btn btn-primary" disabled={promoting || !promoteUserId}
+              style={{ opacity: (promoting || !promoteUserId) ? 0.7 : 1 }}>
+              {promoting ? 'Promoting…' : 'Promote'}
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={() => setShowPromoteModal(false)}>Cancel</button>
           </div>
         </form>
       </Modal>

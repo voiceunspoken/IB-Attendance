@@ -28,6 +28,10 @@ export default function LeavesPage() {
   const [superRegularizations, setSuperRegularizations] = useState([]);
   const [attendanceCorrections, setAttendanceCorrections] = useState([]);
   const [balances, setBalances] = useState([]);
+  const [balancePage, setBalancePage] = useState(1);
+  const balancePageSize = 20;
+  const paginatedBalances = balances.slice((balancePage - 1) * balancePageSize, balancePage * balancePageSize);
+  const totalBalancePages = Math.ceil(balances.length / balancePageSize);
   const [policy, setPolicy] = useState({ cl: 12, sl: 6, el: 4, rl: 2, sh: 6 });
   const [loading, setLoading] = useState(true);
   const [reviewNote, setReviewNote] = useState('');
@@ -455,7 +459,7 @@ export default function LeavesPage() {
                 </tr>
               </thead>
               <tbody>
-                {balances.map(({ code, name, balance }) => balance && (
+                {paginatedBalances.map(({ code, name, balance }) => balance && (
                   <tr key={code} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '11px 14px', fontWeight: 500 }}>{name} <span style={{ color: 'var(--text3)', fontSize: '11px' }}>#{code}</span></td>
                     {['cl', 'sl', 'el', 'rl', 'sh'].map(t => (
@@ -471,10 +475,25 @@ export default function LeavesPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+              </table>
+            </div>
+            {totalBalancePages > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '4px', padding: '12px 18px', borderTop: '1px solid var(--border)' }}>
+                <button disabled={balancePage <= 1} onClick={() => setBalancePage(p => Math.max(1, p - 1))}
+                  style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: balancePage <= 1 ? 'var(--text3)' : 'var(--text)', cursor: balancePage <= 1 ? 'default' : 'pointer', fontFamily: 'inherit', fontSize: '12px' }}>Prev</button>
+                {Array.from({ length: Math.min(totalBalancePages, 10) }, (_, i) => {
+                  const start = Math.max(1, Math.min(balancePage - 5, totalBalancePages - 9));
+                  return start + i;
+                }).map(p => (
+                  <button key={p} onClick={() => setBalancePage(p)}
+                    style={{ padding: '4px 10px', borderRadius: '6px', border: p === balancePage ? '1px solid var(--blue)' : '1px solid var(--border)', background: p === balancePage ? 'rgba(0,113,227,0.1)' : 'transparent', color: p === balancePage ? 'var(--blue)' : 'var(--text2)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: p === balancePage ? 600 : 400 }}>{p}</button>
+                ))}
+                <button disabled={balancePage >= totalBalancePages} onClick={() => setBalancePage(p => Math.min(totalBalancePages, p + 1))}
+                  style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: balancePage >= totalBalancePages ? 'var(--text3)' : 'var(--text)', cursor: balancePage >= totalBalancePages ? 'default' : 'pointer', fontFamily: 'inherit', fontSize: '12px' }}>Next</button>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
 
       {/* ── POLICY ── */}
       {!loading && tab === 'policy' && (
