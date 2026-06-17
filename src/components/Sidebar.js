@@ -10,8 +10,9 @@ export default function Sidebar({ open, onClose, isMobile }) {
 
   const navLinks = isAdmin ? [
     { label: 'Dashboard', path: '/' },
-    { label: 'Leaves', path: '/leaves' },
+    { label: 'Attendance', path: '/attendance' },
     { label: 'Team', path: '/team' },
+    { label: 'Leaves', path: '/leaves' },
     { label: 'Settings', path: '/settings' },
   ] : [];
 
