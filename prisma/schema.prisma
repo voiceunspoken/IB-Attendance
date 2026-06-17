@@ -9,60 +9,17 @@ datasource db {
 }
 
 model User {
-  id             String    @id @default(cuid())
-  username       String    @unique
-  password       String
-  email          String?   // for email notifications
-  role           String    @default("employee") // "super_admin" | "admin" | "employee"
-  employeeCode   String?
-  createdAt      DateTime  @default(now())
-}
-
-model Department {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  employees Employee[]
-  subDepartments SubDepartment[]
-  createdAt DateTime @default(now())
-}
-
-model SubDepartment {
-  id           String   @id @default(cuid())
-  name         String
-  departmentId String
-  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  employees    Employee[]
-  createdAt    DateTime @default(now())
-
-  @@unique([name, departmentId])
-}
-
-model Designation {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  employees Employee[]
-  createdAt DateTime @default(now())
-}
-
-model EmployeeManager {
-  id                 String   @id @default(cuid())
-  employeeId         String
-  managerEmployeeId  String
-  priority           Int      // 1 = primary manager, 2 = secondary, etc.
-  employee           Employee @relation("EmployeeManagers", fields: [employeeId], references: [id], onDelete: Cascade)
-  manager            Employee @relation("ManagerOf", fields: [managerEmployeeId], references: [id], onDelete: Cascade)
-
-  @@unique([employeeId, managerEmployeeId])
-}
-
-model Employee {
   id              String     @id @default(cuid())
-  code            String     @unique
-  name            String
+  username        String     @unique
+  password        String
+  email           String?
+  role            String     @default("employee") // "super_admin" | "admin" | "employee"
+  disabled        Boolean    @default(false)
+  code            String?    @unique
+  name            String?
   birthday        DateTime?
   joiningDate     DateTime?
   workAnniversary DateTime?
-
   employeeType    String     @default("regular") // "regular" | "wfh" | "wfm"
 
   departmentId    String?
@@ -72,8 +29,8 @@ model Employee {
   designationId   String?
   designation     Designation? @relation(fields: [designationId], references: [id])
 
-  managedEmployees EmployeeManager[] @relation("ManagerOf")
-  managers         EmployeeManager[] @relation("EmployeeManagers")
+  managedUsers    UserManager[] @relation("ManagerOf")
+  managers        UserManager[] @relation("UserManagers")
 
   records         MonthRecord[]
   dailyLogs       DailyLog[]
@@ -87,10 +44,47 @@ model Employee {
   updatedAt       DateTime @updatedAt
 }
 
+model Department {
+  id             String   @id @default(cuid())
+  name           String   @unique
+  users          User[]
+  subDepartments SubDepartment[]
+  createdAt      DateTime @default(now())
+}
+
+model SubDepartment {
+  id           String   @id @default(cuid())
+  name         String
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  users        User[]
+  createdAt    DateTime @default(now())
+
+  @@unique([name, departmentId])
+}
+
+model Designation {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  users     User[]
+  createdAt DateTime @default(now())
+}
+
+model UserManager {
+  id             String   @id @default(cuid())
+  userId         String
+  managerUserId  String
+  priority       Int      // 1 = primary manager, 2 = secondary, etc.
+  user           User     @relation("UserManagers", fields: [userId], references: [id], onDelete: Cascade)
+  manager        User     @relation("ManagerOf", fields: [managerUserId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, managerUserId])
+}
+
 model PunchLog {
   id         String    @id @default(cuid())
-  employeeId String
-  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   date       DateTime
   punchIn    DateTime?
   punchOut   DateTime?
@@ -100,7 +94,7 @@ model PunchLog {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
-  @@unique([employeeId, date])
+  @@unique([userId, date])
 }
 
 model PendingChange {
@@ -117,9 +111,9 @@ model PendingChange {
 model MonthRecord {
   id         String   @id @default(cuid())
   monthYear  String   // e.g "3_2026"
-  employeeId String
-  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   present    Int      @default(0)
   absent     Int      @default(0)
   halfDay    Int      @default(0)
@@ -130,51 +124,51 @@ model MonthRecord {
   shortLeave Int      @default(0)
   rl         Int      @default(0)
   holi       Int      @default(0)
-  
+
   numDays    Int      @default(31)
 
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  @@unique([employeeId, monthYear])
+  @@unique([userId, monthYear])
 }
 
 model DailyLog {
   id         String   @id @default(cuid())
-  employeeId String
-  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   monthYear  String   // e.g. "3_2026"
   day        Int      // 1 to 31
-  
+
   type       String   // "present", "absent", "half", "holiday", "wo", "rl"
   raw        String   @default("")
-  
+
   inT        Int?
   outT       Int?
-  
+
   isLate     Boolean  @default(false)
   isSS       Boolean  @default(false)
   isSL       Boolean  @default(false)
   hdReason   String?  // null | "late" | "ss" — why this day was marked half-day
 
-  @@unique([employeeId, monthYear, day])
+  @@unique([userId, monthYear, day])
 }
 
 model Override {
   id         String   @id @default(cuid())
-  employeeId String
-  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   monthYear  String
   day        Int
-  
+
   type       String   // "wfm", "wfm-hd", "wfh", "wos", "wos-hd"
 
-  @@unique([employeeId, monthYear, day])
+  @@unique([userId, monthYear, day])
 }
 
-// Leave quota policy — one per year (global, applies to all employees)
+// Leave quota policy — one per year (global, applies to all users)
 model LeavePolicy {
   id        String @id @default(cuid())
   year      Int    @unique
@@ -186,11 +180,11 @@ model LeavePolicy {
   createdAt DateTime @default(now())
 }
 
-// Per-employee leave balance for a given year
+// Per-user leave balance for a given year
 model LeaveBalance {
   id           String   @id @default(cuid())
-  employeeId   String
-  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   year         Int
   clTotal      Int      @default(12)
   slTotal      Int      @default(6)
@@ -209,15 +203,15 @@ model LeaveBalance {
   updatedAt    DateTime @updatedAt
   createdAt    DateTime @default(now())
 
-  @@unique([employeeId, year])
+  @@unique([userId, year])
 }
 
-// Leave requests submitted by employees
+// Leave requests submitted by users
 model LeaveRequest {
   id             String   @id @default(cuid())
-  employeeId     String
-  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  leaveType      String   // "cl" | "sl" | "el" | "rl"
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leaveType      String   // "cl" | "sl" | "el" | "rl" | "sh"
   fromDate       DateTime
   toDate         DateTime
   days           Float    // 0.5 for half day, 1+ for full days
@@ -243,11 +237,11 @@ model LeaveRequest {
   createdAt      DateTime @default(now())
 }
 
-// Regularization / Conflict requests — employee requests correction for missed punch or wrong marking
+// Regularization / Conflict requests — user requests correction for missed punch or wrong marking
 model RegularizationRequest {
   id           String   @id @default(cuid())
-  employeeId   String
-  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date         DateTime
   type         String   @default("missing_punch") // "missing_punch_in" | "missing_punch_out" | "wrong_mark" | "other"
   requestedIn  String?  // HH:MM
@@ -296,27 +290,27 @@ model AttendancePolicy {
   shiftEndM       Int      @default(0)
 
   // Grace & late rules
-  graceMinutes    Int      @default(15)  // late after shiftStart + grace
-  lateStartMin    Int      @default(30)  // late window start (min from shiftStart, e.g. 10:30)
-  shortLeaveStartMin Int   @default(60)  // short leave starts (e.g. 10:00 + 60 = 11:00)
-  shortLeaveEndMin   Int   @default(120) // short leave ends (e.g. 12:00)
-  halfDayAfterMin     Int   @default(120) // half day starts (e.g. 12:00)
+  graceMinutes    Int      @default(15)
+  lateStartMin    Int      @default(30)
+  shortLeaveStartMin Int   @default(60)
+  shortLeaveEndMin   Int   @default(120)
+  halfDayAfterMin     Int   @default(120)
 
   // Half day thresholds
-  morningHalfDayCutoffH Int @default(14) // latest punch-in for morning half day (2:30 PM)
+  morningHalfDayCutoffH Int @default(14)
   morningHalfDayCutoffM Int @default(30)
-  eveningHalfDayStartH   Int @default(14) // earliest punch-out for afternoon half day (2:00 PM)
+  eveningHalfDayStartH   Int @default(14)
   eveningHalfDayStartM   Int @default(0)
 
   // Evening rules
-  eveningEarliestExitH   Int @default(17)  // earliest time to leave (5:00 PM)
+  eveningEarliestExitH   Int @default(17)
   eveningEarliestExitM   Int @default(0)
-  eveningShortLeaveWindowMin Int @default(10) // window after earliest exit for short leave
+  eveningShortLeaveWindowMin Int @default(10)
 
   // Deduction ratios
-  minHours        Float    @default(9)   // minimum working hours
-  latesPerHD      Int      @default(3)   // 3 lates = 1 HD
-  ssPerHD         Int      @default(3)   // 3 short shifts = 1 HD
+  minHours        Float    @default(9)
+  latesPerHD      Int      @default(3)
+  ssPerHD         Int      @default(3)
 
   // Approval workflow
   status          String   @default("pending") // "pending" | "active" | "rejected"

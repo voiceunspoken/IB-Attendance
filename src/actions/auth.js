@@ -9,58 +9,77 @@ export async function loginUser(username, password) {
     const user = await prisma.user.findUnique({ where: { username } });
     if (!user) return { error: 'Invalid username or password.' };
 
-    // Support both bcrypt-hashed and legacy plain-text passwords
+    if (user.disabled) return { error: 'Your account has been disabled. Contact your admin.' };
+
     const valid = user.password.startsWith('$2')
       ? await bcrypt.compare(password, user.password)
       : user.password === password;
 
     if (!valid) return { error: 'Invalid username or password.' };
-    return { user: { id: user.id, username: user.username, role: user.role, employeeCode: user.employeeCode ?? null } };
+    return { user: { id: user.id, username: user.username, role: user.role, code: user.code ?? null } };
   } catch (e) {
     console.error('[loginUser error]', e.message);
     return { error: 'Server error: ' + e.message };
   }
 }
 
-export async function createUser(username, password, role, employeeCode, createdBy = 'system') {
+export async function createUser(username, password, role, code, createdBy = 'system') {
   const existing = await prisma.user.findUnique({ where: { username } });
   if (existing) return { error: 'Username already exists.' };
 
-  if (role === 'employee' && employeeCode) {
-    const emp = await prisma.employee.findUnique({ where: { code: employeeCode } });
-    if (!emp) return { error: `Employee code "${employeeCode}" not found.` };
-  }
-
   const hashed = await bcrypt.hash(password, 10);
   const user = await prisma.user.create({
-    data: { username, password: hashed, role, employeeCode: role === 'employee' ? (employeeCode || null) : null }
+    data: { username, password: hashed, role, code: code || null }
   });
   await logAction(createdBy, 'user_created', 'user', user.id, `Created user "${username}" with role "${role}"`);
-  return { user: { id: user.id, username: user.username, role: user.role, employeeCode: user.employeeCode } };
+  return { user: { id: user.id, username: user.username, role: user.role, code: user.code } };
 }
 
 export async function getUsers() {
   return prisma.user.findMany({
-    select: { id: true, username: true, role: true, employeeCode: true, createdAt: true },
+    select: { id: true, username: true, role: true, disabled: true, code: true, name: true, createdAt: true },
     orderBy: { createdAt: 'asc' }
   });
 }
 
 export async function deleteUser(userId, deletedBy = 'admin') {
   const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { error: 'User not found.' };
+  await prisma.punchLog.deleteMany({ where: { userId } });
+  await prisma.regularizationRequest.deleteMany({ where: { userId } });
+  await prisma.leaveRequest.deleteMany({ where: { userId } });
+  await prisma.leaveBalance.deleteMany({ where: { userId } });
+  await prisma.override.deleteMany({ where: { userId } });
+  await prisma.dailyLog.deleteMany({ where: { userId } });
+  await prisma.monthRecord.deleteMany({ where: { userId } });
+  await prisma.userManager.deleteMany({ where: { userId } });
+  await prisma.userManager.deleteMany({ where: { managerUserId: userId } });
   await prisma.user.delete({ where: { id: userId } });
   await logAction(deletedBy, 'user_deleted', 'user', userId, `Deleted user "${user?.username}"`);
   return { success: true };
 }
 
+export async function toggleDisableUser(userId, performedBy = 'admin') {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { error: 'User not found.' };
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { disabled: !user.disabled }
+  });
+  const action = updated.disabled ? 'user_disabled' : 'user_enabled';
+  await logAction(performedBy, action, 'user', userId, `${action === 'user_disabled' ? 'Disabled' : 'Enabled'} user "${user.username}"`);
+  return { success: true, disabled: updated.disabled };
+}
+
 export async function updateUser(userId, fields, updatedBy = 'admin') {
   const data = {};
   if (fields.password) data.password = await bcrypt.hash(fields.password, 10);
-  if (fields.employeeCode !== undefined) data.employeeCode = fields.employeeCode || null;
+  if (fields.code !== undefined) data.code = fields.code || null;
+  if (fields.name !== undefined) data.name = fields.name;
   if (fields.role) data.role = fields.role;
   const user = await prisma.user.update({ where: { id: userId }, data });
   await logAction(updatedBy, 'user_updated', 'user', userId, `Updated user "${user.username}"`);
-  return { user: { id: user.id, username: user.username, role: user.role, employeeCode: user.employeeCode } };
+  return { user: { id: user.id, username: user.username, role: user.role, code: user.code } };
 }
 
 export async function changePassword(userId, currentPassword, newPassword) {

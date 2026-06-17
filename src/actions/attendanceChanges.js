@@ -5,8 +5,8 @@ import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
 
 export async function requestAttendanceCorrection(employeeCode, monthYear, day, currentType, newType, reason, requestedBy) {
-  const emp = await prisma.employee.findUnique({ where: { code: employeeCode } });
-  if (!emp) return { error: 'Employee not found' };
+  const user = await prisma.user.findUnique({ where: { code: employeeCode } });
+  if (!user) return { error: 'Employee not found' };
 
   const payload = JSON.stringify({ employeeCode, monthYear, day, currentType, newType, reason });
 
@@ -40,15 +40,15 @@ export async function reviewAttendanceCorrection(changeId, reviewedBy, approve) 
   const payload = JSON.parse(change.payload);
 
   if (approve) {
-    const emp = await prisma.employee.findUnique({ where: { code: payload.employeeCode } });
-    if (emp) {
+    const user = await prisma.user.findUnique({ where: { code: payload.employeeCode } });
+    if (user) {
       const existing = await prisma.dailyLog.findUnique({
-        where: { employeeId_monthYear_day: { employeeId: emp.id, monthYear: payload.monthYear, day: payload.day } }
+        where: { userId_monthYear_day: { userId: user.id, monthYear: payload.monthYear, day: payload.day } }
       });
 
       if (existing) {
         await prisma.dailyLog.update({
-          where: { employeeId_monthYear_day: { employeeId: emp.id, monthYear: payload.monthYear, day: payload.day } },
+          where: { userId_monthYear_day: { userId: user.id, monthYear: payload.monthYear, day: payload.day } },
           data: {
             type: payload.newType,
             isLate: false,
@@ -74,7 +74,7 @@ export async function reviewAttendanceCorrection(changeId, reviewedBy, approve) 
 
         if (Object.keys(changes).length > 0) {
           await prisma.monthRecord.updateMany({
-            where: { employeeId: emp.id, monthYear: payload.monthYear },
+            where: { userId: user.id, monthYear: payload.monthYear },
             data: changes
           });
         }

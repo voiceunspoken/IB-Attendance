@@ -45,8 +45,8 @@ export default function DashboardHome() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
-    if (!authLoading && isAuthenticated && !isAdmin && user?.employeeCode) {
-      router.push(`/employee/${user.employeeCode}`);
+    if (!authLoading && isAuthenticated && !isAdmin && user?.code) {
+      router.push(`/employee/${user.code}`);
     }
   }, [isAuthenticated, isAdmin, user, authLoading, router]);
 

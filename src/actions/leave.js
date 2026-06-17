@@ -4,8 +4,6 @@ import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
 
-// ─── LEAVE POLICY ───────────────────────────────────────────
-
 export async function getLeavePolicy(year) {
   return prisma.leavePolicy.findUnique({ where: { year } });
 }
@@ -18,21 +16,19 @@ export async function upsertLeavePolicy(year, { cl, sl, el, rl }) {
   });
 }
 
-// ─── LEAVE BALANCE ───────────────────────────────────────────
-
 export async function getLeaveBalance(employeeCode, year) {
-  const emp = await prisma.employee.findUnique({ where: { code: employeeCode } });
-  if (!emp) return null;
+  const user = await prisma.user.findUnique({ where: { code: employeeCode } });
+  if (!user) return null;
 
   let balance = await prisma.leaveBalance.findUnique({
-    where: { employeeId_year: { employeeId: emp.id, year } }
+    where: { userId_year: { userId: user.id, year } }
   });
 
   if (!balance) {
     const policy = await prisma.leavePolicy.findUnique({ where: { year } });
     balance = await prisma.leaveBalance.create({
       data: {
-        employeeId: emp.id,
+        userId: user.id,
         year,
         clTotal: policy?.cl ?? 12,
         slTotal: policy?.sl ?? 6,
@@ -43,10 +39,9 @@ export async function getLeaveBalance(employeeCode, year) {
     });
   }
 
-  // Sync used counts from approved leave requests
   const approved = await prisma.leaveRequest.findMany({
     where: {
-      employeeId: emp.id,
+      userId: user.id,
       status: 'approved',
       fromDate: { gte: new Date(`${year}-01-01`), lte: new Date(`${year}-12-31`) }
     }
@@ -55,13 +50,11 @@ export async function getLeaveBalance(employeeCode, year) {
   const used = { cl: 0, sl: 0, el: 0, rl: 0, sh: 0 };
   approved.forEach(r => { used[r.leaveType] = (used[r.leaveType] || 0) + r.days; });
 
-  // RL from attendance records
   const records = await prisma.monthRecord.findMany({
-    where: { employeeId: emp.id, monthYear: { contains: `_${year}` } }
+    where: { userId: user.id, monthYear: { contains: `_${year}` } }
   });
   const attendanceRL = records.reduce((s, r) => s + r.rl, 0);
 
-  // Accrual: CL = 1/month, EL = 1/quarter
   const now = new Date();
   const isPastYear = year < now.getFullYear();
   const refMonth = isPastYear ? 12 : now.getMonth() + 1;
@@ -69,7 +62,6 @@ export async function getLeaveBalance(employeeCode, year) {
   const clAccrued = Math.min(refMonth, balance.clTotal);
   const elAccrued = Math.min(refQuarter, balance.elTotal || 4);
 
-  // Persist accrual counts for display
   await prisma.leaveBalance.update({
     where: { id: balance.id },
     data: { clAccrued, elAccrued }
@@ -93,55 +85,53 @@ export async function getLeaveBalance(employeeCode, year) {
 }
 
 export async function getAllLeaveBalances(year) {
-  const employees = await prisma.employee.findMany({
+  const users = await prisma.user.findMany({
+    where: { code: { not: null } },
     select: { id: true, code: true, name: true }
   });
 
   const balances = await Promise.all(
-    employees.map(emp => getLeaveBalance(emp.code, year))
+    users.map(u => getLeaveBalance(u.code, year))
   );
 
-  return employees.map((emp, i) => ({ ...emp, balance: balances[i] }));
+  return users.map((u, i) => ({ ...u, balance: balances[i] }));
 }
 
 export async function getLeaveBalancesForExport(year, fromMonth = 1, toMonth = 12) {
-  const employees = await prisma.employee.findMany({
+  const users = await prisma.user.findMany({
+    where: { code: { not: null } },
     select: { id: true, code: true, name: true },
     orderBy: { name: 'asc' }
   });
 
   const fromDate = new Date(`${year}-${String(fromMonth).padStart(2, '0')}-01`);
-  // Last day of toMonth
-  const toDate = new Date(year, toMonth, 0); // day 0 of next month = last day of toMonth
+  const toDate = new Date(year, toMonth, 0);
 
   const results = await Promise.all(
-    employees.map(async (emp) => {
-      const balance = await getLeaveBalance(emp.code, year);
+    users.map(async (u) => {
+      const balance = await getLeaveBalance(u.code, year);
 
-      // Get approved leave requests within the selected range
       const approved = await prisma.leaveRequest.findMany({
         where: {
-          employeeId: emp.id,
+          userId: u.id,
           status: 'approved',
           fromDate: { gte: fromDate, lte: toDate }
         },
         orderBy: { fromDate: 'asc' }
       });
 
-      // Count used per type within range
       const rangeUsed = { cl: 0, sl: 0, el: 0, rl: 0, sh: 0 };
       approved.forEach(r => {
         rangeUsed[r.leaveType] = (rangeUsed[r.leaveType] || 0) + Number(r.days);
       });
 
-      // Summarise leave taken
       const leaveDetail = approved.map(r =>
         `${r.leaveType.toUpperCase()} ${r.days}d (${new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}${r.fromDate.toDateString() !== r.toDate.toDateString() ? '–' + new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''})`
       ).join('; ') || '—';
 
       return {
-        code: emp.code,
-        name: emp.name,
+        code: u.code,
+        name: u.name,
         balance,
         rangeUsed,
         leaveDetail,
@@ -153,29 +143,24 @@ export async function getLeaveBalancesForExport(year, fromMonth = 1, toMonth = 1
 }
 
 export async function adminUpdateLeaveBalance(employeeCode, year, fields) {
-  const emp = await prisma.employee.findUnique({ where: { code: employeeCode } });
-  if (!emp) return { error: 'Employee not found' };
+  const user = await prisma.user.findUnique({ where: { code: employeeCode } });
+  if (!user) return { error: 'Employee not found' };
 
   await prisma.leaveBalance.upsert({
-    where: { employeeId_year: { employeeId: emp.id, year } },
+    where: { userId_year: { userId: user.id, year } },
     update: fields,
-    create: { employeeId: emp.id, year, ...fields }
+    create: { userId: user.id, year, ...fields }
   });
   return { success: true };
 }
 
-// ─── LEAVE REQUESTS ──────────────────────────────────────────
-
-// Detect if leave spans Friday–Monday (sandwich)
 function detectSandwich(from, to) {
   let sandwich = false;
   let sandwichDays = 0;
   const startDow = from.getDay();
   const endDow = to.getDay();
-  // Friday(5) → Monday(1) or Friday(5) → Saturday(6) → Sunday(0) → Monday(1)
   if (startDow === 5 && (endDow === 1 || endDow === 0 || endDow === 6)) {
     sandwich = true;
-    // Count Fri, Sat, Sun, Mon
     const diffDays = Math.round((to - from) / (1000 * 60 * 60 * 24)) + 1;
     sandwichDays = diffDays >= 4 ? diffDays : 4;
   }
@@ -187,22 +172,21 @@ function daysBetween(from, to) {
 }
 
 export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, toDate, days, reason, prescriptionFile, shiftSlot }) {
-  const emp = await prisma.employee.findUnique({
+  const user = await prisma.user.findUnique({
     where: { code: employeeCode },
     include: { managers: { include: { manager: true }, orderBy: { priority: 'asc' } } }
   });
-  if (!emp) return { error: 'Employee not found' };
+  if (!user) return { error: 'Employee not found' };
 
   const from = new Date(fromDate);
   const to = new Date(toDate);
 
-  // ── RL: enforce max 1/month ──
   if (leaveType === 'rl') {
     const monthStart = new Date(from.getFullYear(), from.getMonth(), 1);
     const monthEnd = new Date(from.getFullYear(), from.getMonth() + 1, 0);
     const existingRL = await prisma.leaveRequest.findFirst({
       where: {
-        employeeId: emp.id,
+        userId: user.id,
         leaveType: 'rl',
         status: { not: 'rejected' },
         fromDate: { gte: monthStart, lte: monthEnd }
@@ -211,31 +195,27 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
     if (existingRL) return { error: 'You can only take 1 Restricted Leave per month.' };
   }
 
-  // ── SL: prescription required ──
   if (leaveType === 'sl' && !prescriptionFile) {
     return { error: 'Prescription is mandatory for Sick Leave. Please upload a prescription.' };
   }
 
-  // ── SH: Short Leave validation ──
   if (leaveType === 'sh') {
     if (!shiftSlot) return { error: 'Please select a shift slot (10-12 or 5-7).' };
     if (!['10-12', '5-7'].includes(shiftSlot)) return { error: 'Invalid shift slot.' };
     if (fromDate !== toDate) return { error: 'Short Leave can only be taken for a single day.' };
     days = 0.5;
 
-    // Check balance
     const bal = await getLeaveBalance(employeeCode, from.getFullYear());
     if (bal.shAvail <= 0) return { error: 'No Short Leave balance remaining for this year.' };
 
-    // Enforce 1 per 2-month window
-    const window = Math.ceil(from.getMonth() / 2); // 1-based: Jan=1, Feb=1, Mar=2, Apr=2 ...
-    const windowStart = (window - 1) * 2 + 1; // 1, 3, 5, 7, 9, 11
-    const windowEnd = window * 2; // 2, 4, 6, 8, 10, 12
+    const window = Math.ceil(from.getMonth() / 2);
+    const windowStart = (window - 1) * 2 + 1;
+    const windowEnd = window * 2;
     const windowStartDate = new Date(from.getFullYear(), windowStart - 1, 1);
     const windowEndDate = new Date(from.getFullYear(), windowEnd, 0);
     const existingSH = await prisma.leaveRequest.findFirst({
       where: {
-        employeeId: emp.id,
+        userId: user.id,
         leaveType: 'sh',
         status: { not: 'rejected' },
         fromDate: { gte: windowStartDate, lte: windowEndDate }
@@ -244,42 +224,37 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
     if (existingSH) return { error: 'You can only take 1 Short Leave per 2-month window. Your next window opens after ' + (windowEnd % 12 + 1) + '/' + from.getFullYear() + '.' };
   }
 
-  // ── Sandwich detection ──
   let computedDays = days;
   let sandwichCount = 0;
   let sandwichMessage = '';
   const { sandwich, sandwichDays } = detectSandwich(from, to);
   if (sandwich) {
     const balance = await prisma.leaveBalance.findUnique({
-      where: { employeeId_year: { employeeId: emp.id, year: from.getFullYear() } }
+      where: { userId_year: { userId: user.id, year: from.getFullYear() } }
     });
     const usedSoFar = balance?.sandwichUsed ?? 0;
     const totalDays = Math.max(sandwichDays, daysBetween(from, to));
     if (usedSoFar === 0) {
-      // 1st sandwich: only Fri+Mon counted (2 days), weekend free
       computedDays = 2;
       sandwichCount = 1;
       sandwichMessage = 'This is your 1st sandwich leave — only 2 days (Fri + Mon) will be deducted.';
     } else {
-      // Subsequent: all 4 days counted
       computedDays = totalDays >= 4 ? totalDays : 4;
       sandwichCount = usedSoFar + 1;
       sandwichMessage = `This is your ${sandwichCount} sandwich leave — all ${Math.round(computedDays)} days will be deducted.`;
     }
   }
 
-  // ── Determine approval stage ──
   const config = await prisma.superAdminConfig.findFirst();
   const requireSuper = config?.requireSuperApproval ?? true;
 
-  const managers = emp.managers;
+  const managers = user.managers;
   let approvalStage = 'pending_l2';
   let currentApproverId = null;
 
   if (managers.length > 0) {
-    currentApproverId = managers[0].managerEmployeeId; // L2 (junior)
+    currentApproverId = managers[0].managerUserId;
   } else if (requireSuper) {
-    // No managers — skip to super admin if required
     approvalStage = 'pending_super';
   } else {
     approvalStage = 'approved';
@@ -287,7 +262,7 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
 
   const req = await prisma.leaveRequest.create({
     data: {
-      employeeId: emp.id,
+      userId: user.id,
       leaveType,
       fromDate: from,
       toDate: to,
@@ -302,14 +277,13 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
     }
   });
 
-  // Log notifications
   await logAction(employeeCode, 'leave_submitted', 'leave_request', req.id,
     `Submitted ${leaveType.toUpperCase()} leave (${computedDays}d)`);
 
   if (currentApproverId) {
-    const approver = managers.find(m => m.managerEmployeeId === currentApproverId);
+    const approver = managers.find(m => m.managerUserId === currentApproverId);
     await logAction(approver?.manager?.code || 'unknown', 'leave_l2_pending', 'leave_request', req.id,
-      `Leave request from ${emp.name} awaiting your approval`);
+      `Leave request from ${user.name} awaiting your approval`);
   }
 
   revalidatePath(`/employee/${employeeCode}`);
@@ -317,18 +291,17 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
 }
 
 export async function getLeaveRequests(employeeCode) {
-  const emp = await prisma.employee.findUnique({ where: { code: employeeCode } });
-  if (!emp) return [];
+  const user = await prisma.user.findUnique({ where: { code: employeeCode } });
+  if (!user) return [];
   return prisma.leaveRequest.findMany({
-    where: { employeeId: emp.id },
-    include: { employee: { select: { code: true, name: true } } },
+    where: { userId: user.id },
+    include: { user: { select: { code: true, name: true } } },
     orderBy: { createdAt: 'desc' }
   });
 }
 
-// Get requests where a manager is the current approver
 export async function getManagerLeaveRequests(managerCode) {
-  const mgr = await prisma.employee.findUnique({ where: { code: managerCode } });
+  const mgr = await prisma.user.findUnique({ where: { code: managerCode } });
   if (!mgr) return [];
   return prisma.leaveRequest.findMany({
     where: {
@@ -336,36 +309,34 @@ export async function getManagerLeaveRequests(managerCode) {
       status: 'pending',
       approvalStage: { in: ['pending_l2', 'pending_l1'] }
     },
-    include: { employee: { select: { code: true, name: true } } },
+    include: { user: { select: { code: true, name: true } } },
     orderBy: { createdAt: 'asc' }
   });
 }
 
-// Get requests at a specific stage (for admin overview, super admin)
 export async function getLeaveRequestsByStage(stage) {
   const where = stage === 'pending_super'
     ? { approvalStage: 'pending_super', status: 'pending' }
     : { approvalStage: stage, status: 'pending' };
   return prisma.leaveRequest.findMany({
     where,
-    include: { employee: { select: { code: true, name: true } } },
+    include: { user: { select: { code: true, name: true } } },
     orderBy: { createdAt: 'asc' }
   });
 }
 
 export async function getAllLeaveRequests() {
   return prisma.leaveRequest.findMany({
-    include: { employee: { select: { code: true, name: true, managers: { include: { manager: { select: { code: true, name: true } } }, orderBy: { priority: 'asc' } } } } },
+    include: { user: { select: { code: true, name: true, managers: { include: { manager: { select: { code: true, name: true } } }, orderBy: { priority: 'asc' } } } } },
     orderBy: { createdAt: 'desc' },
     take: 200
   });
 }
 
-// Multi-level approval review
 export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = '') {
   const req = await prisma.leaveRequest.findUnique({
     where: { id: requestId },
-    include: { employee: { include: { managers: { include: { manager: true }, orderBy: { priority: 'asc' } } } } }
+    include: { user: { include: { managers: { include: { manager: true }, orderBy: { priority: 'asc' } } } } }
   });
   if (!req) return { error: 'Request not found' };
 
@@ -381,16 +352,14 @@ export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = 
     newStage = 'rejected';
     newApproverId = null;
   } else {
-    // Advance to next stage
     if (req.approvalStage === 'pending_l2') {
-      // L2 approved → move to L1
-      const managers = req.employee.managers;
+      const managers = req.user.managers;
       const l1Manager = managers.length > 1 ? managers[1]?.manager : managers[0]?.manager;
       if (l1Manager) {
         newStage = 'pending_l1';
         newApproverId = l1Manager.id;
         await logAction(l1Manager.code, 'leave_l1_pending', 'leave_request', req.id,
-          `Leave request from ${req.employee.name} awaiting your approval (approved by L2)`);
+          `Leave request from ${req.user.name} awaiting your approval (approved by L2)`);
       } else if (requireSuper) {
         newStage = 'pending_super';
         newApproverId = null;
@@ -400,7 +369,6 @@ export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = 
         newApproverId = null;
       }
     } else if (req.approvalStage === 'pending_l1') {
-      // L1 approved → move to super admin or approve
       if (requireSuper) {
         newStage = 'pending_super';
         newApproverId = null;
@@ -410,14 +378,12 @@ export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = 
         newApproverId = null;
       }
     } else if (req.approvalStage === 'pending_super') {
-      // Super admin approved → final
       newStage = 'approved';
       newStatus = 'approved';
       newApproverId = null;
     }
   }
 
-  // Update the request
   const updated = await prisma.leaveRequest.update({
     where: { id: requestId },
     data: {
@@ -428,18 +394,16 @@ export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = 
       reviewedAt: new Date(),
       reviewNote: note || null
     },
-    include: { employee: true }
+    include: { user: true }
   });
 
-  // Update sandwichUsed on full approval
   if (newStatus === 'approved' && req.sandwichCount > 0) {
     await prisma.leaveBalance.updateMany({
-      where: { employeeId: req.employeeId, year: req.fromDate.getFullYear() },
+      where: { userId: req.userId, year: req.fromDate.getFullYear() },
       data: { sandwichUsed: { increment: 1 } }
     });
   }
 
-  // Update DailyLog on full approval
   if (newStatus === 'approved') {
     const from = new Date(req.fromDate);
     const to = new Date(req.toDate);
@@ -447,7 +411,7 @@ export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = 
       const monthYear = `${d.getMonth() + 1}_${d.getFullYear()}`;
       const day = d.getDate();
       const existing = await prisma.dailyLog.findUnique({
-        where: { employeeId_monthYear_day: { employeeId: req.employeeId, monthYear, day } }
+        where: { userId_monthYear_day: { userId: req.userId, monthYear, day } }
       });
       if (existing && existing.type === 'absent') {
         const updateData = { type: req.leaveType === 'rl' ? 'rl' : 'present', raw: req.leaveType.toUpperCase() };
@@ -461,11 +425,11 @@ export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = 
           }
         }
         await prisma.dailyLog.update({
-          where: { employeeId_monthYear_day: { employeeId: req.employeeId, monthYear, day } },
+          where: { userId_monthYear_day: { userId: req.userId, monthYear, day } },
           data: updateData
         });
         await prisma.monthRecord.updateMany({
-          where: { employeeId: req.employeeId, monthYear },
+          where: { userId: req.userId, monthYear },
           data: { absent: { decrement: 1 }, present: { increment: 1 } }
         });
       }
@@ -479,15 +443,13 @@ export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = 
   return { request: updated };
 }
 
-// ─── REGULARIZATION / CONFLICT ───────────────────────────────
-
 export async function submitRegularization(employeeCode, { date, requestedIn, requestedOut, reason, type }) {
-  const emp = await prisma.employee.findUnique({ where: { code: employeeCode } });
-  if (!emp) return { error: 'Employee not found' };
+  const user = await prisma.user.findUnique({ where: { code: employeeCode } });
+  if (!user) return { error: 'Employee not found' };
 
   const req = await prisma.regularizationRequest.create({
     data: {
-      employeeId: emp.id,
+      userId: user.id,
       date: new Date(date),
       type: type || 'missing_punch',
       requestedIn: requestedIn || null,
@@ -501,10 +463,10 @@ export async function submitRegularization(employeeCode, { date, requestedIn, re
 }
 
 export async function getRegularizations(employeeCode) {
-  const emp = await prisma.employee.findUnique({ where: { code: employeeCode } });
-  if (!emp) return [];
+  const user = await prisma.user.findUnique({ where: { code: employeeCode } });
+  if (!user) return [];
   return prisma.regularizationRequest.findMany({
-    where: { employeeId: emp.id },
+    where: { userId: user.id },
     orderBy: { createdAt: 'desc' }
   });
 }
@@ -512,12 +474,11 @@ export async function getRegularizations(employeeCode) {
 export async function getAllPendingRegularizations() {
   return prisma.regularizationRequest.findMany({
     where: { status: 'pending' },
-    include: { employee: { select: { code: true, name: true } } },
+    include: { user: { select: { code: true, name: true } } },
     orderBy: { createdAt: 'asc' }
   });
 }
 
-// Admin review — sets status, then needs super admin approval
 export async function reviewRegularization(requestId, reviewedBy, approve, note = '') {
   const req = await prisma.regularizationRequest.update({
     where: { id: requestId },
@@ -531,16 +492,14 @@ export async function reviewRegularization(requestId, reviewedBy, approve, note 
   return { request: req };
 }
 
-// Get regularizations pending super admin approval
 export async function getPendingSuperRegularizations() {
   return prisma.regularizationRequest.findMany({
     where: { status: 'approved', superStatus: 'pending' },
-    include: { employee: { select: { code: true, name: true } } },
+    include: { user: { select: { code: true, name: true } } },
     orderBy: { createdAt: 'asc' }
   });
 }
 
-// Super admin final approval
 export async function reviewRegularizationSuper(requestId, superReviewedBy, approve) {
   const req = await prisma.regularizationRequest.update({
     where: { id: requestId },
@@ -551,21 +510,20 @@ export async function reviewRegularizationSuper(requestId, superReviewedBy, appr
     }
   });
 
-  // If fully approved, update DailyLog
   if (approve && req.status === 'approved') {
     const date = new Date(req.date);
     const monthYear = `${date.getMonth() + 1}_${date.getFullYear()}`;
     const day = date.getDate();
 
     const existing = await prisma.dailyLog.findUnique({
-      where: { employeeId_monthYear_day: { employeeId: req.employeeId, monthYear, day } }
+      where: { userId_monthYear_day: { userId: req.userId, monthYear, day } }
     });
 
     if (existing && (existing.type === 'absent' || !existing.inT)) {
       const inT = req.requestedIn ? parseTime(req.requestedIn) : existing.inT;
       const outT = req.requestedOut ? parseTime(req.requestedOut) : existing.outT;
       await prisma.dailyLog.update({
-        where: { employeeId_monthYear_day: { employeeId: req.employeeId, monthYear, day } },
+        where: { userId_monthYear_day: { userId: req.userId, monthYear, day } },
         data: { type: 'present', inT, outT }
       });
     }

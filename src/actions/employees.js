@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 
 export async function getEmployeeDetails(code) {
-  return prisma.employee.findUnique({
+  return prisma.user.findUnique({
     where: { code },
     select: {
       id: true, code: true, name: true, birthday: true, joiningDate: true, workAnniversary: true,
@@ -27,7 +27,7 @@ export async function updateEmployeeDetails(code, fields) {
   if (fields.subDepartmentId !== undefined) data.subDepartmentId = fields.subDepartmentId || null;
   if (fields.designationId !== undefined) data.designationId = fields.designationId || null;
 
-  await prisma.employee.update({ where: { code }, data });
+  await prisma.user.update({ where: { code }, data });
   revalidatePath('/');
   return { success: true };
 }

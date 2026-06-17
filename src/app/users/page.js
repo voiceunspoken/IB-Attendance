@@ -3,23 +3,22 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
-import { getUsers, createUser, deleteUser, updateUser, getPendingChanges, reviewPendingChange } from '../../actions/auth';
-import { getAllEmployees } from '../../actions/attendance';
-import { updateEmployeeDetails } from '../../actions/employees';
+import { getUsers, createUser, deleteUser, updateUser, toggleDisableUser, getPendingChanges, reviewPendingChange } from '../../actions/auth';
 import ConfirmModal from '../../components/ConfirmModal';
+import { FiSearch } from 'react-icons/fi';
 
 const ROLE_STYLES = {
-  super_admin: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', icon: '👑', label: 'Super Admin' },
-  admin: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3', icon: '🔑', label: 'Admin' },
-  employee: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', icon: '👤', label: 'Employee' },
+  super_admin: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Super Admin' },
+  admin: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3', label: 'Admin' },
+  employee: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Employee' },
 };
 
 const ROLE_PERMISSIONS = [
-  { role: 'Super Admin', icon: '👑', color: '#c0392b', bg: 'rgba(255,59,48,0.06)',
+  { role: 'Super Admin', color: '#c0392b', bg: 'rgba(255,59,48,0.06)',
     perms: ['All admin capabilities', 'Approve / reject admin changes', 'Manage all user accounts', 'Full audit log access'] },
-  { role: 'Admin', icon: '🔑', color: '#0071e3', bg: 'rgba(0,113,227,0.06)',
+  { role: 'Admin', color: '#0071e3', bg: 'rgba(0,113,227,0.06)',
     perms: ['Upload attendance data', 'Apply WFM / WFH / WOS overrides', 'Export CSV & manage employees', 'Changes need super admin approval'] },
-  { role: 'Employee', icon: '👤', color: '#1a7f37', bg: 'rgba(52,199,89,0.06)',
+  { role: 'Employee', color: '#1a7f37', bg: 'rgba(52,199,89,0.06)',
     perms: ['View own attendance only', 'Apply for leave & regularization', 'Read-only calendar', 'No edit access'] },
 ];
 
@@ -27,8 +26,14 @@ function RoleBadge({ role }) {
   const s = ROLE_STYLES[role] || ROLE_STYLES.employee;
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 10px 2px 6px', borderRadius: '980px', fontSize: 'var(--fs-xs)', fontWeight: 600, background: s.bg, color: s.color }}>
-      <span style={{ fontSize: '12px' }}>{s.icon}</span> {s.label}
+      <span style={{ fontSize: '12px', fontWeight: 700 }}>●</span> {s.label}
     </span>
+  );
+}
+
+function DisabledBadge() {
+  return (
+    <span style={{ display: 'inline-flex', padding: '1px 7px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, background: 'rgba(255,59,48,0.1)', color: 'var(--red)' }}>Disabled</span>
   );
 }
 
@@ -63,7 +68,7 @@ function SearchBar({ value, onChange, placeholder, count }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: '200px', maxWidth: '360px' }}>
       <div style={{ position: 'relative', flex: 1 }}>
-        <span style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)', fontSize: '13px', pointerEvents: 'none' }}>🔍</span>
+        <span style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)', fontSize: '13px', pointerEvents: 'none' }}><FiSearch size={13} /></span>
         <input className="input-field" placeholder={placeholder} value={value}
           onChange={e => onChange(e.target.value)}
           style={{ width: '100%', padding: '8px 12px 8px 34px', fontSize: 'var(--fs-sm)' }} />
@@ -79,28 +84,23 @@ export default function UsersPage() {
   const { isAdmin, isSuperAdmin, isAuthenticated, user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [tab, setTab] = useState('users');
+  const [tab, setTab] = useState('accounts');
   const [users, setUsers] = useState([]);
-  const [employees, setEmployees] = useState([]);
   const [pendingChanges, setPendingChanges] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [form, setForm] = useState({ username: '', password: '', role: 'employee', employeeCode: '' });
+  const [form, setForm] = useState({ username: '', password: '', role: 'employee', code: '', name: '' });
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const [editUser, setEditUser] = useState(null);
-  const [editFields, setEditFields] = useState({ password: '', employeeCode: '', role: '' });
+  const [editFields, setEditFields] = useState({ password: '', role: '', code: '', name: '' });
   const [editError, setEditError] = useState('');
 
-  const [editEmp, setEditEmp] = useState(null);
-  const [empFields, setEmpFields] = useState({ birthday: '', joiningDate: '', workAnniversary: '' });
-
   const [userSearch, setUserSearch] = useState('');
-  const [empSearch, setEmpSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
-  const [confirmState, setConfirmState] = useState({ show: false, message: '', onConfirm: null });
+  const [confirmState, setConfirmState] = useState({ show: false, message: '', onConfirm: null, confirmLabel: null, confirmLoadingLabel: null, variant: null });
   const [fetchTrigger, setFetchTrigger] = useState(0);
 
   useEffect(() => {
@@ -111,14 +111,12 @@ export default function UsersPage() {
   useEffect(() => {
     if (!isAdmin) return;
     (async () => {
-      const [u, allEmps, pending] = await Promise.all([
+      const [u, pending] = await Promise.all([
         getUsers(),
-        getAllEmployees(),
         isSuperAdmin ? getPendingChanges() : Promise.resolve([])
       ]);
       setUsers(u);
       setPendingChanges(pending);
-      setEmployees(allEmps.map(e => ({ code: e.code, name: e.name, birthday: e.birthday, workAnniversary: e.workAnniversary })));
       setLoading(false);
     })();
   }, [isAdmin, isSuperAdmin, fetchTrigger]);
@@ -126,37 +124,50 @@ export default function UsersPage() {
   const filteredUsers = useMemo(() => {
     return users.filter(u => {
       const q = userSearch.toLowerCase();
-      if (q && !u.username.toLowerCase().includes(q)) return false;
+      if (q && !u.username.toLowerCase().includes(q) && !(u.name || '').toLowerCase().includes(q) && !(u.code || '').toLowerCase().includes(q)) return false;
       if (roleFilter !== 'all' && u.role !== roleFilter) return false;
       return true;
     });
   }, [users, userSearch, roleFilter]);
-
-  const filteredEmployees = useMemo(() => {
-    const q = empSearch.toLowerCase();
-    if (!q) return employees;
-    return employees.filter(e => e.name.toLowerCase().includes(q) || e.code.toLowerCase().includes(q));
-  }, [employees, empSearch]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
     setFormError(''); setFormSuccess('');
     if (!form.username || !form.password) return setFormError('Username and password are required.');
     setSubmitting(true);
-    const result = await createUser(form.username.trim(), form.password, form.role, form.employeeCode || null);
+    const result = await createUser(form.username.trim(), form.password, form.role, form.code || null, user.username);
     setSubmitting(false);
     if (result.error) return setFormError(result.error);
     setFormSuccess(`User "${form.username}" created.`);
-    setForm({ username: '', password: '', role: 'employee', employeeCode: '' });
+    setForm({ username: '', password: '', role: 'employee', code: '', name: '' });
     setFetchTrigger(t => t + 1);
   };
 
   const handleDelete = (u) => {
     setConfirmState({
       show: true,
-      message: `Delete user "${u.username}"? This cannot be undone.`,
+      message: `Delete user "${u.username}" and ALL their attendance data? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      confirmLoadingLabel: 'Deleting…',
+      variant: 'danger',
       onConfirm: async () => {
-        await deleteUser(u.id);
+        await deleteUser(u.id, user.username);
+        setFetchTrigger(t => t + 1);
+      },
+    });
+  };
+
+  const handleToggleDisable = async (u) => {
+    setConfirmState({
+      show: true,
+      message: u.disabled
+        ? `Enable user "${u.username}" again? They will be able to log in.`
+        : `Disable user "${u.username}"? They will be unable to log in. Data is preserved.`,
+      confirmLabel: u.disabled ? 'Enable' : 'Disable',
+      confirmLoadingLabel: 'Updating…',
+      variant: u.disabled ? 'default' : 'danger',
+      onConfirm: async () => {
+        await toggleDisableUser(u.id, user.username);
         setFetchTrigger(t => t + 1);
       },
     });
@@ -164,7 +175,7 @@ export default function UsersPage() {
 
   const openEdit = (u) => {
     setEditUser(u);
-    setEditFields({ password: '', employeeCode: u.employeeCode || '', role: u.role });
+    setEditFields({ password: '', role: u.role, code: u.code || '', name: u.name || '' });
     setEditError('');
   };
 
@@ -173,10 +184,11 @@ export default function UsersPage() {
     setEditError('');
     const fields = {};
     if (editFields.password) fields.password = editFields.password;
-    if (editFields.employeeCode !== editUser.employeeCode) fields.employeeCode = editFields.employeeCode;
+    if (editFields.code !== editUser.code) fields.code = editFields.code;
+    if (editFields.name !== editUser.name) fields.name = editFields.name;
     if (editFields.role !== editUser.role) fields.role = editFields.role;
     if (!Object.keys(fields).length) return setEditError('No changes made.');
-    const result = await updateUser(editUser.id, fields);
+    const result = await updateUser(editUser.id, fields, user.username);
     if (result.error) return setEditError(result.error);
     setEditUser(null);
     setFetchTrigger(t => t + 1);
@@ -187,26 +199,6 @@ export default function UsersPage() {
     setFetchTrigger(t => t + 1);
   };
 
-  const openEditEmp = (emp) => {
-    setEditEmp(emp);
-    setEmpFields({
-      birthday: emp.birthday ? emp.birthday.split('T')[0] : '',
-      joiningDate: emp.joiningDate ? emp.joiningDate.split('T')[0] : '',
-      workAnniversary: emp.workAnniversary ? emp.workAnniversary.split('T')[0] : ''
-    });
-  };
-
-  const handleUpdateEmp = async (e) => {
-    e.preventDefault();
-    await updateEmployeeDetails(editEmp.code, {
-      birthday: empFields.birthday || null,
-      joiningDate: empFields.joiningDate || null,
-      workAnniversary: empFields.workAnniversary || null
-    });
-    setEditEmp(null);
-    setFetchTrigger(t => t + 1);
-  };
-
   const availableRoles = isSuperAdmin
     ? [{ value: 'employee', label: 'Employee' }, { value: 'admin', label: 'Admin' }, { value: 'super_admin', label: 'Super Admin' }]
     : [{ value: 'employee', label: 'Employee' }, { value: 'admin', label: 'Admin' }];
@@ -214,8 +206,7 @@ export default function UsersPage() {
   if (authLoading || !isAuthenticated || !isAdmin) return null;
 
   const tabs = [
-    { key: 'users', label: 'Accounts' },
-    { key: 'employees', label: 'Employee Details' },
+    { key: 'accounts', label: 'Accounts' },
     ...(isSuperAdmin ? [{ key: 'pending', label: `Pending Approvals${pendingChanges.length > 0 ? ` (${pendingChanges.length})` : ''}` }] : [])
   ];
 
@@ -237,7 +228,7 @@ export default function UsersPage() {
             User Management
           </h1>
           <p style={{ color: 'var(--text2)', fontSize: 'var(--fs-sm)', marginTop: '3px' }}>
-            Manage accounts, roles, and employee details.
+            Manage accounts, roles, and employee details in one place.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '3px', background: 'var(--surface3)', borderRadius: '12px', padding: '3px' }}>
@@ -255,7 +246,7 @@ export default function UsersPage() {
       </div>
 
       {/* ── ACCOUNTS TAB ── */}
-      {tab === 'users' && (
+      {tab === 'accounts' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 'var(--gap)', alignItems: 'start' }}>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
@@ -280,32 +271,29 @@ export default function UsersPage() {
                   <div>
                     <label className="input-label">Role</label>
                     <select className="input-field" value={form.role}
-                      onChange={e => setForm(f => ({ ...f, role: e.target.value, employeeCode: '' }))}>
+                      onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
                       {availableRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
                   </div>
-                  {form.role === 'employee' && (
-                    <div>
-                      <label className="input-label">Link to Employee</label>
-                      <select className="input-field" value={form.employeeCode}
-                        onChange={e => setForm(f => ({ ...f, employeeCode: e.target.value }))}>
-                        <option value="">— Select employee —</option>
-                        {employees.map(emp => (
-                          <option key={emp.code} value={emp.code}>{emp.name} ({emp.code})</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                  <div>
+                    <label className="input-label">Employee Code</label>
+                    <input className="input-field" placeholder="e.g. 1042" value={form.code}
+                      onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="input-label">Full Name</label>
+                    <input className="input-field" placeholder="e.g. John Doe" value={form.name}
+                      onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+                  </div>
                 </div>
                 {/* Role preview */}
                 {form.role && (() => {
                   const s = ROLE_STYLES[form.role];
                   return (
                     <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '10px 14px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ fontSize: '16px' }}>{s.icon}</span>
+                      <span style={{ fontSize: '16px' }}>●</span>
                       <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text2)' }}>
                         Will be created as <strong style={{ color: s.color }}>{s.label}</strong>.
-                        {form.role === 'employee' && !form.employeeCode && <span style={{ color: 'var(--orange)' }}> No employee linked.</span>}
                       </span>
                     </div>
                   );
@@ -345,7 +333,7 @@ export default function UsersPage() {
                 <div style={{ padding: '36px', textAlign: 'center', color: 'var(--text2)', fontSize: 'var(--fs-sm)' }}>Loading…</div>
               ) : users.length === 0 ? (
                 <div style={{ padding: '48px 24px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '32px', marginBottom: '12px', opacity: 0.3 }}>👤</div>
+                  <div style={{ fontSize: '32px', marginBottom: '12px', opacity: 0.3 }}>●</div>
                   <div style={{ color: 'var(--text2)', fontSize: 'var(--fs-sm)', marginBottom: '4px' }}>No accounts yet</div>
                   <div style={{ color: 'var(--text3)', fontSize: 'var(--fs-xs)' }}>Create an account above to get started.</div>
                 </div>
@@ -356,54 +344,57 @@ export default function UsersPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr>
-                        {['Username', 'Role', 'Linked Employee', 'Created', 'Actions'].map(h => (
+                        {['Username', 'Name', 'Code', 'Role', 'Status', 'Created', 'Actions'].map(h => (
                           <th key={h} style={thStyle}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredUsers.map(u => {
-                        const emp = employees.find(e => e.code === u.employeeCode);
-                        return (
-                          <tr key={u.id}
-                            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
-                            onMouseLeave={e => e.currentTarget.style.background = ''}>
-                            <td style={{ ...tdStyle, fontWeight: 500 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <div style={{
-                                  width: '28px', height: '28px', borderRadius: '50%',
-                                  background: ROLE_STYLES[u.role]?.bg || 'var(--surface3)',
-                                  display: 'grid', placeItems: 'center',
-                                  fontSize: '11px', fontWeight: 700,
-                                  color: ROLE_STYLES[u.role]?.color || 'var(--text2)',
-                                  flexShrink: 0,
-                                }}>
-                                  {u.username.charAt(0).toUpperCase()}
-                                </div>
-                                <span>{u.username}</span>
+                      {filteredUsers.map(u => (
+                        <tr key={u.id}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
+                          onMouseLeave={e => e.currentTarget.style.background = ''}>
+                          <td style={{ ...tdStyle, fontWeight: 500 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{
+                                width: '28px', height: '28px', borderRadius: '50%',
+                                background: ROLE_STYLES[u.role]?.bg || 'var(--surface3)',
+                                display: 'grid', placeItems: 'center',
+                                fontSize: '11px', fontWeight: 700,
+                                color: ROLE_STYLES[u.role]?.color || 'var(--text2)',
+                                flexShrink: 0,
+                              }}>
+                                {u.username.charAt(0).toUpperCase()}
                               </div>
-                            </td>
-                            <td style={tdStyle}><RoleBadge role={u.role} /></td>
-                            <td style={{ ...tdStyle, color: emp ? 'var(--text)' : 'var(--text3)' }}>
-                              {emp ? `${emp.name} (${emp.code})` : '—'}
-                            </td>
-                            <td style={{ ...tdStyle, color: 'var(--text2)', fontSize: 'var(--fs-xs)', whiteSpace: 'nowrap' }}>
-                              {new Date(u.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                            </td>
-                            <td style={tdStyle}>
-                              <div style={{ display: 'flex', gap: '6px' }}>
-                                <button className="btn btn-secondary" style={{ padding: '4px 12px', fontSize: 'var(--fs-xs)' }} onClick={() => openEdit(u)}>Edit</button>
-                                <button onClick={() => handleDelete(u)} style={{
-                                  padding: '4px 11px', fontSize: 'var(--fs-xs)', borderRadius: '980px',
-                                  border: '1px solid rgba(255,59,48,0.2)', background: 'rgba(255,59,48,0.06)',
-                                  color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500,
-                                  transition: 'all 0.15s',
-                                }}>Delete</button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                              <span>{u.username}</span>
+                            </div>
+                          </td>
+                          <td style={{ ...tdStyle, color: u.name ? 'var(--text)' : 'var(--text3)' }}>{u.name || '—'}</td>
+                          <td style={{ ...tdStyle, color: u.code ? 'var(--text)' : 'var(--text3)', fontSize: 'var(--fs-xs)', fontFamily: 'monospace' }}>{u.code || '—'}</td>
+                          <td style={tdStyle}><RoleBadge role={u.role} /></td>
+                          <td style={tdStyle}>{u.disabled ? <DisabledBadge /> : <span style={{ color: 'var(--green)', fontSize: 'var(--fs-xs)', fontWeight: 500 }}>Active</span>}</td>
+                          <td style={{ ...tdStyle, color: 'var(--text2)', fontSize: 'var(--fs-xs)', whiteSpace: 'nowrap' }}>
+                            {new Date(u.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </td>
+                          <td style={tdStyle}>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button className="btn btn-secondary" style={{ padding: '4px 12px', fontSize: 'var(--fs-xs)' }} onClick={() => openEdit(u)}>Edit</button>
+                              <button onClick={() => handleToggleDisable(u)} style={{
+                                padding: '4px 11px', fontSize: 'var(--fs-xs)', borderRadius: '980px',
+                                border: '1px solid rgba(255,159,10,0.2)', background: 'rgba(255,159,10,0.06)',
+                                color: '#b36200', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500,
+                                transition: 'all 0.15s',
+                              }}>{u.disabled ? 'Enable' : 'Disable'}</button>
+                              <button onClick={() => handleDelete(u)} style={{
+                                padding: '4px 11px', fontSize: 'var(--fs-xs)', borderRadius: '980px',
+                                border: '1px solid rgba(255,59,48,0.2)', background: 'rgba(255,59,48,0.06)',
+                                color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500,
+                                transition: 'all 0.15s',
+                              }}>Delete</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -419,7 +410,11 @@ export default function UsersPage() {
             {ROLE_PERMISSIONS.map(item => (
               <div key={item.role} className="card" style={{ padding: '16px', borderLeft: `3px solid ${item.color}`, borderTopLeftRadius: '6px', borderBottomLeftRadius: '6px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                  <span style={{ fontSize: '16px' }}>{item.icon}</span>
+                  <div style={{
+                    width: '24px', height: '24px', borderRadius: '50%',
+                    background: item.bg, display: 'grid', placeItems: 'center',
+                    fontSize: '12px', fontWeight: 700, color: item.color,
+                  }}>●</div>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 'var(--fs-sm)', color: item.color }}>{item.role}</div>
                     <div style={{ fontSize: '10px', color: 'var(--text3)', marginTop: '1px' }}>
@@ -438,70 +433,6 @@ export default function UsersPage() {
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* ── EMPLOYEE DETAILS TAB ── */}
-      {tab === 'employees' && (
-        <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
-          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 700 }}>Employee Details</span>
-              <span style={{ background: 'var(--surface3)', borderRadius: '980px', padding: '1px 9px', fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--text2)' }}>
-                {employees.length}
-              </span>
-            </div>
-            <SearchBar value={empSearch} onChange={setEmpSearch} placeholder="Search employees…" count={filteredEmployees.length} />
-          </div>
-          {employees.length === 0 ? (
-            <div style={{ padding: '48px 24px', textAlign: 'center' }}>
-              <div style={{ fontSize: '32px', marginBottom: '12px', opacity: 0.3 }}>👥</div>
-              <div style={{ color: 'var(--text2)', fontSize: 'var(--fs-sm)' }}>No employees loaded yet.</div>
-              <div style={{ color: 'var(--text3)', fontSize: 'var(--fs-xs)', marginTop: '2px' }}>Upload attendance data on the Dashboard to populate this list.</div>
-            </div>
-          ) : filteredEmployees.length === 0 ? (
-            <div style={{ padding: '36px', textAlign: 'center', color: 'var(--text2)', fontSize: 'var(--fs-sm)' }}>No employees match your search.</div>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    {['Code', 'Name', 'Birthday', 'Joining Date', 'Work Anniversary', 'Actions'].map(h => (
-                      <th key={h} style={thStyle}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredEmployees.map(emp => (
-                    <tr key={emp.code}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
-                      onMouseLeave={e => e.currentTarget.style.background = ''}>
-                      <td style={{ ...tdStyle, color: 'var(--text2)', fontSize: 'var(--fs-xs)', fontFamily: 'monospace' }}>{emp.code}</td>
-                      <td style={{ ...tdStyle, fontWeight: 500 }}>{emp.name}</td>
-                      <td style={{ ...tdStyle, color: emp.birthday ? 'var(--text)' : 'var(--text3)' }}>
-                        {emp.birthday
-                          ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>🎂 {new Date(emp.birthday).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                          : '—'}
-                      </td>
-                      <td style={{ ...tdStyle, color: emp.joiningDate ? 'var(--text)' : 'var(--text3)' }}>
-                        {emp.joiningDate
-                          ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>📅 {new Date(emp.joiningDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                          : '—'}
-                      </td>
-                      <td style={{ ...tdStyle, color: emp.workAnniversary ? 'var(--text)' : 'var(--text3)' }}>
-                        {emp.workAnniversary
-                          ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>🏢 {new Date(emp.workAnniversary).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                          : '—'}
-                      </td>
-                      <td style={tdStyle}>
-                        <button className="btn btn-secondary" style={{ padding: '4px 12px', fontSize: 'var(--fs-xs)' }} onClick={() => openEditEmp(emp)}>Edit</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
       )}
 
@@ -573,16 +504,16 @@ export default function UsersPage() {
               {availableRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
           </div>
-          {editFields.role === 'employee' && (
-            <div>
-              <label className="input-label">Linked Employee</label>
-              <select className="input-field" value={editFields.employeeCode}
-                onChange={e => setEditFields(f => ({ ...f, employeeCode: e.target.value }))}>
-                <option value="">— None —</option>
-                {employees.map(emp => <option key={emp.code} value={emp.code}>{emp.name} ({emp.code})</option>)}
-              </select>
-            </div>
-          )}
+          <div>
+            <label className="input-label">Employee Code</label>
+            <input className="input-field" placeholder="e.g. 1042" value={editFields.code}
+              onChange={e => setEditFields(f => ({ ...f, code: e.target.value }))} />
+          </div>
+          <div>
+            <label className="input-label">Full Name</label>
+            <input className="input-field" placeholder="e.g. John Doe" value={editFields.name}
+              onChange={e => setEditFields(f => ({ ...f, name: e.target.value }))} />
+          </div>
           {editError && <div style={{ color: 'var(--red)', fontSize: 'var(--fs-sm)' }}>{editError}</div>}
           <div style={{ display: 'flex', gap: '8px', paddingTop: '4px' }}>
             <button type="submit" className="btn btn-primary">Save Changes</button>
@@ -591,35 +522,13 @@ export default function UsersPage() {
         </form>
       </Modal>
 
-      {/* Edit employee details modal */}
-      <Modal open={!!editEmp} onClose={() => setEditEmp(null)} title={editEmp?.name || ''}>
-        <form onSubmit={handleUpdateEmp} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div>
-            <label className="input-label">Birthday</label>
-            <input className="input-field" type="date" value={empFields.birthday}
-              onChange={e => setEmpFields(f => ({ ...f, birthday: e.target.value }))} />
-          </div>
-          <div>
-            <label className="input-label">Joining Date</label>
-            <input className="input-field" type="date" value={empFields.joiningDate}
-              onChange={e => setEmpFields(f => ({ ...f, joiningDate: e.target.value }))} />
-          </div>
-          <div>
-            <label className="input-label">Work Anniversary</label>
-            <input className="input-field" type="date" value={empFields.workAnniversary}
-              onChange={e => setEmpFields(f => ({ ...f, workAnniversary: e.target.value }))} />
-          </div>
-          <div style={{ display: 'flex', gap: '8px', paddingTop: '4px' }}>
-            <button type="submit" className="btn btn-primary">Save</button>
-            <button type="button" className="btn btn-secondary" onClick={() => setEditEmp(null)}>Cancel</button>
-          </div>
-        </form>
-      </Modal>
-
       {/* Confirm modal */}
       {confirmState.show && (
         <ConfirmModal
           message={confirmState.message}
+          confirmLabel={confirmState.confirmLabel}
+          confirmLoadingLabel={confirmState.confirmLoadingLabel}
+          variant={confirmState.variant}
           onConfirm={async () => {
             await confirmState.onConfirm();
             setConfirmState(s => ({ ...s, show: false }));

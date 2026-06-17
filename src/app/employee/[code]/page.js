@@ -63,10 +63,10 @@ export default function EmployeeDashboard({ params }) {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
-    if (!authLoading && isAuthenticated && !isAdmin && user?.employeeCode && user.employeeCode !== code) {
-      router.push(`/employee/${user.employeeCode}`);
+    if (!authLoading && isAuthenticated && !isAdmin && user?.code && user.code !== code) {
+      router.push(`/employee/${user.code}`);
     }
-    if (isAdmin) setTab('attendance');
+    if (isAdmin && tab !== 'attendance') setTab('attendance');
   }, [isAuthenticated, isAdmin, user, authLoading, router, code]);
 
   useEffect(() => {

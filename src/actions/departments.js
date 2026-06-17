@@ -21,8 +21,7 @@ export async function addDepartment(name) {
 }
 
 export async function deleteDepartment(id) {
-  // Unlink employees first
-  await prisma.employee.updateMany({ where: { departmentId: id }, data: { departmentId: null } });
+  await prisma.user.updateMany({ where: { departmentId: id }, data: { departmentId: null } });
   await prisma.subDepartment.deleteMany({ where: { departmentId: id } });
   await prisma.department.delete({ where: { id } });
   revalidatePath('/');
@@ -40,7 +39,7 @@ export async function addSubDepartment(name, departmentId) {
 }
 
 export async function deleteSubDepartment(id) {
-  await prisma.employee.updateMany({ where: { subDepartmentId: id }, data: { subDepartmentId: null } });
+  await prisma.user.updateMany({ where: { subDepartmentId: id }, data: { subDepartmentId: null } });
   await prisma.subDepartment.delete({ where: { id } });
   revalidatePath('/');
   return { success: true };
@@ -61,7 +60,7 @@ export async function addDesignation(name) {
 }
 
 export async function deleteDesignation(id) {
-  await prisma.employee.updateMany({ where: { designationId: id }, data: { designationId: null } });
+  await prisma.user.updateMany({ where: { designationId: id }, data: { designationId: null } });
   await prisma.designation.delete({ where: { id } });
   revalidatePath('/');
   return { success: true };
@@ -70,19 +69,17 @@ export async function deleteDesignation(id) {
 // ─── MANAGER ASSIGNMENT ──────────────────────────────────────
 
 export async function setEmployeeManagers(employeeCode, managerCodes) {
-  const emp = await prisma.employee.findUnique({ where: { code: employeeCode } });
-  if (!emp) return { error: 'Employee not found' };
+  const user = await prisma.user.findUnique({ where: { code: employeeCode } });
+  if (!user) return { error: 'Employee not found' };
 
-  // Remove existing manager assignments
-  await prisma.employeeManager.deleteMany({ where: { employeeId: emp.id } });
+  await prisma.userManager.deleteMany({ where: { userId: user.id } });
 
-  // Add new ones with priority
   if (managerCodes && managerCodes.length > 0) {
     for (let i = 0; i < managerCodes.length; i++) {
-      const mgr = await prisma.employee.findUnique({ where: { code: managerCodes[i] } });
+      const mgr = await prisma.user.findUnique({ where: { code: managerCodes[i] } });
       if (mgr) {
-        await prisma.employeeManager.create({
-          data: { employeeId: emp.id, managerEmployeeId: mgr.id, priority: i + 1 }
+        await prisma.userManager.create({
+          data: { userId: user.id, managerUserId: mgr.id, priority: i + 1 }
         });
       }
     }
@@ -93,7 +90,7 @@ export async function setEmployeeManagers(employeeCode, managerCodes) {
 }
 
 export async function getEmployeeManagers(employeeCode) {
-  const emp = await prisma.employee.findUnique({
+  const user = await prisma.user.findUnique({
     where: { code: employeeCode },
     include: {
       managers: {
@@ -102,29 +99,29 @@ export async function getEmployeeManagers(employeeCode) {
       }
     }
   });
-  if (!emp) return [];
-  return emp.managers.map(m => ({ code: m.manager.code, name: m.manager.name, priority: m.priority }));
+  if (!user) return [];
+  return user.managers.map(m => ({ code: m.manager.code, name: m.manager.name, priority: m.priority }));
 }
 
 export async function getManagedEmployees(managerCode) {
-  const mgr = await prisma.employee.findUnique({ where: { code: managerCode } });
+  const mgr = await prisma.user.findUnique({ where: { code: managerCode } });
   if (!mgr) return [];
 
-  const relations = await prisma.employeeManager.findMany({
-    where: { managerEmployeeId: mgr.id },
+  const relations = await prisma.userManager.findMany({
+    where: { managerUserId: mgr.id },
     include: {
-      employee: {
+      user: {
         select: { code: true, name: true, employeeType: true, department: { select: { name: true } }, designation: { select: { name: true } } }
       }
     },
     orderBy: [{ priority: 'asc' }]
   });
   return relations.map(r => ({
-    code: r.employee.code,
-    name: r.employee.name,
-    employeeType: r.employee.employeeType,
-    department: r.employee.department?.name ?? null,
-    designation: r.employee.designation?.name ?? null,
+    code: r.user.code,
+    name: r.user.name,
+    employeeType: r.user.employeeType,
+    department: r.user.department?.name ?? null,
+    designation: r.user.designation?.name ?? null,
     priority: r.priority
   }));
 }

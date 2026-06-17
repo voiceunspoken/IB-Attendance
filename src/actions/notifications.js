@@ -4,7 +4,6 @@ import { prisma } from '../lib/prisma';
 
 const FROM = process.env.EMAIL_FROM || 'IB Attendance <noreply@ibeesattendance.com>';
 
-// Lazy Resend client — only created when actually sending, avoids crash if key not set
 async function getResend() {
   if (!process.env.RESEND_API_KEY) return null;
   const { Resend } = await import('resend');
@@ -12,7 +11,7 @@ async function getResend() {
 }
 
 async function getEmployeeEmail(employeeCode) {
-  const user = await prisma.user.findFirst({ where: { employeeCode } });
+  const user = await prisma.user.findFirst({ where: { code: employeeCode } });
   return user?.email ?? null;
 }
 
@@ -138,16 +137,16 @@ export async function sendMonthlyReport(employeeCode, employeeName, monthYear, s
 }
 
 export async function sendAllMonthlyReports(monthYear) {
-  const users = await prisma.user.findMany({ where: { role: 'employee', employeeCode: { not: null } } });
+  const users = await prisma.user.findMany({ where: { role: 'employee', code: { not: null } } });
   const results = [];
   for (const u of users) {
     const record = await prisma.monthRecord.findFirst({
-      where: { employee: { code: u.employeeCode }, monthYear },
-      include: { employee: true }
+      where: { user: { code: u.code }, monthYear },
+      include: { user: true }
     });
     if (record) {
-      const r = await sendMonthlyReport(u.employeeCode, record.employee.name, monthYear, record);
-      results.push({ code: u.employeeCode, ...r });
+      const r = await sendMonthlyReport(u.code, record.user.name, monthYear, record);
+      results.push({ code: u.code, ...r });
     }
   }
   return results;

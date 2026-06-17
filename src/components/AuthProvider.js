@@ -36,8 +36,8 @@ export function AuthProvider({ children }) {
     setUser(result.user);
 
     // Employees go straight to their own profile
-    if (result.user.role === 'employee' && result.user.employeeCode) {
-      router.push(`/employee/${result.user.employeeCode}`);
+    if (result.user.role === 'employee' && result.user.code) {
+      router.push(`/employee/${result.user.code}`);
     } else {
       router.push('/');
     }

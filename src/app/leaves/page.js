@@ -218,8 +218,8 @@ export default function LeavesPage() {
               <div key={r.id} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.employee?.name || 'Unknown'}</span>
-                    <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.employee?.code}</span>
+                    <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name || 'Unknown'}</span>
+                    <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user?.code}</span>
                     <span style={{ fontSize: '12px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
                     <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
                     {r.shiftSlot && <span style={{ fontSize: '11px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
@@ -258,8 +258,8 @@ export default function LeavesPage() {
                 <div key={r.id} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.employee?.name}</span>
-                      <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.employee?.code}</span>
+                      <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name}</span>
+                      <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user?.code}</span>
                       <span style={{ fontSize: '12px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
                       <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
                       {r.shiftSlot && <span style={{ fontSize: '11px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
@@ -313,8 +313,8 @@ export default function LeavesPage() {
                 <div key={r.id} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
                   <div>
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px' }}>
-                      <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.employee.name}</span>
-                      <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.employee.code}</span>
+                      <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user.name}</span>
+                      <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user.code}</span>
                       <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                     </div>
                     <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
@@ -343,8 +343,8 @@ export default function LeavesPage() {
                   <div key={r.id} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
                     <div>
                       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px' }}>
-                        <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.employee.name}</span>
-                        <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.employee.code}</span>
+                        <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user.name}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user.code}</span>
                         <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                       </div>
                       <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
