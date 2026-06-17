@@ -14,7 +14,7 @@ import { getMonths } from '../../actions/attendance';
 import { changePassword } from '../../actions/auth';
 import { sendAllMonthlyReports } from '../../actions/notifications';
 import ConfirmModal from '../../components/ConfirmModal';
-import { FiSun, FiClock, FiPlus, FiUser, FiCalendar, FiFileText, FiSettings, FiAward, FiRefreshCw, FiFilter, FiChevronDown } from 'react-icons/fi';
+import { FiSun, FiClock, FiPlus, FiUser, FiCalendar, FiFileText, FiSettings, FiAward, FiRefreshCw, FiFilter } from 'react-icons/fi';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -262,43 +262,41 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div style={{ padding: '24px 28px', maxWidth: '1000px', margin: '0 auto' }} className="animate-fade-in">
-      <div style={{ marginBottom: '24px' }}>
+    <div className="animate-fade-in" style={{ padding: '24px 28px', maxWidth: '1000px', margin: '0 auto' }}>
+      <div className="mb-20">
         <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '-0.04em' }}>Settings</h1>
-        <p style={{ color: 'var(--text2)', fontSize: '14px', marginTop: '4px' }}>Holidays, shift policy, employees, notifications and security.</p>
+        <p className="text-muted text-base" style={{ marginTop: '4px' }}>Holidays, shift policy, employees, notifications and security.</p>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '4px', background: 'var(--surface3)', borderRadius: '10px', padding: '3px', marginBottom: '24px', flexWrap: 'wrap' }}>
+      <div className="flex gap-4 flex-wrap bg-surface2" style={{ borderRadius: '10px', padding: '3px', marginBottom: '24px' }}>
         {tabs.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} style={{
-            padding: '6px 16px', borderRadius: '7px', fontSize: '13px', fontWeight: 500,
-            border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+          <button key={t.key} onClick={() => setTab(t.key)} className="btn border-none" style={{
+            padding: '6px 16px', borderRadius: '7px', fontSize: '13px',
             background: tab === t.key ? 'var(--surface)' : 'transparent',
             color: tab === t.key ? 'var(--text)' : 'var(--text2)',
-            boxShadow: tab === t.key ? 'var(--shadow-sm)' : 'none', transition: 'all 0.15s'
+            boxShadow: tab === t.key ? 'var(--shadow-sm)' : 'none',
           }}>{t.label}</button>
         ))}
       </div>
 
-      {loading && <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text2)', fontSize: '14px' }}>Loading…</div>}
+      {loading && <div className="p-32 text-center text-muted text-base">Loading…</div>}
 
       {/* ── HOLIDAYS ── */}
       {!loading && tab === 'holidays' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div className="flex-col gap-16">
           {/* Sub-tabs */}
-          <div style={{ display: 'flex', gap: '4px', background: 'var(--surface3)', borderRadius: '10px', padding: '3px', width: 'fit-content' }}>
+          <div className="flex gap-4 bg-surface2" style={{ borderRadius: '10px', padding: '3px', width: 'fit-content' }}>
             {[
               { key: 'gazette', label: `Gazette (${holidays.filter(h => !h.isRestricted && h.type === 'national').length})` },
               { key: 'restricted', label: `Restricted (${holidays.filter(h => h.isRestricted || h.type === 'optional').length})` },
               ...(isSuperAdmin ? [{ key: 'pending', label: `Pending (${pendingHolidays.length})` }] : []),
             ].map(t => (
-              <button key={t.key} onClick={() => setHSubTab(t.key)} style={{
-                padding: '6px 16px', borderRadius: '7px', fontSize: '13px', fontWeight: 500,
-                border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+              <button key={t.key} onClick={() => setHSubTab(t.key)} className="btn border-none" style={{
+                padding: '6px 16px', borderRadius: '7px', fontSize: '13px',
                 background: hSubTab === t.key ? 'var(--surface)' : 'transparent',
                 color: hSubTab === t.key ? 'var(--text)' : 'var(--text2)',
-                boxShadow: hSubTab === t.key ? 'var(--shadow-sm)' : 'none', transition: 'all 0.15s'
+                boxShadow: hSubTab === t.key ? 'var(--shadow-sm)' : 'none',
               }}>{t.label}</button>
             ))}
           </div>
@@ -306,9 +304,9 @@ export default function SettingsPage() {
           {/* Gazette / Restricted list */}
           {(hSubTab === 'gazette' || hSubTab === 'restricted') && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}>
-              <div className="card" style={{ padding: '22px 24px' }}>
-                <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px' }}>Add {hSubTab === 'gazette' ? 'Gazette' : 'Restricted'} Holiday — {year}</div>
-                <form onSubmit={handleAddHoliday} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div className="card card-body">
+                <div className="text-md text-bold mb-12">Add {hSubTab === 'gazette' ? 'Gazette' : 'Restricted'} Holiday — {year}</div>
+                <form onSubmit={handleAddHoliday} className="flex-col gap-12">
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                     <div>
                       <label className="input-label">Month</label>
@@ -326,11 +324,11 @@ export default function SettingsPage() {
                     <input className="input-field" placeholder="e.g. Republic Day" value={hForm.name} onChange={e => setHForm(f => ({ ...f, name: e.target.value }))} />
                   </div>
                   {hSubTab === 'restricted' && (
-                    <div style={{ fontSize: '12px', color: 'var(--text2)', background: 'rgba(175,82,222,0.08)', borderRadius: '10px', padding: '10px 14px' }}>
+                    <div className="text-xs text-muted" style={{ background: 'rgba(175,82,222,0.08)', borderRadius: '10px', padding: '10px 14px' }}>
                       This will be added as a restricted holiday (RL-eligible, pending super admin approval).
                     </div>
                   )}
-                  {hMsg && <div style={{ fontSize: '13px', color: hMsg.startsWith('Added') ? 'var(--green)' : 'var(--red)' }}>{hMsg}</div>}
+                  {hMsg && <div className="text-sm" style={{ color: hMsg.startsWith('Added') ? 'var(--green)' : 'var(--red)' }}>{hMsg}</div>}
                   <button type="submit" className="btn btn-primary">Submit for Approval</button>
                   <button type="button" className="btn btn-secondary" onClick={handleSeedHolidays}>
                     Seed IB Holidays {year}
@@ -339,8 +337,8 @@ export default function SettingsPage() {
 
                 {/* CSV Upload */}
                 <div style={{ marginTop: '20px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
-                  <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>Bulk Upload (CSV)</div>
-                  <div style={{ fontSize: '11px', color: 'var(--text2)', marginBottom: '10px' }}>
+                  <div className="text-sm text-semibold mb-6">Bulk Upload (CSV)</div>
+                  <div className="text-xs text-muted mb-10">
                     Format: Date (DD/MM/YYYY), Name, Type (gazette/restricted). One per line.
                   </div>
                   <input type="file" accept=".csv,.xlsx" className="input-field" style={{ padding: '8px', fontSize: '12px' }}
@@ -352,26 +350,26 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
+              <div className="card overflow-hidden p-0">
+                <div className="card-header">
                   {hSubTab === 'gazette' ? 'Gazette' : 'Restricted'} Holidays ({holidays.filter(h => hSubTab === 'gazette' ? (!h.isRestricted || h.type === 'national') : (h.isRestricted || h.type === 'optional')).length})
                 </div>
-                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                <div className="scroll-y" style={{ maxHeight: '400px' }}>
                   {holidays.filter(h => hSubTab === 'gazette' ? (!h.isRestricted || h.type === 'national') : (h.isRestricted || h.type === 'optional')).length === 0
-                    ? <div style={{ padding: '40px', textAlign: 'center' }}>
+                    ? <div className="p-32 text-center">
                         <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.25, color: 'var(--text3)' }}><FiSun size={36} /></div>
-                        <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px', color: 'var(--text2)' }}>No holidays added yet</div>
-                        <div style={{ fontSize: '13px', color: 'var(--text3)', marginBottom: '16px' }}>Add your first holiday to get started.</div>
-                        <button onClick={() => setHSubTab('add')} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 500, border: 'none', cursor: 'pointer', fontFamily: 'inherit', background: 'var(--accent)', color: '#fff' }}><FiPlus size={14} /> Add Your First Holiday</button>
+                        <div className="text-md text-semibold mb-2 text-muted">No holidays added yet</div>
+                        <div className="text-sm text-muted2 mb-16">Add your first holiday to get started.</div>
+                        <button onClick={() => setHSubTab('add')} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 500, border: 'none', cursor: 'pointer', fontFamily: 'inherit', background: 'var(--blue)', color: '#fff' }}><FiPlus size={14} /> Add Your First Holiday</button>
                       </div>
                     : holidays.filter(h => hSubTab === 'gazette' ? (!h.isRestricted || h.type === 'national') : (h.isRestricted || h.type === 'optional')).map(h => (
-                      <div key={h.id} style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div key={h.id} className="flex-between border-bottom" style={{ padding: '12px 20px' }}>
                         <div>
-                          <span style={{ fontWeight: 500, fontSize: '13px' }}>{h.name}</span>
-                          <span style={{ fontSize: '12px', color: 'var(--text2)', marginLeft: '8px' }}>{MONTHS[h.month - 1]} {h.day}</span>
-                          {h.status === 'pending' && <span style={{ fontSize: '10px', background: 'rgba(255,159,10,0.1)', color: '#b36200', padding: '1px 6px', borderRadius: '980px', marginLeft: '6px' }}>Pending</span>}
+                          <span className="text-sm text-medium">{h.name}</span>
+                          <span className="text-xs text-muted" style={{ marginLeft: '8px' }}>{MONTHS[h.month - 1]} {h.day}</span>
+                          {h.status === 'pending' && <span className="badge" style={{ background: 'rgba(255,159,10,0.1)', color: '#b36200', marginLeft: '6px' }}>Pending</span>}
                         </div>
-                        <button onClick={() => handleDeleteHoliday(h.id)} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>
+                        <button onClick={() => handleDeleteHoliday(h.id)} className="btn border-none" style={{ fontSize: '12px', padding: '4px 10px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>
                       </div>
                     ))
                   }
@@ -382,35 +380,35 @@ export default function SettingsPage() {
 
           {/* Pending Holidays — super admin approval */}
           {hSubTab === 'pending' && isSuperAdmin && (
-            <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
-              <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
+            <div className="card overflow-hidden p-0">
+              <div className="card-header">
                 Pending Holiday Approvals ({pendingHolidays.length})
               </div>
               {pendingHolidays.length === 0
-                ? <div style={{ padding: '40px', textAlign: 'center' }}>
+                ? <div className="p-32 text-center">
                     <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.25, color: 'var(--text3)' }}><FiSun size={36} /></div>
-                    <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px', color: 'var(--text2)' }}>No pending holidays</div>
-                    <div style={{ fontSize: '13px', color: 'var(--text3)', marginBottom: '16px' }}>Add a holiday proposal for super admin approval.</div>
-                    <button onClick={() => setHSubTab('add')} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 500, border: 'none', cursor: 'pointer', fontFamily: 'inherit', background: 'var(--accent)', color: '#fff' }}><FiPlus size={14} /> Add Your First Holiday</button>
+                    <div className="text-md text-semibold mb-2 text-muted">No pending holidays</div>
+                    <div className="text-sm text-muted2 mb-16">Add a holiday proposal for super admin approval.</div>
+                    <button onClick={() => setHSubTab('add')} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 500, border: 'none', cursor: 'pointer', fontFamily: 'inherit', background: 'var(--blue)', color: '#fff' }}><FiPlus size={14} /> Add Your First Holiday</button>
                   </div>
                 : pendingHolidays.map(h => (
-                  <div key={h.id} style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                  <div key={h.id} className="flex-between border-bottom gap-12" style={{ padding: '14px 20px' }}>
                     <div>
-                      <span style={{ fontWeight: 500, fontSize: '13px' }}>{h.name}</span>
-                      <span style={{ fontSize: '12px', color: 'var(--text2)', marginLeft: '8px' }}>{MONTHS[h.month - 1]} {h.day}</span>
-                      <span style={{ fontSize: '11px', color: h.isRestricted ? 'var(--purple)' : 'var(--blue)', marginLeft: '6px', fontWeight: 500 }}>
+                      <span className="text-sm text-medium">{h.name}</span>
+                      <span className="text-xs text-muted" style={{ marginLeft: '8px' }}>{MONTHS[h.month - 1]} {h.day}</span>
+                      <span className="text-xs text-semibold" style={{ color: h.isRestricted ? 'var(--purple)' : 'var(--blue)', marginLeft: '6px' }}>
                         {h.isRestricted ? 'Restricted' : 'Gazette'}
                       </span>
-                      <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '2px' }}>By {h.createdBy || 'admin'} · {new Date(h.createdAt).toLocaleString()}</div>
+                      <div className="text-xs text-muted2" style={{ marginTop: '2px' }}>By {h.createdBy || 'admin'} · {new Date(h.createdAt).toLocaleString()}</div>
                     </div>
-                    <div style={{ display: 'flex', gap: '6px' }}>
+                    <div className="flex gap-6">
                       <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: '12px', background: 'var(--green)' }}
                         onClick={async () => {
                           await approveHoliday(h.id, user.username);
                           const [hd, ph] = await Promise.all([getHolidays(year), getPendingHolidays(year)]);
                           setHolidays(hd); setPendingHolidays(ph);
                         }}>Approve</button>
-                      <button style={{ padding: '6px 14px', fontSize: '12px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
+                      <button className="btn border-none" style={{ padding: '6px 14px', fontSize: '12px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
                         onClick={async () => {
                           await rejectHoliday(h.id, user.username);
                           const [hd, ph] = await Promise.all([getHolidays(year), getPendingHolidays(year)]);
@@ -427,12 +425,12 @@ export default function SettingsPage() {
 
       {/* ── SHIFT POLICY ── */}
       {!loading && tab === 'shift' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div className="flex-col gap-16">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}>
-          <div className="card" style={{ padding: '22px 24px' }}>
-            <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '6px' }}>Shift Configuration</div>
-            <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '20px' }}>Changes apply to new uploads only — existing data is not recalculated.</div>
-            <form onSubmit={handleSavePolicy} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div className="card card-body">
+            <div className="text-md text-bold mb-6">Shift Configuration</div>
+            <div className="text-sm text-muted mb-20">Changes apply to new uploads only — existing data is not recalculated.</div>
+            <form onSubmit={handleSavePolicy} className="flex-col gap-14">
               {[
                 { label: 'Shift Start Hour (0–23)', key: 'shiftStartH', min: 0, max: 23 },
                 { label: 'Shift Start Minute (0–59)', key: 'shiftStartM', min: 0, max: 59 },
@@ -441,39 +439,39 @@ export default function SettingsPage() {
                 { label: 'Lates per Half-Day Deduction', key: 'latesPerHD', min: 1, max: 10 },
                 { label: 'Short Shifts per Half-Day Deduction', key: 'ssPerHD', min: 1, max: 10 },
               ].map(({ label, key, min, max, step }) => (
-                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
-                  <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text)', flex: 1 }}>{label}</label>
-                  <input type="number" min={min} max={max} step={step || 1} className="input-field"
-                    style={{ width: '80px', padding: '8px 12px', textAlign: 'center' }}
+                <div key={key} className="flex-between gap-16">
+                  <label className="text-base text-medium" style={{ flex: 1 }}>{label}</label>
+                  <input type="number" min={min} max={max} step={step || 1} className="input-field text-center"
+                    style={{ width: '80px', padding: '8px 12px' }}
                     value={policy[key]} onChange={e => setPolicy(p => ({ ...p, [key]: parseFloat(e.target.value) || 0 }))} />
                 </div>
               ))}
-              <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '12px 14px', fontSize: '13px', color: 'var(--text2)' }}>
+              <div className="text-sm text-muted" style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '12px 14px' }}>
                 Current: Shift {String(policy.shiftStartH).padStart(2,'0')}:{String(policy.shiftStartM).padStart(2,'0')} · Late after +{policy.graceMinutes}min · Min {policy.minHours}h · {policy.latesPerHD} lates = 1 HD · {policy.ssPerHD} SS = 1 HD
               </div>
-              {policyMsg && <div style={{ fontSize: '13px', color: 'var(--green)' }}>{policyMsg}</div>}
+              {policyMsg && <div className="text-sm" style={{ color: 'var(--green)' }}>{policyMsg}</div>}
               <button type="submit" className="btn btn-primary">Save & Activate</button>
             </form>
           </div>
 
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>Policy History</div>
-            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+          <div className="card overflow-hidden p-0">
+            <div className="card-header">Policy History</div>
+            <div className="scroll-y" style={{ maxHeight: '400px' }}>
               {policyHistory.length === 0
-                ? <div style={{ padding: '40px', textAlign: 'center' }}>
+                ? <div className="p-32 text-center">
                     <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.25, color: 'var(--text3)' }}><FiClock size={36} /></div>
-                    <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px', color: 'var(--text2)' }}>Policy has never been changed</div>
-                    <div style={{ fontSize: '13px', color: 'var(--text3)' }}>Create a new policy above and activate it to see history here.</div>
+                    <div className="text-md text-semibold mb-2 text-muted">Policy has never been changed</div>
+                    <div className="text-sm text-muted2">Create a new policy above and activate it to see history here.</div>
                   </div>
                 : policyHistory.map((p) => (
-                <div key={p.id} style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 500 }}>
+                <div key={p.id} className="border-bottom p-12-20">
+                  <div className="flex-between">
+                    <span className="text-sm text-medium">
                       {String(p.shiftStartH).padStart(2,'0')}:{String(p.shiftStartM).padStart(2,'0')} · {p.graceMinutes}min grace · {p.minHours}h min
                     </span>
-                    {p.isActive && <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--green)', background: 'rgba(52,199,89,0.1)', padding: '2px 8px', borderRadius: '980px' }}>Active</span>}
+                    {p.isActive && <span className="badge" style={{ background: 'rgba(52,199,89,0.1)', color: 'var(--green)' }}>Active</span>}
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '3px' }}>{new Date(p.createdAt).toLocaleString()}</div>
+                  <div className="text-xs text-muted2" style={{ marginTop: '3px' }}>{new Date(p.createdAt).toLocaleString()}</div>
                 </div>
               ))}
             </div>
@@ -483,26 +481,26 @@ export default function SettingsPage() {
         )}
 
         {isSuperAdmin && pendingPolicies.length > 0 && (
-          <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
+          <div className="card overflow-hidden p-0">
+            <div className="card-header">
               Pending Policy Approvals ({pendingPolicies.length})
             </div>
             {pendingPolicies.map(p => (
-              <div key={p.id} style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+              <div key={p.id} className="flex-between border-bottom gap-12" style={{ padding: '14px 20px' }}>
                 <div>
-                  <div style={{ fontSize: '13px', fontWeight: 500 }}>
+                  <div className="text-sm text-medium">
                     {String(p.shiftStartH).padStart(2,'0')}:{String(p.shiftStartM).padStart(2,'0')} · {p.graceMinutes}min grace · {p.minHours}h min · {p.latesPerHD} lates = 1 HD · {p.ssPerHD} SS = 1 HD
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '2px' }}>
+                  <div className="text-xs text-muted2" style={{ marginTop: '2px' }}>
                     By {p.createdBy || 'admin'} · {new Date(p.createdAt).toLocaleString()}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '6px' }}>
+                <div className="flex gap-6">
                   <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: '12px', background: 'var(--green)' }}
                     onClick={async () => { await reviewPolicy(p.id, user.username, true); const pp = await getPendingPolicies(); setPendingPolicies(pp); }}>
                     Approve
                   </button>
-                  <button style={{ padding: '6px 14px', fontSize: '12px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
+                  <button className="btn border-none" style={{ padding: '6px 14px', fontSize: '12px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
                     onClick={async () => { await reviewPolicy(p.id, user.username, false); const pp = await getPendingPolicies(); setPendingPolicies(pp); }}>
                     Reject
                   </button>
@@ -511,18 +509,16 @@ export default function SettingsPage() {
             ))}
           </div>
         )}
-        
-
 
       {/* ── NOTIFICATIONS ── */}
       {!loading && tab === 'notifications' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '560px' }}>
-          <div className="card" style={{ padding: '22px 24px' }}>
-            <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '6px' }}>Monthly Report Emails</div>
-            <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '20px' }}>
+        <div className="flex-col gap-16" style={{ maxWidth: '560px' }}>
+          <div className="card card-body">
+            <div className="text-md text-bold mb-6">Monthly Report Emails</div>
+            <div className="text-sm text-muted mb-20">
               Send attendance summary emails to all employees who have an email on their account.
             </div>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
+            <div className="flex gap-10 items-end">
               <div style={{ flex: 1 }}>
                 <label className="input-label">Select Month</label>
                 <select className="input-field" value={notifMonth} onChange={e => setNotifMonth(e.target.value)}>
@@ -531,17 +527,17 @@ export default function SettingsPage() {
               </div>
               <button className="btn btn-primary" onClick={handleSendReports}>Send Reports</button>
             </div>
-            {notifMsg && <div style={{ marginTop: '12px', fontSize: '13px', color: notifMsg.includes('error') ? 'var(--red)' : 'var(--green)' }}>{notifMsg}</div>}
+            {notifMsg && <div className="text-sm mt-12" style={{ color: notifMsg.includes('error') ? 'var(--red)' : 'var(--green)' }}>{notifMsg}</div>}
           </div>
         </div>
       )}
 
       {/* ── CHANGE PASSWORD ── */}
       {!loading && tab === 'password' && (
-        <div className="card" style={{ padding: '24px', maxWidth: '400px' }}>
-          <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '6px' }}>Change Password</div>
-          <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '20px' }}>Logged in as <strong>{user?.username}</strong></div>
-          <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div className="card p-24" style={{ maxWidth: '400px' }}>
+          <div className="text-md text-bold mb-6">Change Password</div>
+          <div className="text-sm text-muted mb-20">Logged in as <strong>{user?.username}</strong></div>
+          <form onSubmit={handleChangePassword} className="flex-col gap-14">
             <div>
               <label className="input-label">Current Password</label>
               <input className="input-field" type="password" value={pwForm.current} onChange={e => setPwForm(f => ({ ...f, current: e.target.value }))} />
@@ -554,8 +550,8 @@ export default function SettingsPage() {
               <label className="input-label">Confirm New Password</label>
               <input className="input-field" type="password" value={pwForm.confirm} onChange={e => setPwForm(f => ({ ...f, confirm: e.target.value }))} />
             </div>
-            {pwError && <div style={{ color: 'var(--red)', fontSize: '13px' }}>{pwError}</div>}
-            {pwMsg && <div style={{ color: 'var(--green)', fontSize: '13px' }}>{pwMsg}</div>}
+            {pwError && <div className="text-sm" style={{ color: 'var(--red)' }}>{pwError}</div>}
+            {pwMsg && <div className="text-sm" style={{ color: 'var(--green)' }}>{pwMsg}</div>}
             <button type="submit" className="btn btn-primary">Update Password</button>
           </form>
         </div>

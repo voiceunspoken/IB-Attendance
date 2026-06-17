@@ -161,13 +161,13 @@ export default function DashboardHome() {
         color: '#fff', position: 'relative', overflow: 'hidden',
       }}>
         <div style={{ position: 'relative', zIndex: 1 }}>
-          <div style={{ fontSize: '13px', fontWeight: 500, opacity: 0.75, marginBottom: '4px' }}>
+          <div className="text-xs text-medium" style={{ opacity: 0.75, marginBottom: '4px' }}>
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
           </div>
           <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '-0.04em', margin: '0 0 4px' }}>
             Welcome back{user?.name ? `, ${user.name.split(' ')[0]}` : ''}
           </h1>
-          <p style={{ fontSize: '14px', opacity: 0.75, margin: 0 }}>
+          <p className="text-sm" style={{ opacity: 0.75, margin: 0 }}>
             {headerMonth ? `Attendance overview for ${formatMonth(headerMonth)}` : 'Attendance Portal'}
           </p>
         </div>
@@ -177,9 +177,9 @@ export default function DashboardHome() {
 
       {loading ? (
         <div className="animate-fade-in">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)', marginBottom: 'var(--gap)' }}>
+          <div className="kpi-grid" style={{ gap: 'var(--gap)', marginBottom: 'var(--gap)' }}>
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="card" style={{ padding: '24px' }}>
+              <div key={i} className="card p-24">
                 <div className="skeleton" style={{ width: '40px', height: '40px', borderRadius: '12px', marginBottom: '14px' }} />
                 <div className="skeleton" style={{ width: '50%', height: '32px', borderRadius: '8px', marginBottom: '6px' }} />
                 <div className="skeleton" style={{ width: '70%', height: '12px', borderRadius: '4px' }} />
@@ -187,31 +187,29 @@ export default function DashboardHome() {
             ))}
             </div>
 
-            {/* ── Upcoming Birthdays ── */}
+            {/* ── Upcoming Birthdays (loading skeleton) ── */}
             <div style={{ marginTop: '12px' }}>
-              <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '12px' }}>Upcoming Birthdays</div>
-              <div className="card" style={{ padding: '16px 20px' }}>
+              <div className="text-base text-bold mb-12">Upcoming Birthdays</div>
+              <div className="card card-body-sm">
                 {upcomingBirthdays.length === 0 ? (
-                  <div style={{ color: 'var(--text3)', fontSize: '13px', textAlign: 'center', padding: '12px 0' }}>No birthdays in the next 30 days</div>
+                  <div className="text-sm text-muted2 text-center" style={{ padding: '12px 0' }}>No birthdays in the next 30 days</div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div className="flex-col gap-8">
                     {upcomingBirthdays.map((b, i) => (
-                      <div key={b.name} style={{
-                        display: 'flex', alignItems: 'center', gap: '12px',
+                      <div key={b.name} className="flex items-center gap-12" style={{
                         paddingBottom: i < upcomingBirthdays.length - 1 ? '8px' : 0,
                         borderBottom: i < upcomingBirthdays.length - 1 ? '1px solid var(--border)' : 'none',
                       }}>
-                        <div style={{
+                        <div className="flex-col items-center grid-center flex-shrink-0" style={{
                           width: '40px', height: '40px', borderRadius: '10px',
-                          background: 'rgba(255,159,10,0.08)', display: 'flex',
-                          flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                          background: 'rgba(255,159,10,0.08)',
                         }}>
-                          <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text2)', lineHeight: 1 }}>{b.date.toLocaleString('en', { month: 'short' })}</span>
+                          <span className="text-xs text-semibold text-muted" style={{ lineHeight: 1 }}>{b.date.toLocaleString('en', { month: 'short' })}</span>
                           <span style={{ fontSize: '16px', fontWeight: 700, lineHeight: 1.2 }}>{b.date.getDate()}</span>
                         </div>
                         <div>
-                          <div style={{ fontSize: '13px', fontWeight: 600 }}>{b.name}</div>
-                          <div style={{ fontSize: '11px', color: 'var(--text3)' }}>{b.daysAway === 0 ? 'Today!' : `${b.daysAway} day${b.daysAway !== 1 ? 's' : ''} away`}</div>
+                          <div className="text-sm text-semibold">{b.name}</div>
+                          <div className="text-xs text-muted2">{b.daysAway === 0 ? 'Today!' : `${b.daysAway} day${b.daysAway !== 1 ? 's' : ''} away`}</div>
                         </div>
                         <div style={{ marginLeft: 'auto', color: 'rgba(255,159,10,0.5)' }}>
                           <FiGift size={16} />
@@ -227,57 +225,57 @@ export default function DashboardHome() {
         <>
 
           {/* ── Top KPI Row ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)', marginBottom: 'var(--gap)' }}>
-            <div className="card" style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'linear-gradient(135deg, #0071e3, #40a0ff)', display: 'grid', placeItems: 'center', color: '#fff', flexShrink: 0 }}>
+          <div className="kpi-grid" style={{ gap: 'var(--gap)', marginBottom: 'var(--gap)' }}>
+            <div className="card flex items-center gap-16" style={{ padding: '20px 24px' }}>
+              <div className="grid-center" style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'linear-gradient(135deg, #0071e3, #40a0ff)', color: '#fff', flexShrink: 0 }}>
                 <FiUsers size={22} />
               </div>
               <div>
                 <div style={{ fontSize: '24px', fontWeight: 700, lineHeight: 1.2 }}>{activeEmployees}</div>
-                <div style={{ fontSize: '13px', color: 'var(--text2)' }}>Active Employees</div>
+                <div className="text-sm text-muted">Active Employees</div>
               </div>
             </div>
-            <div className="card" style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'linear-gradient(135deg, #34c759, #68e088)', display: 'grid', placeItems: 'center', color: '#fff', flexShrink: 0 }}>
+            <div className="card flex items-center gap-16" style={{ padding: '20px 24px' }}>
+              <div className="grid-center" style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'linear-gradient(135deg, #34c759, #68e088)', color: '#fff', flexShrink: 0 }}>
                 <FiActivity size={22} />
               </div>
               <div>
                 <div style={{ fontSize: '24px', fontWeight: 700, lineHeight: 1.2 }}>{attendanceRate}{attendanceRate !== '—' ? '%' : ''}</div>
-                <div style={{ fontSize: '13px', color: 'var(--text2)' }}>Attendance Rate</div>
+                <div className="text-sm text-muted">Attendance Rate</div>
               </div>
             </div>
-            <div className="card" style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'linear-gradient(135deg, #ff9f0a, #ffc75a)', display: 'grid', placeItems: 'center', color: '#fff', flexShrink: 0 }}>
+            <div className="card flex items-center gap-16" style={{ padding: '20px 24px' }}>
+              <div className="grid-center" style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'linear-gradient(135deg, #ff9f0a, #ffc75a)', color: '#fff', flexShrink: 0 }}>
                 <FiClipboard size={22} />
               </div>
               <div>
                 <div style={{ fontSize: '24px', fontWeight: 700, lineHeight: 1.2 }}>{pendingLeaves}</div>
-                <div style={{ fontSize: '13px', color: 'var(--text2)' }}>Pending Leave Requests</div>
+                <div className="text-sm text-muted">Pending Leave Requests</div>
               </div>
             </div>
-            <div className="card" style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'linear-gradient(135deg, #ff3b30, #ff6b6b)', display: 'grid', placeItems: 'center', color: '#fff', flexShrink: 0 }}>
+            <div className="card flex items-center gap-16" style={{ padding: '20px 24px' }}>
+              <div className="grid-center" style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'linear-gradient(135deg, #ff3b30, #ff6b6b)', color: '#fff', flexShrink: 0 }}>
                 <FiAlertTriangle size={22} />
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: '24px', fontWeight: 700, lineHeight: 1.2 }}>
                   {totalPending}
                   {totalPending > 0 && (
-                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#ff3b30', background: 'rgba(255,59,48,0.1)', padding: '2px 7px', borderRadius: '980px', marginLeft: '8px', verticalAlign: 'middle' }}>
+                    <span className="badge" style={{ background: 'rgba(255,59,48,0.1)', color: '#ff3b30', marginLeft: '8px', verticalAlign: 'middle' }}>
                       Needs review
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: '13px', color: 'var(--text2)' }}>Pending Approvals</div>
+                <div className="text-sm text-muted">Pending Approvals</div>
               </div>
             </div>
           </div>
 
           {/* ── Pending Approvals (Super Admin) ── */}
           {isSuperAdmin && totalPending > 0 && (
-            <div className="card" style={{ padding: '20px 24px', marginBottom: 'var(--gap)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <div style={{ fontSize: '14px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="card p-22-24" style={{ marginBottom: 'var(--gap)' }}>
+              <div className="flex-between mb-16">
+                <div className="text-base text-bold flex items-center gap-8">
                   <FiAlertTriangle size={16} /> Pending Approvals
                 </div>
                 <button className="btn btn-outline" style={{ fontSize: '12px', padding: '4px 12px' }}
@@ -296,21 +294,21 @@ export default function DashboardHome() {
                 {pendingCounts.policies > 0 && (
                   <div style={{ padding: '14px 16px', borderRadius: '12px', background: 'rgba(255,159,10,0.08)', border: '1px solid rgba(255,159,10,0.2)' }}>
                     <div style={{ fontSize: '22px', fontWeight: 700, color: '#ff9f0a' }}>{pendingCounts.policies}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text2)', marginBottom: '8px' }}>Shift Polic{pendingCounts.policies !== 1 ? 'ies' : 'y'}</div>
+                    <div className="text-xs text-muted mb-6">Shift Polic{pendingCounts.policies !== 1 ? 'ies' : 'y'}</div>
                     <button className="btn btn-secondary" style={{ fontSize: '11px', padding: '3px 10px' }} onClick={() => router.push('/settings')}>Review →</button>
                   </div>
                 )}
                 {pendingCounts.corrections > 0 && (
                   <div style={{ padding: '14px 16px', borderRadius: '12px', background: 'rgba(175,82,222,0.08)', border: '1px solid rgba(175,82,222,0.2)' }}>
                     <div style={{ fontSize: '22px', fontWeight: 700, color: '#af52de' }}>{pendingCounts.corrections}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text2)', marginBottom: '8px' }}>Attendance Corrections</div>
+                    <div className="text-xs text-muted mb-6">Attendance Corrections</div>
                     <button className="btn btn-secondary" style={{ fontSize: '11px', padding: '3px 10px' }} onClick={() => router.push('/leaves')}>Review →</button>
                   </div>
                 )}
                 {pendingCounts.regularizations > 0 && (
                   <div style={{ padding: '14px 16px', borderRadius: '12px', background: 'rgba(90,200,250,0.08)', border: '1px solid rgba(90,200,250,0.2)' }}>
                     <div style={{ fontSize: '22px', fontWeight: 700, color: '#5ac8fa' }}>{pendingCounts.regularizations}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text2)', marginBottom: '8px' }}>Regularizations</div>
+                    <div className="text-xs text-muted mb-6">Regularizations</div>
                     <button className="btn btn-secondary" style={{ fontSize: '11px', padding: '3px 10px' }} onClick={() => router.push('/leaves')}>Review →</button>
                   </div>
                 )}
@@ -328,69 +326,67 @@ export default function DashboardHome() {
           {/* ── Quick Access + Upcoming Holidays ── */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 'var(--gap)', alignItems: 'start' }}>
             <div>
-              <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '12px' }}>Quick Access</div>
+              <div className="text-base text-bold mb-12">Quick Access</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
                 <div className="card" style={{ padding: '20px', cursor: 'pointer', transition: 'all 0.2s' }}
                   onClick={() => router.push('/attendance')}
                   onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.08)'; }}
                   onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(0,113,227,0.1)', color: '#0071e3', display: 'grid', placeItems: 'center', marginBottom: '12px' }}>
+                  <div className="grid-center" style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(0,113,227,0.1)', color: '#0071e3', marginBottom: '12px' }}>
                     <FiCalendar size={18} />
                   </div>
-                  <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '2px' }}>Attendance</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text3)' }}>{months.length > 0 ? `${months.length} month${months.length !== 1 ? 's' : ''} loaded` : 'Upload monthly data'}</div>
+                  <div className="text-md text-bold mb-2">Attendance</div>
+                  <div className="text-xs text-muted2">{months.length > 0 ? `${months.length} month${months.length !== 1 ? 's' : ''} loaded` : 'Upload monthly data'}</div>
                 </div>
                 <div className="card" style={{ padding: '20px', cursor: 'pointer', transition: 'all 0.2s' }}
                   onClick={() => router.push('/team')}
                   onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.08)'; }}
                   onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(52,199,89,0.1)', color: '#34c759', display: 'grid', placeItems: 'center', marginBottom: '12px' }}>
+                  <div className="grid-center" style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(52,199,89,0.1)', color: '#34c759', marginBottom: '12px' }}>
                     <FiUsers size={18} />
                   </div>
-                  <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '2px' }}>Team</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text3)' }}>{deptCount} department{deptCount !== 1 ? 's' : ''} · {activeEmployees} employees</div>
+                  <div className="text-md text-bold mb-2">Team</div>
+                  <div className="text-xs text-muted2">{deptCount} department{deptCount !== 1 ? 's' : ''} · {activeEmployees} employees</div>
                 </div>
                 <div className="card" style={{ padding: '20px', cursor: 'pointer', transition: 'all 0.2s' }}
                   onClick={() => router.push('/leaves')}
                   onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.08)'; }}
                   onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(255,159,10,0.1)', color: '#ff9f0a', display: 'grid', placeItems: 'center', marginBottom: '12px' }}>
+                  <div className="grid-center" style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(255,159,10,0.1)', color: '#ff9f0a', marginBottom: '12px' }}>
                     <FiClipboard size={18} />
                   </div>
-                  <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '2px' }}>Leaves</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text3)' }}>{pendingLeaves > 0 ? `${pendingLeaves} pending request${pendingLeaves !== 1 ? 's' : ''}` : 'No pending requests'}</div>
+                  <div className="text-md text-bold mb-2">Leaves</div>
+                  <div className="text-xs text-muted2">{pendingLeaves > 0 ? `${pendingLeaves} pending request${pendingLeaves !== 1 ? 's' : ''}` : 'No pending requests'}</div>
                 </div>
               </div>
             </div>
 
             {/* ── Upcoming Holidays ── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+            <div className="flex-col" style={{ gap: 'var(--gap)' }}>
               <div>
-                <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '12px' }}>Upcoming Holidays</div>
-                <div className="card" style={{ padding: '16px 20px' }}>
+                <div className="text-base text-bold mb-12">Upcoming Holidays</div>
+                <div className="card card-body-sm">
                   {holidays.length === 0 ? (
-                    <div style={{ color: 'var(--text3)', fontSize: '13px', textAlign: 'center', padding: '12px 0' }}>No upcoming holidays</div>
+                    <div className="text-sm text-muted2 text-center" style={{ padding: '12px 0' }}>No upcoming holidays</div>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div className="flex-col gap-8">
                       {holidays.slice(0, 5).map((h, i) => {
                         const d = new Date(h.year, h.month - 1, h.day);
                         return (
-                          <div key={`${h.year}-${h.month}-${h.day}`} style={{
-                            display: 'flex', alignItems: 'center', gap: '12px',
+                          <div key={`${h.year}-${h.month}-${h.day}`} className="flex items-center gap-12" style={{
                             paddingBottom: i < holidays.length - 1 ? '8px' : 0,
                             borderBottom: i < holidays.length - 1 ? '1px solid var(--border)' : 'none',
                           }}>
-                            <div style={{
+                            <div className="flex-col items-center grid-center flex-shrink-0" style={{
                               width: '40px', height: '40px', borderRadius: '10px',
-                              background: 'rgba(0,113,227,0.06)', display: 'flex',
-                              flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                              background: 'rgba(0,113,227,0.06)',
                             }}>
-                              <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text2)', lineHeight: 1 }}>{d.toLocaleString('en', { month: 'short' })}</span>
+                              <span className="text-xs text-semibold text-muted" style={{ lineHeight: 1 }}>{d.toLocaleString('en', { month: 'short' })}</span>
                               <span style={{ fontSize: '16px', fontWeight: 700, lineHeight: 1.2 }}>{h.day}</span>
                             </div>
                             <div>
-                              <div style={{ fontSize: '13px', fontWeight: 600 }}>{h.name}</div>
-                              <div style={{ fontSize: '11px', color: 'var(--text3)' }}>{d.toLocaleDateString('en-US', { weekday: 'long' })}</div>
+                              <div className="text-sm text-semibold">{h.name}</div>
+                              <div className="text-xs text-muted2">{d.toLocaleDateString('en-US', { weekday: 'long' })}</div>
                             </div>
                           </div>
                         );
@@ -402,29 +398,27 @@ export default function DashboardHome() {
 
               {/* ── Upcoming Birthdays ── */}
               <div>
-                <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '12px' }}>Upcoming Birthdays</div>
-                <div className="card" style={{ padding: '16px 20px' }}>
+                <div className="text-base text-bold mb-12">Upcoming Birthdays</div>
+                <div className="card card-body-sm">
                   {upcomingBirthdays.length === 0 ? (
-                    <div style={{ color: 'var(--text3)', fontSize: '13px', textAlign: 'center', padding: '12px 0' }}>No birthdays in the next 30 days</div>
+                    <div className="text-sm text-muted2 text-center" style={{ padding: '12px 0' }}>No birthdays in the next 30 days</div>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div className="flex-col gap-8">
                       {upcomingBirthdays.map((b, i) => (
-                        <div key={b.name} style={{
-                          display: 'flex', alignItems: 'center', gap: '12px',
+                        <div key={b.name} className="flex items-center gap-12" style={{
                           paddingBottom: i < upcomingBirthdays.length - 1 ? '8px' : 0,
                           borderBottom: i < upcomingBirthdays.length - 1 ? '1px solid var(--border)' : 'none',
                         }}>
-                          <div style={{
+                          <div className="flex-col items-center grid-center flex-shrink-0" style={{
                             width: '40px', height: '40px', borderRadius: '10px',
-                            background: 'rgba(255,159,10,0.08)', display: 'flex',
-                            flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                            background: 'rgba(255,159,10,0.08)',
                           }}>
-                            <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text2)', lineHeight: 1 }}>{b.date.toLocaleString('en', { month: 'short' })}</span>
+                            <span className="text-xs text-semibold text-muted" style={{ lineHeight: 1 }}>{b.date.toLocaleString('en', { month: 'short' })}</span>
                             <span style={{ fontSize: '16px', fontWeight: 700, lineHeight: 1.2 }}>{b.date.getDate()}</span>
                           </div>
                           <div>
-                            <div style={{ fontSize: '13px', fontWeight: 600 }}>{b.name}</div>
-                            <div style={{ fontSize: '11px', color: 'var(--text3)' }}>{b.daysAway === 0 ? 'Today!' : `${b.daysAway} day${b.daysAway !== 1 ? 's' : ''} away`}</div>
+                            <div className="text-sm text-semibold">{b.name}</div>
+                            <div className="text-xs text-muted2">{b.daysAway === 0 ? 'Today!' : `${b.daysAway} day${b.daysAway !== 1 ? 's' : ''} away`}</div>
                           </div>
                           <div style={{ marginLeft: 'auto', color: 'rgba(255,159,10,0.5)' }}>
                             <FiGift size={16} />
@@ -439,19 +433,19 @@ export default function DashboardHome() {
           </div>
 
           {hasNoMonths && (
-            <div className="card" style={{ padding: '36px', textAlign: 'center', marginTop: '20px' }}>
+            <div className="card text-center" style={{ padding: '36px', marginTop: '20px' }}>
               <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.3 }}><FiCalendar size={36} /></div>
-              <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px', color: 'var(--text2)' }}>No attendance data yet</div>
-              <div style={{ fontSize: '13px', color: 'var(--text3)', marginBottom: '16px' }}>Upload your first month of attendance data to get started.</div>
+              <div className="text-md text-semibold mb-2 text-muted">No attendance data yet</div>
+              <div className="text-sm text-muted2 mb-16">Upload your first month of attendance data to get started.</div>
               <button className="btn btn-primary" onClick={() => router.push('/attendance')}><FiCalendar size={14} style={{ marginRight: '6px' }} /> Go to Attendance</button>
             </div>
           )}
 
           {!hasNoMonths && dataError && (
-            <div className="card" style={{ padding: '36px', textAlign: 'center', marginTop: '20px' }}>
+            <div className="card text-center" style={{ padding: '36px', marginTop: '20px' }}>
               <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.3 }}><FiAlertTriangle size={36} /></div>
-              <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px', color: 'var(--text2)' }}>Could not load monthly data</div>
-              <div style={{ fontSize: '13px', color: 'var(--text3)', marginBottom: '16px' }}>The monthly attendance data failed to load. Try refreshing the page.</div>
+              <div className="text-md text-semibold mb-2 text-muted">Could not load monthly data</div>
+              <div className="text-sm text-muted2 mb-16">The monthly attendance data failed to load. Try refreshing the page.</div>
               <button className="btn btn-primary" onClick={() => window.location.reload()}><FiArrowRight size={14} style={{ marginRight: '6px' }} /> Refresh</button>
             </div>
           )}

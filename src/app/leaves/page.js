@@ -257,18 +257,18 @@ export default function LeavesPage() {
 
       {/* ── ALL REQUESTS (admin overview — read only) ── */}
       {!loading && tab === 'overview' && (
-        <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
+        <div className="card overflow-hidden p-0">
+          <div className="card-header">
             All Leave Requests ({leaveRequests.length})
           </div>
           {leaveRequests.length === 0
-            ? <div style={{ padding: '40px', textAlign: 'center' }}>
+            ? <div className="p-32 text-center">
                 <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.25 }}><FiClipboard size={36} /></div>
                 <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px', color: 'var(--text2)' }}>No leave requests yet</div>
                 <div style={{ fontSize: '13px', color: 'var(--text3)', marginBottom: '16px' }}>Employees can apply for leave from their profile page.</div>
               </div>
             : leaveRequests.map(r => (
-              <div key={r.id} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
+              <div key={r.id} className="p-16-20 border-bottom flex-between items-start" style={{ gap: '16px' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
                     <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name || 'Unknown'}</span>
@@ -301,14 +301,14 @@ export default function LeavesPage() {
       {/* ── MY APPROVALS (manager + super admin) ── */}
       {!loading && tab === 'manager_approval' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
+          <div className="card overflow-hidden p-0">
+            <div className="card-header">
               Pending Your Approval ({managerLeaves.length})
             </div>
             {managerLeaves.length === 0
-              ? <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text3)', fontSize: '13px' }}>No leave requests awaiting your approval.</div>
+              ? <div className="p-32 text-center text-muted2 text-sm">No leave requests awaiting your approval.</div>
               : managerLeaves.map(r => (
-                <div key={r.id} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
+                <div key={r.id} className="p-16-20 border-bottom flex-between items-start" style={{ gap: '16px' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
                       <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name || 'Unknown'}</span>
@@ -352,14 +352,14 @@ export default function LeavesPage() {
 
           {/* Super admin also sees pending_super leaves here */}
           {isSuperAdmin && (
-            <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
-              <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
+            <div className="card overflow-hidden p-0">
+              <div className="card-header">
                 Pending Super Admin Approval
               </div>
               {leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length === 0
-                ? <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text3)', fontSize: '13px' }}>No leave requests awaiting super admin approval.</div>
+                ? <div className="p-32 text-center text-muted2 text-sm">No leave requests awaiting super admin approval.</div>
                 : leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').map(r => (
-                  <div key={r.id} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
+                  <div key={r.id} className="p-16-20 border-bottom flex-between items-start" style={{ gap: '16px' }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
                         <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name}</span>
@@ -408,14 +408,14 @@ export default function LeavesPage() {
       {!loading && tab === 'regularize' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Admin review */}
-          <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
+          <div className="card overflow-hidden p-0">
+            <div className="card-header">
               Pending Admin Review ({regularizations.length})
             </div>
             {regularizations.length === 0
-              ? <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text3)', fontSize: '13px' }}>No pending regularizations.</div>
+              ? <div className="p-32 text-center text-muted2 text-sm">No pending regularizations.</div>
               : regularizations.map(r => (
-                <div key={r.id} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
+                <div key={r.id} className="p-16-20 border-bottom flex-between" style={{ gap: '16px' }}>
                   <div>
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px' }}>
                       <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user.name}</span>
@@ -438,14 +438,14 @@ export default function LeavesPage() {
 
           {/* Super admin final approval */}
           {isSuperAdmin && (
-            <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
-              <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
+            <div className="card overflow-hidden p-0">
+              <div className="card-header">
                 Pending Super Admin Approval ({superRegularizations.length})
               </div>
               {superRegularizations.length === 0
-                ? <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text3)', fontSize: '13px' }}>No regularizations awaiting final approval.</div>
+                ? <div className="p-32 text-center text-muted2 text-sm">No regularizations awaiting final approval.</div>
                 : superRegularizations.map(r => (
-                  <div key={r.id} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
+                  <div key={r.id} className="p-16-20 border-bottom flex-between" style={{ gap: '16px' }}>
                     <div>
                       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px' }}>
                         <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user.name}</span>
@@ -471,16 +471,16 @@ export default function LeavesPage() {
 
       {/* ── ATTENDANCE CORRECTIONS (super admin) ── */}
       {!loading && tab === 'corrections' && isSuperAdmin && (
-        <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
+        <div className="card overflow-hidden p-0">
+          <div className="card-header">
             Pending Attendance Corrections ({attendanceCorrections.length})
           </div>
           {attendanceCorrections.length === 0
-            ? <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text3)', fontSize: '13px' }}>No pending corrections.</div>
+            ? <div className="p-32 text-center text-muted2 text-sm">No pending corrections.</div>
             : attendanceCorrections.map(c => {
                 const p = JSON.parse(c.payload);
                 return (
-                  <div key={c.id} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
+                  <div key={c.id} className="p-16-20 border-bottom flex-between" style={{ gap: '16px' }}>
                     <div>
                       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px' }}>
                         <span style={{ fontWeight: 600, fontSize: '14px' }}>{p.employeeCode}</span>
@@ -513,7 +513,7 @@ export default function LeavesPage() {
 
       {/* ── LEAVE BALANCES ── */}
       {!loading && tab === 'balances' && (
-        <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
+        <div className="card overflow-hidden p-0">
 
           {/* Header with range picker */}
           <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
