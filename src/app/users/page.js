@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
-import { getUsers, createUser, deleteUser, updateUser, toggleDisableUser, getPendingChanges, reviewPendingChange } from '../../actions/auth';
+import { getUsers, createUser, deleteUser, updateUser, toggleDisableUser, promoteToAdmin, getPendingChanges, reviewPendingChange } from '../../actions/auth';
 import ConfirmModal from '../../components/ConfirmModal';
 import { FiSearch } from 'react-icons/fi';
 
@@ -89,6 +89,10 @@ export default function UsersPage() {
   const [pendingChanges, setPendingChanges] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Users with code who are not yet admin — eligible for promotion
+  const [promotableEmployees, setPromotableEmployees] = useState([]);
+  const [promoteTarget, setPromoteTarget] = useState('');
+
   const [form, setForm] = useState({ username: '', password: '', role: 'employee', code: '', name: '' });
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
@@ -117,6 +121,8 @@ export default function UsersPage() {
       ]);
       setUsers(u);
       setPendingChanges(pending);
+      // Users with code who are not admin/super_admin — eligible for promotion
+      setPromotableEmployees(u.filter(x => x.code && x.role === 'employee'));
       setLoading(false);
     })();
   }, [isAdmin, isSuperAdmin, fetchTrigger]);
@@ -133,6 +139,22 @@ export default function UsersPage() {
   const handleCreate = async (e) => {
     e.preventDefault();
     setFormError(''); setFormSuccess('');
+
+    // Admin/super_admin: promote existing employee instead of creating new user
+    if (form.role === 'admin' || form.role === 'super_admin') {
+      if (!promoteTarget) return setFormError('Select an employee to promote.');
+      setSubmitting(true);
+      const target = promotableEmployees.find(x => x.id === promoteTarget);
+      const result = await promoteToAdmin(promoteTarget, form.role, user.username);
+      setSubmitting(false);
+      if (result.error) return setFormError(result.error);
+      setFormSuccess(`"${target?.name || target?.username}" promoted to ${form.role}. They can login with their existing credentials.`);
+      setForm({ username: '', password: '', role: 'employee', code: '', name: '' });
+      setPromoteTarget('');
+      setFetchTrigger(t => t + 1);
+      return;
+    }
+
     if (!form.username || !form.password) return setFormError('Username and password are required.');
     setSubmitting(true);
     const result = await createUser(form.username.trim(), form.password, form.role, form.code || null, user.username);
@@ -257,37 +279,74 @@ export default function UsersPage() {
                 Create Account
               </div>
               <form onSubmit={handleCreate}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                  <div>
-                    <label className="input-label">Username</label>
-                    <input className="input-field" placeholder="e.g. john.doe" value={form.username}
-                      onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
+                {form.role === 'admin' || form.role === 'super_admin' ? (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                      <div>
+                        <label className="input-label">Role</label>
+                        <select className="input-field" value={form.role}
+                          onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+                          {availableRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="input-label">Select Employee</label>
+                        <select className="input-field" value={promoteTarget}
+                          onChange={e => setPromoteTarget(e.target.value)}>
+                          <option value="">— Select employee to promote —</option>
+                          {promotableEmployees.map(emp => (
+                            <option key={emp.id} value={emp.id}>{emp.name || emp.username} ({emp.code})</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    {promoteTarget && (() => {
+                      const emp = promotableEmployees.find(x => x.id === promoteTarget);
+                      const s = ROLE_STYLES[form.role];
+                      return (
+                        <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '10px 14px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span style={{ fontSize: '16px' }}>●</span>
+                          <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text2)' }}>
+                            "<strong>{emp?.name || emp?.username}</strong>" will be promoted to <strong style={{ color: s.color }}>{s.label}</strong>.
+                            They can login with their existing credentials.
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                    <div>
+                      <label className="input-label">Username</label>
+                      <input className="input-field" placeholder="e.g. john.doe" value={form.username}
+                        onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="input-label">Password</label>
+                      <input className="input-field" type="password" placeholder="Set a password" value={form.password}
+                        onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="input-label">Role</label>
+                      <select className="input-field" value={form.role}
+                        onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+                        {availableRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="input-label">Employee Code</label>
+                      <input className="input-field" placeholder="e.g. 1042" value={form.code}
+                        onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="input-label">Full Name</label>
+                      <input className="input-field" placeholder="e.g. John Doe" value={form.name}
+                        onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+                    </div>
                   </div>
-                  <div>
-                    <label className="input-label">Password</label>
-                    <input className="input-field" type="password" placeholder="Set a password" value={form.password}
-                      onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="input-label">Role</label>
-                    <select className="input-field" value={form.role}
-                      onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
-                      {availableRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="input-label">Employee Code</label>
-                    <input className="input-field" placeholder="e.g. 1042" value={form.code}
-                      onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="input-label">Full Name</label>
-                    <input className="input-field" placeholder="e.g. John Doe" value={form.name}
-                      onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-                  </div>
-                </div>
+                )}
                 {/* Role preview */}
-                {form.role && (() => {
+                {form.role === 'employee' && form.role && (() => {
                   const s = ROLE_STYLES[form.role];
                   return (
                     <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '10px 14px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -301,7 +360,7 @@ export default function UsersPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                   <button type="submit" className="btn btn-primary" disabled={submitting}
                     style={{ opacity: submitting ? 0.7 : 1 }}>
-                    {submitting ? 'Creating…' : 'Create Account'}
+                    {submitting ? 'Processing…' : (form.role === 'admin' || form.role === 'super_admin' ? 'Promote to ' + (form.role === 'super_admin' ? 'Super Admin' : 'Admin') : 'Create Account')}
                   </button>
                   {formError && <span style={{ color: 'var(--red)', fontSize: 'var(--fs-sm)' }}>{formError}</span>}
                   {formSuccess && <span style={{ color: 'var(--green)', fontSize: 'var(--fs-sm)' }}>{formSuccess}</span>}

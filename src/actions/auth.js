@@ -98,6 +98,19 @@ export async function changePassword(userId, currentPassword, newPassword) {
   return { success: true };
 }
 
+export async function promoteToAdmin(userId, role, performedBy = 'admin') {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { error: 'User not found.' };
+  if (!user.code) return { error: 'Selected user has no employee code. Cannot promote.' };
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { role }
+  });
+  await logAction(performedBy, 'user_promoted', 'user', userId,
+    `Promoted "${user.username}" (${user.code}) to ${role}`);
+  return { success: true, user: { id: updated.id, username: updated.username, role: updated.role, code: updated.code, name: updated.name } };
+}
+
 export async function ensureAdminExists() {
   try {
     const count = await prisma.user.count({ where: { role: 'super_admin' } });
