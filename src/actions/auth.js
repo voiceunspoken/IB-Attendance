@@ -3,6 +3,7 @@
 import { prisma } from '../lib/prisma';
 import bcrypt from 'bcryptjs';
 import { logAction } from './audit';
+import { requireAdmin } from '../lib/auth-guard';
 
 export async function loginUser(username, password) {
   try {
@@ -24,6 +25,8 @@ export async function loginUser(username, password) {
 }
 
 export async function createUser(username, password, role, code, createdBy = 'system') {
+  const auth = await requireAdmin(createdBy);
+  if (auth) return auth;
   const existing = await prisma.user.findUnique({ where: { username } });
   if (existing) return { error: 'Username already exists.' };
 
@@ -43,6 +46,8 @@ export async function getUsers() {
 }
 
 export async function deleteUser(userId, deletedBy = 'admin') {
+  const auth = await requireAdmin(deletedBy);
+  if (auth) return auth;
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return { error: 'User not found.' };
   await prisma.punchLog.deleteMany({ where: { userId } });
@@ -60,6 +65,8 @@ export async function deleteUser(userId, deletedBy = 'admin') {
 }
 
 export async function toggleDisableUser(userId, performedBy = 'admin') {
+  const auth = await requireAdmin(performedBy);
+  if (auth) return auth;
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return { error: 'User not found.' };
   const updated = await prisma.user.update({
@@ -72,6 +79,8 @@ export async function toggleDisableUser(userId, performedBy = 'admin') {
 }
 
 export async function updateUser(userId, fields, updatedBy = 'admin') {
+  const auth = await requireAdmin(updatedBy);
+  if (auth) return auth;
   const data = {};
   if (fields.password) data.password = await bcrypt.hash(fields.password, 10);
   if (fields.code !== undefined) data.code = fields.code || null;
@@ -99,6 +108,8 @@ export async function changePassword(userId, currentPassword, newPassword) {
 }
 
 export async function promoteToAdmin(userId, role, performedBy = 'admin') {
+  const auth = await requireAdmin(performedBy);
+  if (auth) return auth;
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return { error: 'User not found.' };
   if (!user.code) return { error: 'Selected user has no employee code. Cannot promote.' };

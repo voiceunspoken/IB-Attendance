@@ -74,33 +74,43 @@ export default function EmployeeDashboard({ params }) {
     if (!isAuthenticated) return;
     setLoading(true);
     (async () => {
-    const year = new Date().getFullYear();
-    const [data, balance, requests, regs, holidays, allHolidays] = await Promise.all([
-      getEmployeeHistory(code),
-      getLeaveBalance(code, year),
-      getLeaveRequests(code),
-      getRegularizations(code),
-      getUpcomingHolidays(),
-      getHolidays(year)
-    ]);
-    if (data) {
-      setEmp(data);
-      let ov = {};
-      data.overrides.forEach(o => { ov[`${data.code}_${o.day}`] = o.type; });
-      setOverrides(ov);
-      // RL-eligible dates: restricted holidays + birthday
-      const restricted = allHolidays.filter(h => h.isRestricted || h.type === 'optional');
-      const empBirthday = data.birthday ? { month: new Date(data.birthday).getMonth() + 1, day: new Date(data.birthday).getDate() } : null;
-      setRlHolidays(restricted.map(h => ({ ...h, isBirthday: false })).concat(
-        empBirthday ? [{ month: empBirthday.month, day: empBirthday.day, name: '🎂 Birthday', type: 'optional', isBirthday: true }] : []
-      ));
+    try {
+      const year = new Date().getFullYear();
+      const [data, balance, requests, regs, holidays, allHolidays] = await Promise.all([
+        getEmployeeHistory(code),
+        getLeaveBalance(code, year),
+        getLeaveRequests(code),
+        getRegularizations(code),
+        getUpcomingHolidays(),
+        getHolidays(year)
+      ]);
+      if (data) {
+        setEmp(data);
+        let ov = {};
+        data.overrides.forEach(o => { ov[`${data.code}_${o.day}`] = o.type; });
+        setOverrides(ov);
+        const restricted = allHolidays.filter(h => h.isRestricted || h.type === 'optional');
+        const empBirthday = data.birthday ? { month: new Date(data.birthday).getMonth() + 1, day: new Date(data.birthday).getDate() } : null;
+        setRlHolidays(restricted.map(h => ({ ...h, isBirthday: false })).concat(
+          empBirthday ? [{ month: empBirthday.month, day: empBirthday.day, name: '🎂 Birthday', type: 'optional', isBirthday: true }] : []
+        ));
+      }
+      setLeaveBalance(balance);
+      setLeaveBalanceDetail(balance);
+      setLeaveRequests(requests);
+      setRegularizations(regs);
+      setUpcomingHolidays(holidays);
+    } catch {
+      setEmp(null);
+      setOverrides({});
+      setLeaveBalance(null);
+      setLeaveBalanceDetail(null);
+      setLeaveRequests([]);
+      setRegularizations([]);
+      setUpcomingHolidays([]);
+    } finally {
+      setLoading(false);
     }
-    setLeaveBalance(balance);
-    setLeaveBalanceDetail(balance);
-    setLeaveRequests(requests);
-    setRegularizations(regs);
-    setUpcomingHolidays(holidays);
-    setLoading(false);
     })();
   }, [isAuthenticated, code, fetchTrigger]);
 

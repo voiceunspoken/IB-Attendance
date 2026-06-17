@@ -110,23 +110,32 @@ export default function LeavesPage() {
     if (!isSuperAdmin && tab === 'corrections') setTab('requests');
     setLoading(true);
     (async () => {
-      const [reqs, regs, bal, pol] = await Promise.all([
-        getAllLeaveRequests(),
-        getAllPendingRegularizations(),
-        getAllLeaveBalances(year),
-        getLeavePolicy(year)
-      ]);
-      setLeaveRequests(reqs);
-      setRegularizations(regs);
-      setBalances(bal);
-      if (isSuperAdmin) {
-        const supRegs = await getPendingSuperRegularizations();
-        setSuperRegularizations(supRegs);
-        const ac = await getPendingAttendanceCorrections();
-        setAttendanceCorrections(ac);
+      try {
+        const [reqs, regs, bal, pol] = await Promise.all([
+          getAllLeaveRequests(),
+          getAllPendingRegularizations(),
+          getAllLeaveBalances(year),
+          getLeavePolicy(year)
+        ]);
+        setLeaveRequests(reqs);
+        setRegularizations(regs);
+        setBalances(bal);
+        if (isSuperAdmin) {
+          const supRegs = await getPendingSuperRegularizations();
+          setSuperRegularizations(supRegs);
+          const ac = await getPendingAttendanceCorrections();
+          setAttendanceCorrections(ac);
+        }
+        if (pol) setPolicy({ cl: pol.cl, sl: pol.sl, el: pol.el, rl: pol.rl, sh: pol.sh ?? 6 });
+      } catch {
+        setLeaveRequests([]);
+        setRegularizations([]);
+        setBalances([]);
+        setSuperRegularizations([]);
+        setAttendanceCorrections([]);
+      } finally {
+        setLoading(false);
       }
-      if (pol) setPolicy({ cl: pol.cl, sl: pol.sl, el: pol.el, rl: pol.rl, sh: pol.sh ?? 6 });
-      setLoading(false);
     })();
   }, [isAdmin, isSuperAdmin, year, tab, fetchTrigger]);
 

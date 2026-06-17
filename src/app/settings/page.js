@@ -63,28 +63,36 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!isAdmin) return;
     (async () => {
-      const [h, sp, hist, ms] = await Promise.all([
-        getHolidays(year),
-        getActiveShiftPolicy(),
-        getShiftPolicyHistory(),
-        getMonths(),
-      ]);
-      setHolidays(h);
-      if (isSuperAdmin) {
-        const ph = await getPendingHolidays(year);
-        setPendingHolidays(ph);
+      try {
+        const [h, sp, hist, ms] = await Promise.all([
+          getHolidays(year),
+          getActiveShiftPolicy(),
+          getShiftPolicyHistory(),
+          getMonths(),
+        ]);
+        setHolidays(h);
+        if (isSuperAdmin) {
+          const ph = await getPendingHolidays(year);
+          setPendingHolidays(ph);
+        }
+        setPolicy({ shiftStartH: sp.shiftStartH, shiftStartM: sp.shiftStartM, graceMinutes: sp.graceMinutes, minHours: sp.minHours, latesPerHD: sp.latesPerHD, ssPerHD: sp.ssPerHD });
+        setPolicyHistory(hist);
+        setMonths(ms);
+        if (ms.length > 0) setNotifMonth(ms[0]);
+        if (isSuperAdmin) {
+          const logs = await getAuditLog({ limit: 100 });
+          setAuditLog(logs);
+          const pp = await getPendingPolicies();
+          setPendingPolicies(pp);
+        }
+      } catch {
+        setHolidays([]);
+        setMonths([]);
+        setAuditLog([]);
+        setPendingPolicies([]);
+      } finally {
+        setLoading(false);
       }
-      setPolicy({ shiftStartH: sp.shiftStartH, shiftStartM: sp.shiftStartM, graceMinutes: sp.graceMinutes, minHours: sp.minHours, latesPerHD: sp.latesPerHD, ssPerHD: sp.ssPerHD });
-      setPolicyHistory(hist);
-      setMonths(ms);
-      if (ms.length > 0) setNotifMonth(ms[0]);
-      if (isSuperAdmin) {
-        const logs = await getAuditLog({ limit: 100 });
-        setAuditLog(logs);
-        const pp = await getPendingPolicies();
-        setPendingPolicies(pp);
-      }
-      setLoading(false);
     })();
   }, [isAdmin, isSuperAdmin, year]);
 

@@ -133,23 +133,34 @@ export default function TeamPage() {
   useEffect(() => {
     if (!isAdmin) return;
     (async () => {
-      const [u, emps, depts, desigs, ms, pending] = await Promise.all([
-        getUsers(),
-        getAllEmployees(),
-        getDepartments(),
-        getDesignations(),
-        getMonths(),
-        isSuperAdmin ? getPendingChanges() : Promise.resolve([])
-      ]);
-      setUsers(u);
-      setEmployees(emps);
-      setDepartments(depts);
-      setDesignations(desigs);
-      setMonths(ms);
-      setPendingChanges(pending);
-      setPromotableEmployees(u.filter(x => x.code && x.role === 'employee'));
-      if (ms.length > 0 && !editRecord.monthYear) setEditRecord(r => ({ ...r, monthYear: ms[0] }));
-      setLoading(false);
+      try {
+        const [u, emps, depts, desigs, ms, pending] = await Promise.all([
+          getUsers(),
+          getAllEmployees(),
+          getDepartments(),
+          getDesignations(),
+          getMonths(),
+          isSuperAdmin ? getPendingChanges() : Promise.resolve([])
+        ]);
+        setUsers(u);
+        setEmployees(emps);
+        setDepartments(depts);
+        setDesignations(desigs);
+        setMonths(ms);
+        setPendingChanges(pending);
+        setPromotableEmployees(u.filter(x => x.code && x.role === 'employee'));
+        if (ms.length > 0 && !editRecord.monthYear) setEditRecord(r => ({ ...r, monthYear: ms[0] }));
+      } catch {
+        setUsers([]);
+        setEmployees([]);
+        setDepartments([]);
+        setDesignations([]);
+        setMonths([]);
+        setPendingChanges([]);
+        setPromotableEmployees([]);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [isAdmin, isSuperAdmin, fetchTrigger, editRecord.monthYear]);
 
@@ -295,7 +306,7 @@ export default function TeamPage() {
     if (!editEmp) return;
     const result = await updateEmployeeDetails(editEmp.code, editEmpForm);
     if (result.error) return setEditEmpMsg(result.error);
-    await setEmployeeManagers(editEmp.code, editEmpManagers);
+    await setEmployeeManagers(editEmp.code, editEmpManagers, user.username);
     setEditEmpMsg('Saved successfully.');
     setEmployees(await getAllEmployees());
     setTimeout(() => setEditEmp(null), 800);
@@ -361,9 +372,9 @@ export default function TeamPage() {
   const handleAssignDeptManager = async () => {
     if (!deptMgrTarget.id) return;
     if (deptMgrTarget.type === 'dept') {
-      await setDepartmentManager(deptMgrTarget.id, deptMgrUserId || null);
+      await setDepartmentManager(deptMgrTarget.id, deptMgrUserId || null, user.username);
     } else {
-      await setSubDepartmentManager(deptMgrTarget.id, deptMgrUserId || null);
+      await setSubDepartmentManager(deptMgrTarget.id, deptMgrUserId || null, user.username);
     }
     setDeptMgrTarget({ type: '', id: '', name: '' });
     setDeptMgrUserId('');

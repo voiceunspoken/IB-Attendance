@@ -3,6 +3,7 @@
 import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
+import { requireAdmin, requireSuperAdmin } from '../lib/auth-guard';
 
 export async function getLeavePolicy(year) {
   return prisma.leavePolicy.findUnique({ where: { year } });
@@ -249,7 +250,7 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
   const requireSuper = config?.requireSuperApproval ?? true;
 
   const managers = user.managers;
-  let approvalStage = 'pending_l2';
+  let approvalStage = 'pending_mgr';
   let currentApproverId = null;
 
   if (managers.length > 0) {
@@ -282,7 +283,7 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
 
   if (currentApproverId) {
     const approver = managers.find(m => m.managerUserId === currentApproverId);
-    await logAction(approver?.manager?.code || 'unknown', 'leave_l2_pending', 'leave_request', req.id,
+    await logAction(approver?.manager?.code || 'unknown', 'leave_mgr_pending', 'leave_request', req.id,
       `Leave request from ${user.name} awaiting your approval`);
   }
 
@@ -307,7 +308,7 @@ export async function getManagerLeaveRequests(managerCode) {
     where: {
       currentApproverId: mgr.id,
       status: 'pending',
-      approvalStage: { in: ['pending_l2', 'pending_l1'] }
+      approvalStage: { in: ['pending_l2', 'pending_l1', 'pending_mgr'] }
     },
     include: { user: { select: { code: true, name: true } } },
     orderBy: { createdAt: 'asc' }
@@ -351,33 +352,23 @@ export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = 
     newStatus = 'rejected';
     newStage = 'rejected';
     newApproverId = null;
+  } else if (req.approvalStage === 'pending_super') {
+    newStage = 'approved';
+    newStatus = 'approved';
+    newApproverId = null;
   } else {
-    if (req.approvalStage === 'pending_l2') {
-      const managers = req.user.managers;
-      const l1Manager = managers.length > 1 ? managers[1]?.manager : managers[0]?.manager;
-      if (l1Manager) {
-        newStage = 'pending_l1';
-        newApproverId = l1Manager.id;
-        await logAction(l1Manager.code, 'leave_l1_pending', 'leave_request', req.id,
-          `Leave request from ${req.user.name} awaiting your approval (approved by L2)`);
-      } else if (requireSuper) {
-        newStage = 'pending_super';
-        newApproverId = null;
-      } else {
-        newStage = 'approved';
-        newStatus = 'approved';
-        newApproverId = null;
-      }
-    } else if (req.approvalStage === 'pending_l1') {
-      if (requireSuper) {
-        newStage = 'pending_super';
-        newApproverId = null;
-      } else {
-        newStage = 'approved';
-        newStatus = 'approved';
-        newApproverId = null;
-      }
-    } else if (req.approvalStage === 'pending_super') {
+    const managers = req.user.managers;
+    const currentIdx = managers.findIndex(m => m.managerUserId === req.currentApproverId);
+    if (currentIdx >= 0 && currentIdx < managers.length - 1) {
+      const nextMgr = managers[currentIdx + 1];
+      newStage = 'pending_mgr';
+      newApproverId = nextMgr.managerUserId;
+      await logAction(nextMgr.manager.code, 'leave_mgr_pending', 'leave_request', req.id,
+        `Leave request from ${req.user.name} awaiting your approval (approved by manager)`);
+    } else if (requireSuper) {
+      newStage = 'pending_super';
+      newApproverId = null;
+    } else {
       newStage = 'approved';
       newStatus = 'approved';
       newApproverId = null;
@@ -480,6 +471,8 @@ export async function getAllPendingRegularizations() {
 }
 
 export async function reviewRegularization(requestId, reviewedBy, approve, note = '') {
+  const auth = await requireAdmin(reviewedBy);
+  if (auth) return auth;
   const req = await prisma.regularizationRequest.update({
     where: { id: requestId },
     data: {
@@ -501,6 +494,8 @@ export async function getPendingSuperRegularizations() {
 }
 
 export async function reviewRegularizationSuper(requestId, superReviewedBy, approve) {
+  const auth = await requireSuperAdmin(superReviewedBy);
+  if (auth) return auth;
   const req = await prisma.regularizationRequest.update({
     where: { id: requestId },
     data: {

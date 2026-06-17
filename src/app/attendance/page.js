@@ -16,7 +16,7 @@ import { FiSearch, FiDownload, FiUpload, FiChevronDown, FiUsers, FiAlertCircle, 
 import { useToast } from '../../components/Toast';
 
 export default function AttendancePage() {
-  const { isAuthenticated, isAdmin, loading: authLoading } = useAuth();
+  const { isAuthenticated, isAdmin, user, loading: authLoading } = useAuth();
   const router = useRouter();
   const toast = useToast();
 
@@ -43,36 +43,47 @@ export default function AttendancePage() {
 
   const loadData = useCallback(async (monthYear) => {
     setLoading(true);
-    const data = await fetchDashboardData(monthYear);
-    setAllResults(data);
-    let ov = {};
-    data.forEach(r => { ov = { ...ov, ...r.overrides }; });
-    setOverrides(ov);
-    setSelectedDept('');
-    setSelectedSubDept('');
-    setCurrentFilter('all');
-    setSearchQuery('');
-    setCurrentPage(1);
-    setLoading(false);
-    setUploadView(false);
+    try {
+      const data = await fetchDashboardData(monthYear);
+      setAllResults(data);
+      let ov = {};
+      data.forEach(r => { ov = { ...ov, ...r.overrides }; });
+      setOverrides(ov);
+      setSelectedDept('');
+      setSelectedSubDept('');
+      setCurrentFilter('all');
+      setSearchQuery('');
+      setCurrentPage(1);
+    } catch {
+      setAllResults([]);
+      setOverrides({});
+    } finally {
+      setLoading(false);
+      setUploadView(false);
+    }
   }, []);
 
   const loadMonthsList = useCallback(async () => {
     setLoading(true);
-    const m = await getMonths();
-    setMonths(m);
-    if (m.length > 0) {
-      setSelectedMonth(m[0]);
-      await loadData(m[0]);
-    } else {
-      setUploadView(true);
+    try {
+      const m = await getMonths();
+      setMonths(m);
+      if (m.length > 0) {
+        setSelectedMonth(m[0]);
+        await loadData(m[0]);
+      } else {
+        setUploadView(true);
+      }
+    } catch {
+      setMonths([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [loadData]);
 
   useEffect(() => {
     if (isAuthenticated) {
-      getDepartments().then(setDepartments);
+      getDepartments().then(setDepartments).catch(() => setDepartments([]));
       loadMonthsList();
     }
   }, [isAuthenticated, loadMonthsList]);
@@ -147,7 +158,7 @@ export default function AttendancePage() {
           : allHolidays;
         const { results: finalResults } = parseAndAnalyze(rows, policy, yearHolidays);
 
-        await uploadMonthData(monthYearStr, finalResults, nd);
+        await uploadMonthData(monthYearStr, finalResults, nd, user?.username);
         await loadMonthsList();
         setSelectedMonth(monthYearStr);
         await loadData(monthYearStr);
