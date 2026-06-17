@@ -36,7 +36,7 @@ export default function Modal({ open, onClose, title, children, width = '440px' 
       backdropFilter: 'blur(12px)',
       WebkitBackdropFilter: 'blur(12px)',
       display: 'grid', placeItems: 'center',
-      padding: '24px', overflow: 'hidden',
+      padding: '24px', overflow: 'auto',
       animation: 'fadeIn 0.15s ease',
     }}>
       <div ref={contentRef} onClick={e => e.stopPropagation()} style={{
@@ -44,7 +44,7 @@ export default function Modal({ open, onClose, title, children, width = '440px' 
         border: '1px solid var(--border)',
         boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
         padding: '28px', width, maxWidth: '92vw',
-        maxHeight: '100%', overflow: 'hidden',
+        maxHeight: '85vh', overflowY: 'auto',
         animation: 'slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
       }}>
         <div style={{

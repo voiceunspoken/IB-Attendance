@@ -150,6 +150,10 @@ export default function DashboardHome() {
   };
 
   if (authLoading || !isAuthenticated) return null;
+  if (!authLoading && isAuthenticated && !isAdmin) {
+    if (user?.code) router.push(`/employee/${user.code}`);
+    return null;
+  }
 
   return (
     <div className="page-wrapper animate-fade-in">

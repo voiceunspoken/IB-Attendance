@@ -3,18 +3,38 @@
 import { useAuth } from './AuthProvider';
 import { useRouter, usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { FiCalendar, FiFileText, FiTool, FiUser } from 'react-icons/fi';
 import { checkIsManager } from '../actions/manager';
+import { getLeaveBalance } from '../actions/leave';
+
+const EMPLOYEE_LINKS = [
+  { label: 'Attendance', icon: <FiCalendar size={14} />, path: (code) => `/employee/${code}` },
+  { label: 'Leave Requests', icon: <FiFileText size={14} />, path: (code) => `/employee/${code}/leaves` },
+  { label: 'Regularization', icon: <FiTool size={14} />, path: (code) => `/employee/${code}/regularize` },
+  { label: 'Profile', icon: <FiUser size={14} />, path: (code) => `/employee/${code}/profile` },
+];
+
+const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b', ul: '#8e8e93' };
 
 export default function Sidebar({ open, onClose, isMobile }) {
   const { user, isAdmin, isSuperAdmin, logout } = useAuth();
   const [isManager, setIsManager] = useState(false);
+  const [leaveBalance, setLeaveBalance] = useState(null);
   const router = useRouter();
   const pathname = usePathname();
+
+  const isEmployee = !isAdmin && !isManager && !!user?.code;
 
   useEffect(() => {
     if (!user?.code || isAdmin) return;
     checkIsManager(user.code).then(setIsManager);
   }, [user?.code, isAdmin]);
+
+  useEffect(() => {
+    if (!isEmployee || !user?.code) return;
+    const year = new Date().getFullYear();
+    getLeaveBalance(user.code, year).then(setLeaveBalance).catch(() => setLeaveBalance(null));
+  }, [isEmployee, user?.code]);
 
   const baseLinks = isAdmin ? [
     { label: 'Dashboard', path: '/' },
@@ -26,18 +46,23 @@ export default function Sidebar({ open, onClose, isMobile }) {
     { label: 'Dashboard', path: '/' },
     { label: 'My Team', path: '/team/manage' },
     { label: 'Leaves', path: '/leaves' },
+  ] : user?.code ? [
+    ...EMPLOYEE_LINKS.map(l => ({ label: l.label, icon: l.icon, path: l.path(user.code) })),
   ] : [];
 
   const roleLabel = isSuperAdmin ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'Employee';
   const roleColor = isSuperAdmin ? '#ff3b30' : user?.role === 'admin' ? 'var(--blue)' : '#34c759';
   const roleBg = isSuperAdmin ? 'rgba(255,59,48,0.1)' : user?.role === 'admin' ? 'rgba(0,113,227,0.1)' : 'rgba(52,199,89,0.1)';
 
+  const availableLeaveTypes = ['cl', 'sl', 'rl', 'sh'];
+
   const desktopOpen = !isMobile;
   const visible = desktopOpen || open;
 
+  const isActive = (link) => pathname === link.path;
+
   return (
     <>
-      {/* Overlay backdrop — mobile only */}
       {isMobile && open && (
         <div
           onClick={onClose}
@@ -88,10 +113,44 @@ export default function Sidebar({ open, onClose, isMobile }) {
           </div>
         </div>
 
+        {/* Employee info card */}
+        {isEmployee && (
+          <div style={{
+            padding: '12px 12px 0',
+            display: 'flex', flexDirection: 'column', gap: '6px', flexShrink: 0,
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              padding: '8px 10px', background: 'var(--surface2)',
+              borderRadius: '10px',
+            }}>
+              <div style={{
+                width: '28px', height: '28px', borderRadius: '50%',
+                background: roleBg, display: 'grid', placeItems: 'center',
+                fontSize: '12px', fontWeight: 700, color: roleColor, flexShrink: 0,
+              }}>
+                {user?.username?.charAt(0).toUpperCase()}
+              </div>
+              <div style={{ lineHeight: 1.2, minWidth: 0 }}>
+                <div style={{
+                  fontSize: 'var(--fs-sm)', fontWeight: 600,
+                  color: 'var(--text)', letterSpacing: '-0.01em',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {user?.username}
+                </div>
+                <div style={{ fontSize: '10px', color: 'var(--text2)', fontFamily: 'monospace' }}>
+                  #{user?.code}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Nav links */}
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '12px 12px', flex: 1 }}>
           {baseLinks.map(link => {
-            const active = pathname === link.path;
+            const active = isActive(link);
             return (
               <button
                 key={link.path}
@@ -110,15 +169,45 @@ export default function Sidebar({ open, onClose, isMobile }) {
                   letterSpacing: '-0.01em',
                   textAlign: 'left',
                   width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
                 }}
                 onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'var(--surface2)'; e.currentTarget.style.color = 'var(--text)'; }}}
                 onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text2)'; }}}
               >
-                {link.label}
+                {link.icon}{link.label}
               </button>
             );
           })}
         </nav>
+
+        {/* Leave balance strip for employees */}
+        {isEmployee && leaveBalance && (
+          <div style={{
+            padding: '8px 12px 12px', flexShrink: 0, borderTop: '1px solid var(--border)', margin: '0 12px',
+          }}>
+            <div style={{ fontSize: '10px', color: 'var(--text3)', fontWeight: 600, marginBottom: '6px', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+              Leave Balance
+            </div>
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+              {availableLeaveTypes.map(type => {
+                const avail = leaveBalance[`${type}Avail`] ?? 0;
+                const total = leaveBalance[`${type}Total`] ?? 0;
+                return (
+                  <span key={type} style={{
+                    fontSize: '10px', color: 'var(--text2)',
+                    background: 'var(--surface2)', padding: '2px 8px', borderRadius: '980px',
+                    display: 'inline-flex', alignItems: 'center', gap: '3px',
+                  }}>
+                    <span style={{ fontWeight: 700, color: LEAVE_COLORS[type] }}>{type.toUpperCase()}</span>
+                    <span>{avail}/{total}</span>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Close button — mobile only */}
         {isMobile && (

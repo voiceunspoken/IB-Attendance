@@ -29,8 +29,8 @@ model User {
   designationId   String?
   designation     Designation? @relation(fields: [designationId], references: [id])
 
-  deptManagerOf     Department?     @relation("DepartmentManager", references: [id])
-  subDeptManagerOf  SubDepartment?  @relation("SubDepartmentManager", references: [id])
+  deptManagerOf     Department?     @relation("DepartmentManager")
+  subDeptManagerOf  SubDepartment?  @relation("SubDepartmentManager")
 
   managedUsers    UserManager[] @relation("ManagerOf")
   managers        UserManager[] @relation("UserManagers")
@@ -50,7 +50,7 @@ model User {
 model Department {
   id             String   @id @default(cuid())
   name           String   @unique
-  managerId      String?
+  managerId      String?  @unique
   manager        User?    @relation("DepartmentManager", fields: [managerId], references: [id])
   users          User[]
   subDepartments SubDepartment[]
@@ -62,7 +62,7 @@ model SubDepartment {
   name         String
   departmentId String
   department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  managerId    String?
+  managerId    String?  @unique
   manager      User?      @relation("SubDepartmentManager", fields: [managerId], references: [id])
   users        User[]
   createdAt    DateTime @default(now())

@@ -521,14 +521,14 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
             position: 'fixed', inset: 0, zIndex: 99998,
             background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
             display: 'grid', placeItems: 'center', padding: '24px',
-            overflow: 'hidden', animation: 'fadeIn 0.15s ease'
+            overflow: 'auto', animation: 'fadeIn 0.15s ease'
           }}>
             <div onClick={e => e.stopPropagation()}
               style={{
                 background: 'var(--surface)', borderRadius: '16px',
                 border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)',
                 padding: '16px', maxWidth: '380px', width: '100%',
-                maxHeight: '100%', overflow: 'hidden',
+                maxHeight: '85vh', overflowY: 'auto',
                 animation: 'slideUp 0.2s ease',
               }}
             >
