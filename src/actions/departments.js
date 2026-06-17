@@ -7,7 +7,10 @@ import { revalidatePath } from 'next/cache';
 
 export async function getDepartments() {
   return prisma.department.findMany({
-    include: { subDepartments: { orderBy: { name: 'asc' } } },
+    include: {
+      subDepartments: { orderBy: { name: 'asc' }, include: { manager: { select: { id: true, name: true, code: true } } } },
+      manager: { select: { id: true, name: true, code: true } }
+    },
     orderBy: { name: 'asc' }
   });
 }
@@ -124,4 +127,28 @@ export async function getManagedEmployees(managerCode) {
     designation: r.user.designation?.name ?? null,
     priority: r.priority
   }));
+}
+
+// ─── DEPARTMENT MANAGER ──────────────────────────────────────
+
+export async function setDepartmentManager(departmentId, managerId) {
+  const dept = await prisma.department.findUnique({ where: { id: departmentId } });
+  if (!dept) return { error: 'Department not found.' };
+  await prisma.department.update({
+    where: { id: departmentId },
+    data: { managerId: managerId || null }
+  });
+  revalidatePath('/');
+  return { success: true };
+}
+
+export async function setSubDepartmentManager(subDepartmentId, managerId) {
+  const sub = await prisma.subDepartment.findUnique({ where: { id: subDepartmentId } });
+  if (!sub) return { error: 'Sub-department not found.' };
+  await prisma.subDepartment.update({
+    where: { id: subDepartmentId },
+    data: { managerId: managerId || null }
+  });
+  revalidatePath('/');
+  return { success: true };
 }

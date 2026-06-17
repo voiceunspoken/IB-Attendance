@@ -439,8 +439,7 @@ export default function SettingsPage() {
           <div className="card" style={{ padding: '22px 24px' }}>
             <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '6px' }}>Monthly Report Emails</div>
             <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '20px' }}>
-              Send attendance summary emails to all employees who have an email address linked to their account.
-              Requires <code style={{ background: 'var(--surface2)', padding: '1px 5px', borderRadius: '4px' }}>RESEND_API_KEY</code> and <code style={{ background: 'var(--surface2)', padding: '1px 5px', borderRadius: '4px' }}>ADMIN_EMAIL</code> in environment variables.
+              Send attendance summary emails to all employees who have an email on their account.
             </div>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
               <div style={{ flex: 1 }}>
@@ -451,27 +450,7 @@ export default function SettingsPage() {
               </div>
               <button className="btn btn-primary" onClick={handleSendReports}>Send Reports</button>
             </div>
-            {notifMsg && <div style={{ marginTop: '12px', fontSize: '13px', color: 'var(--green)' }}>{notifMsg}</div>}
-          </div>
-
-          <div className="card" style={{ padding: '22px 24px' }}>
-            <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '6px' }}>Email Configuration</div>
-            <div style={{ fontSize: '13px', color: 'var(--text2)', lineHeight: 1.6 }}>
-              Add these to your Vercel environment variables:
-            </div>
-            <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {[
-                { key: 'RESEND_API_KEY', desc: 'Your Resend API key (resend.com)' },
-                { key: 'ADMIN_EMAIL', desc: 'Admin email for high-absence alerts' },
-                { key: 'EMAIL_FROM', desc: 'From address (e.g. noreply@yourdomain.com)' },
-                { key: 'NEXT_PUBLIC_APP_URL', desc: 'Your app URL (e.g. https://ibeesattendance.vercel.app)' },
-              ].map(({ key, desc }) => (
-                <div key={key} style={{ background: 'var(--surface2)', borderRadius: '8px', padding: '10px 14px' }}>
-                  <div style={{ fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--blue)' }}>{key}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '2px' }}>{desc}</div>
-                </div>
-              ))}
-            </div>
+            {notifMsg && <div style={{ marginTop: '12px', fontSize: '13px', color: notifMsg.includes('error') ? 'var(--red)' : 'var(--green)' }}>{notifMsg}</div>}
           </div>
         </div>
       )}
