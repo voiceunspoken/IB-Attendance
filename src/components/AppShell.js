@@ -33,7 +33,7 @@ export default function AppShell({ children }) {
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', position: 'relative' }}>
+    <div style={{ display: 'flex', height: '100%', position: 'relative' }}>
       {isAuthenticated && (
         <Sidebar
           open={sidebarOpen}
@@ -60,7 +60,7 @@ export default function AppShell({ children }) {
 
       {/* Main content area — add padding on mobile for hamburger */}
       <main style={{
-        flex: 1, minWidth: 0,
+        flex: 1, minWidth: 0, minHeight: 0,
         paddingTop: isAuthenticated && isMobile && !sidebarOpen ? '56px' : '0',
         transition: 'padding-top 0.2s ease',
       }}>

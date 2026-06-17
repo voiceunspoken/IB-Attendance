@@ -463,7 +463,7 @@ export default function EmployeeDashboard({ params }) {
                 style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text2)', fontSize: '12px', lineHeight: 1 }}
                 disabled={selectedMonthIndex === emp.records.length - 1}>▶</button>
             </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '11px', color: 'var(--text2)' }}>
+            <div style={{ flex: 1, display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-evenly', fontSize: '11px', color: 'var(--text2)' }}>
               {kpiStats.map(s => (
                 <span key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                   <span style={{ fontWeight: 700, color: s.color }}>{s.val}</span>
@@ -486,7 +486,7 @@ export default function EmployeeDashboard({ params }) {
           </div>
 
           {/* Calendar */}
-          <div style={{ flex: 1, minHeight: 0 }}>
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             <EmployeeModal
               employee={formattedEmployee}
               currentMonth={modalCurrentMonth}
