@@ -9,9 +9,10 @@ import {
   getAllPendingRegularizations, reviewRegularization,
   getPendingSuperRegularizations, reviewRegularizationSuper,
   getAllLeaveBalances, upsertLeavePolicy, getLeavePolicy,
-  getLeaveBalancesForExport
+  getLeaveBalancesForExport, getManagerLeaveRequests
 } from '../../actions/leave';
 import { getPendingAttendanceCorrections, reviewAttendanceCorrection } from '../../actions/attendanceChanges';
+import { getManagedEmployees } from '../../actions/departments';
 
 const LEAVE_LABELS = { cl: 'CL', sl: 'SL', el: 'EL', rl: 'RL', sh: 'SH' };
 const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b' };
@@ -21,9 +22,15 @@ export default function LeavesPage() {
   const router = useRouter();
   const toast = useToast();
 
-  const [tab, setTab] = useState('requests');
+  const [tab, setTab] = useState('manager_approval');
+
+  // Switch to overview for admins after mount
+  useEffect(() => {
+    if (isAdmin && tab === 'manager_approval') setTab('overview');
+  }, [isAdmin, tab]);
   const [fetchTrigger, setFetchTrigger] = useState(0);
   const [leaveRequests, setLeaveRequests] = useState([]);
+  const [managerLeaves, setManagerLeaves] = useState([]);
   const [regularizations, setRegularizations] = useState([]);
   const [superRegularizations, setSuperRegularizations] = useState([]);
   const [attendanceCorrections, setAttendanceCorrections] = useState([]);
@@ -34,6 +41,7 @@ export default function LeavesPage() {
   const totalBalancePages = Math.ceil(balances.length / balancePageSize);
   const [policy, setPolicy] = useState({ cl: 12, sl: 6, el: 4, rl: 2, sh: 6 });
   const [loading, setLoading] = useState(true);
+  const [managerLoading, setManagerLoading] = useState(true);
   const [reviewNote, setReviewNote] = useState('');
   const [reviewingId, setReviewingId] = useState(null);
   const [exporting, setExporting] = useState(false);
@@ -102,8 +110,26 @@ export default function LeavesPage() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
-    if (!authLoading && isAuthenticated && !isAdmin) router.push('/');
-  }, [isAuthenticated, isAdmin, authLoading, router]);
+  }, [isAuthenticated, authLoading, router]);
+
+  useEffect(() => {
+    if (authLoading || !isAuthenticated) return;
+    if (isAdmin) return;
+    (async () => {
+      try {
+        const [mgrEmps, leaves] = await Promise.all([
+          getManagedEmployees(user?.code),
+          getManagerLeaveRequests(user?.code)
+        ]);
+        setManagerLeaves(leaves || []);
+        setManagerLoading(false);
+        if (!mgrEmps || mgrEmps.length === 0) router.push('/');
+      } catch {
+        setManagerLoading(false);
+        router.push('/');
+      }
+    })();
+  }, [isAuthenticated, isAdmin, authLoading, user?.code, router, fetchTrigger]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -111,13 +137,15 @@ export default function LeavesPage() {
     setLoading(true);
     (async () => {
       try {
-        const [reqs, regs, bal, pol] = await Promise.all([
+        const [reqs, regs, bal, pol, mgrLeaves] = await Promise.all([
           getAllLeaveRequests(),
           getAllPendingRegularizations(),
           getAllLeaveBalances(year),
-          getLeavePolicy(year)
+          getLeavePolicy(year),
+          user?.code ? getManagerLeaveRequests(user.code) : Promise.resolve([])
         ]);
         setLeaveRequests(reqs);
+        setManagerLeaves(mgrLeaves);
         setRegularizations(regs);
         setBalances(bal);
         if (isSuperAdmin) {
@@ -129,15 +157,17 @@ export default function LeavesPage() {
         if (pol) setPolicy({ cl: pol.cl, sl: pol.sl, el: pol.el, rl: pol.rl, sh: pol.sh ?? 6 });
       } catch {
         setLeaveRequests([]);
+        setManagerLeaves([]);
         setRegularizations([]);
         setBalances([]);
         setSuperRegularizations([]);
         setAttendanceCorrections([]);
       } finally {
         setLoading(false);
+        setManagerLoading(false);
       }
     })();
-  }, [isAdmin, isSuperAdmin, year, tab, fetchTrigger]);
+  }, [isAdmin, isSuperAdmin, year, tab, fetchTrigger, user?.code]);
 
   const handleReviewLeave = async (id, approve) => {
     await reviewLeaveRequest(id, user.username, approve, reviewNote);
@@ -163,7 +193,9 @@ export default function LeavesPage() {
     setFetchTrigger(t => t + 1);
   };
 
-  if (authLoading || !isAuthenticated || !isAdmin) return null;
+  if (authLoading || !isAuthenticated) return null;
+  if (!isAdmin && managerLoading) return null;
+  if (!isAdmin && !managerLoading && !user?.code) return null;
 
   const statusBadge = (status) => {
     const map = {
@@ -177,6 +209,7 @@ export default function LeavesPage() {
 
   const StageBadge = ({ stage }) => {
     const map = {
+      pending_mgr: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3', label: 'Pending' },
       pending_l2: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3', label: 'L2 Pending' },
       pending_l1: { bg: 'rgba(255,159,10,0.1)', color: '#b36200', label: 'L1 Pending' },
       pending_super: { bg: 'rgba(175,82,222,0.1)', color: '#7b2d8b', label: 'Super Pending' },
@@ -196,15 +229,17 @@ export default function LeavesPage() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', background: 'var(--surface3)', borderRadius: '10px', padding: '3px', marginBottom: '24px', width: 'fit-content', flexWrap: 'wrap' }}>
-        {[
+        {(!isAdmin ? [
+          { key: 'manager_approval', label: `My Approvals${managerLeaves.length > 0 ? ` (${managerLeaves.length})` : ''}` },
+        ] : [
           { key: 'overview', label: `All Requests (${leaveRequests.length})` },
-          { key: 'myapproval', label: `Pending My Approval${superRegularizations.length + attendanceCorrections.length > 0 ? ` (${superRegularizations.length + attendanceCorrections.length})` : ''}` },
+          { key: 'manager_approval', label: `My Approvals${managerLeaves.length > 0 ? ` (${managerLeaves.length})` : ''}` },
           { key: 'regularize', label: `Regularizations${regularizations.length > 0 ? ` (${regularizations.length})` : ''}` },
           { key: 'corrections', label: `Attendance Corrections${attendanceCorrections.length > 0 ? ` (${attendanceCorrections.length})` : ''}` },
           { key: 'balances', label: 'Leave Balances' },
           { key: 'policy', label: 'Policy' },
-        ].filter(t => {
-          if (t.key === 'myapproval' || t.key === 'corrections') return isSuperAdmin;
+        ]).filter(t => {
+          if (t.key === 'corrections') return isSuperAdmin;
           return true;
         }).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
@@ -258,20 +293,20 @@ export default function LeavesPage() {
         </div>
       )}
 
-      {/* ── PENDING MY APPROVAL (super admin) ── */}
-      {!loading && tab === 'myapproval' && isSuperAdmin && (
+      {/* ── MY APPROVALS (manager + super admin) ── */}
+      {!loading && tab === 'manager_approval' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
             <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
-              Pending Super Admin Approval
+              Pending Your Approval ({managerLeaves.length})
             </div>
-            {leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length === 0
+            {managerLeaves.length === 0
               ? <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text3)', fontSize: '13px' }}>No leave requests awaiting your approval.</div>
-              : leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').map(r => (
+              : managerLeaves.map(r => (
                 <div key={r.id} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name}</span>
+                      <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name || 'Unknown'}</span>
                       <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user?.code}</span>
                       <span style={{ fontSize: '12px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
                       <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
@@ -309,6 +344,58 @@ export default function LeavesPage() {
               ))
             }
           </div>
+
+          {/* Super admin also sees pending_super leaves here */}
+          {isSuperAdmin && (
+            <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
+              <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
+                Pending Super Admin Approval
+              </div>
+              {leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length === 0
+                ? <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text3)', fontSize: '13px' }}>No leave requests awaiting super admin approval.</div>
+                : leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').map(r => (
+                  <div key={r.id} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user?.code}</span>
+                        <span style={{ fontSize: '12px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
+                        {r.shiftSlot && <span style={{ fontSize: '11px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
+                        <StageBadge stage={r.approvalStage} />
+                      </div>
+                      {r.sandwichCount > 0 && (
+                        <div style={{ fontSize: '11px', color: 'var(--orange)', marginBottom: '2px', fontWeight: 500 }}>
+                          🥪 {r.sandwichCount === 1 ? '1st sandwich' : `${r.sandwichCount} sandwich`} leave
+                        </div>
+                      )}
+                      <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
+                        {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                        {' · '}{r.reason}
+                      </div>
+                      {r.prescriptionFile && <div style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '2px' }}>📎 Prescription attached</div>}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '200px' }}>
+                      {reviewingId === r.id ? (
+                        <>
+                          <input className="input-field" placeholder="Optional note…" value={reviewNote}
+                            onChange={e => setReviewNote(e.target.value)} style={{ padding: '6px 10px', fontSize: '12px' }} />
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button className="btn btn-primary" style={{ flex: 1, padding: '6px', fontSize: '12px', background: 'var(--green)' }} onClick={() => handleReviewLeave(r.id, true)}>Approve</button>
+                            <button style={{ flex: 1, padding: '6px', fontSize: '12px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleReviewLeave(r.id, false)}>Reject</button>
+                          </div>
+                          <button className="btn btn-secondary" style={{ padding: '5px', fontSize: '11px' }} onClick={() => setReviewingId(null)}>Cancel</button>
+                        </>
+                      ) : (
+                        <button className="btn btn-secondary" style={{ padding: '6px 14px', fontSize: '12px' }} onClick={() => setReviewingId(r.id)}>Review</button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              }
+            </div>
+          )}
         </div>
       )}
 
