@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
 import { useToast } from '../../components/Toast';
+import { FiClipboard } from 'react-icons/fi';
 import {
   getAllLeaveRequests, reviewLeaveRequest,
   getAllPendingRegularizations, reviewRegularization,
@@ -261,7 +262,11 @@ export default function LeavesPage() {
             All Leave Requests ({leaveRequests.length})
           </div>
           {leaveRequests.length === 0
-            ? <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text3)', fontSize: '13px' }}>No leave requests yet.</div>
+            ? <div style={{ padding: '40px', textAlign: 'center' }}>
+                <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.25 }}><FiClipboard size={36} /></div>
+                <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px', color: 'var(--text2)' }}>No leave requests yet</div>
+                <div style={{ fontSize: '13px', color: 'var(--text3)', marginBottom: '16px' }}>Employees can apply for leave from their profile page.</div>
+              </div>
             : leaveRequests.map(r => (
               <div key={r.id} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
                 <div style={{ flex: 1 }}>

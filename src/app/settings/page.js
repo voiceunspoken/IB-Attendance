@@ -14,6 +14,7 @@ import { getMonths } from '../../actions/attendance';
 import { changePassword } from '../../actions/auth';
 import { sendAllMonthlyReports } from '../../actions/notifications';
 import ConfirmModal from '../../components/ConfirmModal';
+import { FiSun, FiClock, FiPlus } from 'react-icons/fi';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -299,7 +300,12 @@ export default function SettingsPage() {
                 </div>
                 <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
                   {holidays.filter(h => hSubTab === 'gazette' ? (!h.isRestricted || h.type === 'national') : (h.isRestricted || h.type === 'optional')).length === 0
-                    ? <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text3)', fontSize: '13px' }}>No holidays added yet.</div>
+                    ? <div style={{ padding: '40px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.25, color: 'var(--text3)' }}><FiSun size={36} /></div>
+                        <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px', color: 'var(--text2)' }}>No holidays added yet</div>
+                        <div style={{ fontSize: '13px', color: 'var(--text3)', marginBottom: '16px' }}>Add your first holiday to get started.</div>
+                        <button onClick={() => setHSubTab('add')} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 500, border: 'none', cursor: 'pointer', fontFamily: 'inherit', background: 'var(--accent)', color: '#fff' }}><FiPlus size={14} /> Add Your First Holiday</button>
+                      </div>
                     : holidays.filter(h => hSubTab === 'gazette' ? (!h.isRestricted || h.type === 'national') : (h.isRestricted || h.type === 'optional')).map(h => (
                       <div key={h.id} style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
@@ -323,7 +329,12 @@ export default function SettingsPage() {
                 Pending Holiday Approvals ({pendingHolidays.length})
               </div>
               {pendingHolidays.length === 0
-                ? <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text3)', fontSize: '13px' }}>No pending holidays.</div>
+                ? <div style={{ padding: '40px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.25, color: 'var(--text3)' }}><FiSun size={36} /></div>
+                    <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px', color: 'var(--text2)' }}>No pending holidays</div>
+                    <div style={{ fontSize: '13px', color: 'var(--text3)', marginBottom: '16px' }}>Add a holiday proposal for super admin approval.</div>
+                    <button onClick={() => setHSubTab('add')} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 500, border: 'none', cursor: 'pointer', fontFamily: 'inherit', background: 'var(--accent)', color: '#fff' }}><FiPlus size={14} /> Add Your First Holiday</button>
+                  </div>
                 : pendingHolidays.map(h => (
                   <div key={h.id} style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
                     <div>
@@ -390,7 +401,13 @@ export default function SettingsPage() {
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
             <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>Policy History</div>
             <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-              {policyHistory.map((p) => (
+              {policyHistory.length === 0
+                ? <div style={{ padding: '40px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.25, color: 'var(--text3)' }}><FiClock size={36} /></div>
+                    <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px', color: 'var(--text2)' }}>Policy has never been changed</div>
+                    <div style={{ fontSize: '13px', color: 'var(--text3)' }}>Create a new policy above and activate it to see history here.</div>
+                  </div>
+                : policyHistory.map((p) => (
                 <div key={p.id} style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '13px', fontWeight: 500 }}>

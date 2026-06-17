@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '../../../components/AuthProvider';
 import { getEmployeeHistory, toggleOverride, clearAllOverrides } from '../../../actions/attendance';
 import {
@@ -13,7 +14,7 @@ import { requestAttendanceCorrection } from '../../../actions/attendanceChanges'
 import EmployeeModal from '../../../components/EmployeeModal';
 import Modal from '../../../components/Modal';
 import { useToast } from '../../../components/Toast';
-import { FiCalendar, FiFileText, FiTool, FiDownload } from 'react-icons/fi';
+import { FiCalendar, FiFileText, FiTool, FiDownload, FiSearch, FiArrowLeft } from 'react-icons/fi';
 
 const LEAVE_LABELS = { cl: 'Casual Leave', sl: 'Sick Leave', el: 'Earned Leave', rl: 'Restricted Leave', sh: 'Short Leave', ul: 'Unpaid Leave' };
 const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b', ul: '#8e8e93' };
@@ -55,6 +56,7 @@ export default function EmployeeDashboard({ params }) {
   const [bulkOverrideTo, setBulkOverrideTo] = useState('');
   const [bulkOverrideType, setBulkOverrideType] = useState('wfm');
   const [bulkOverrideModal, setBulkOverrideModal] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   // Regularization form
   const [regForm, setRegForm] = useState({ date: '', requestedIn: '', requestedOut: '', reason: '' });
@@ -168,7 +170,14 @@ export default function EmployeeDashboard({ params }) {
 
   if (authLoading || !isAuthenticated) return null;
   if (loading) return <div style={{ padding: '60px', textAlign: 'center', color: 'var(--text2)', fontSize: '14px' }}>Loading…</div>;
-  if (!emp || emp.records.length === 0) return <div style={{ padding: '60px', textAlign: 'center', color: 'var(--red)', fontSize: '14px' }}>Employee not found.</div>;
+  if (!emp || emp.records.length === 0) return (
+    <div style={{ padding: '60px', textAlign: 'center' }}>
+      <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.25, color: 'var(--text3)' }}><FiSearch size={36} /></div>
+      <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px', color: 'var(--text2)' }}>Employee not found</div>
+      <div style={{ fontSize: '13px', color: 'var(--text3)', marginBottom: '16px' }}>No employee matches this code or no records exist.</div>
+      <Link href="/team" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 500, background: 'var(--accent)', color: '#fff', textDecoration: 'none' }}><FiArrowLeft size={14} /> Go Back</Link>
+    </div>
+  );
 
   const currentRecord = emp.records[selectedMonthIndex];
   const [month, year] = currentRecord.monthYear.split('_');
@@ -228,21 +237,24 @@ export default function EmployeeDashboard({ params }) {
     toast.success('Correction request submitted for super admin approval.');
   };
 
-  const handleBulkOverride = () => {
+  const handleBulkOverride = async () => {
     const f = parseInt(bulkOverrideFrom);
     const t = parseInt(bulkOverrideTo) || f;
     if (!f || isNaN(f)) return toast.error('Please enter a valid start date.');
     const dIM = new Date(modalCurrentMonth.year, modalCurrentMonth.month, 0).getDate();
     const start = Math.max(1, Math.min(f, dIM));
     const end = Math.max(start, Math.min(t, dIM));
+    setBulkLoading(true);
     for (let d = start; d <= end; d++) {
       const info = formattedEmployee.days.find(x => x.d === d);
       if (info && info.type !== 'wo' && info.type !== 'holiday') {
-        handleApplyOverride(formattedEmployee.code, d, bulkOverrideType);
+        await handleApplyOverride(formattedEmployee.code, d, bulkOverrideType);
       }
     }
+    setBulkLoading(false);
     setBulkOverrideFrom('');
     setBulkOverrideTo('');
+    setBulkOverrideModal(false);
   };
 
   const formatMonth = (my) => {
@@ -532,8 +544,9 @@ export default function EmployeeDashboard({ params }) {
                     </select>
                   </div>
                   <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                    <button className="btn btn-primary" style={{ flex: 1, padding: '9px' }}
-                      onClick={() => { handleBulkOverride(); setBulkOverrideModal(false); }}>Apply</button>
+                    <button className="btn btn-primary" style={{ flex: 1, padding: '9px', opacity: bulkLoading ? 0.7 : 1 }}
+                      disabled={bulkLoading}
+                      onClick={() => handleBulkOverride()}>{bulkLoading ? 'Applying…' : 'Apply'}</button>
                     <button className="btn btn-secondary" style={{ flex: 1, padding: '9px' }}
                       onClick={() => { setBulkOverrideModal(false); }}>Cancel</button>
                   </div>

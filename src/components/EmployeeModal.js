@@ -13,6 +13,9 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
   const [popupPos, setPopupPos] = useState({ x: 0, y: 0 });
   const [correctionType, setCorrectionType] = useState('present');
   const [correctionReason, setCorrectionReason] = useState('');
+  const [clearing, setClearing] = useState(false);
+  const [submittingCorrection, setSubmittingCorrection] = useState(false);
+  const [applyingOverride, setApplyingOverride] = useState(false);
 
   const toast = useToast();
   const fmtTime = (m) => m != null ? `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` : '';
@@ -54,19 +57,21 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
     { val: ovCounts.wos + ovCounts.woshd, label: 'WOS', color: 'var(--teal)' },
   ];
 
-  const handleApply = () => {
+  const handleApply = async () => {
     const f = parseInt(fromDate);
     const t = parseInt(toDate) || f;
     if (!f || isNaN(f)) return toast.error('Please enter a valid start date.');
     const dIM = new Date(currentMonth.year, currentMonth.month, 0).getDate();
     const start = Math.max(1, Math.min(f, dIM));
     const end = Math.max(start, Math.min(t, dIM));
+    setApplyingOverride(true);
     for (let d = start; d <= end; d++) {
       const info = employee.days.find(x => x.d === d);
       if (info && info.type !== 'wo' && info.type !== 'holiday') {
-        onApplyOverride(employee.code, d, overrideType);
+        await onApplyOverride(employee.code, d, overrideType);
       }
     }
+    setApplyingOverride(false);
     setFromDate('');
     setToDate('');
   };
@@ -343,19 +348,21 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
                 value={correctionReason}
                 onChange={e => setCorrectionReason(e.target.value)}
                 style={{ width: '100%', padding: '7px 10px', fontSize: 'var(--fs-sm)', marginBottom: '6px', boxSizing: 'border-box' }} />
-              <button onClick={() => {
+              <button onClick={async () => {
                 if (!correctionReason.trim()) return toast.error('Please provide a reason.');
-                onProposeCorrection(employee.code, popupDay, cdi.type, correctionType, correctionReason);
+                setSubmittingCorrection(true);
+                await onProposeCorrection(employee.code, popupDay, cdi.type, correctionType, correctionReason);
+                setSubmittingCorrection(false);
                 setCorrectionReason('');
                 setCorrectionType('present');
                 setSelectedDay(null);
                 setPopupDay(null);
               }} style={{
                 padding: '7px 14px', borderRadius: '9px', border: '1px solid var(--blue)',
-                background: 'var(--blue-light)', color: 'var(--blue)', cursor: 'pointer',
-                fontSize: 'var(--fs-sm)', fontWeight: 600, fontFamily: 'inherit', width: '100%'
-              }}>
-                Submit Correction Request
+                background: 'var(--blue-light)', color: 'var(--blue)', cursor: submittingCorrection ? 'default' : 'pointer',
+                fontSize: 'var(--fs-sm)', fontWeight: 600, fontFamily: 'inherit', width: '100%', opacity: submittingCorrection ? 0.7 : 1
+              }} disabled={submittingCorrection}>
+                {submittingCorrection ? 'Submitting…' : 'Submit Correction Request'}
               </button>
             </>
           );
@@ -433,9 +440,10 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
                 <option value="wos-hd">WOS — Half Day</option>
               </select>
             </div>
-            <button className="btn btn-primary" style={{ padding: '8px 18px', fontSize: 'var(--fs-sm)' }} onClick={handleApply}>Apply</button>
-            <button className="btn btn-outline" style={{ padding: '8px 14px', fontSize: 'var(--fs-sm)' }}
-              onClick={() => onClearAllOverrides(employee.code)}>Clear All</button>
+            <button className="btn btn-primary" style={{ padding: '8px 18px', fontSize: 'var(--fs-sm)', opacity: applyingOverride ? 0.7 : 1 }} disabled={applyingOverride} onClick={handleApply}>{applyingOverride ? 'Applying…' : 'Apply'}</button>
+            <button className="btn btn-outline" style={{ padding: '8px 14px', fontSize: 'var(--fs-sm)', opacity: clearing ? 0.7 : 1 }}
+              disabled={clearing}
+              onClick={async () => { setClearing(true); await onClearAllOverrides(employee.code); setClearing(false); }}>{clearing ? 'Clearing…' : 'Clear All'}</button>
           </div>
         </div>
         )}
