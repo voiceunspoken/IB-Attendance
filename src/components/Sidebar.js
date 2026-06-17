@@ -3,9 +3,8 @@
 import { useAuth } from './AuthProvider';
 import { useRouter, usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { FiCalendar, FiFileText, FiTool, FiUser } from 'react-icons/fi';
+import { FiCalendar, FiFileText, FiTool, FiUser, FiHome, FiUsers, FiSettings } from 'react-icons/fi';
 import { checkIsManager } from '../actions/manager';
-import { getLeaveBalance } from '../actions/leave';
 
 const EMPLOYEE_LINKS = [
   { label: 'Attendance', icon: <FiCalendar size={14} />, path: (code) => `/employee/${code}` },
@@ -14,52 +13,66 @@ const EMPLOYEE_LINKS = [
   { label: 'Profile', icon: <FiUser size={14} />, path: (code) => `/employee/${code}/profile` },
 ];
 
-const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b', ul: '#8e8e93' };
+const ADMIN_LINKS = [
+  { label: 'Dashboard', icon: <FiHome size={14} />, path: '/' },
+  { label: 'Attendance', icon: <FiCalendar size={14} />, path: '/attendance' },
+  { label: 'Team', icon: <FiUsers size={14} />, path: '/team' },
+  { label: 'Leaves', icon: <FiFileText size={14} />, path: '/leaves' },
+  { label: 'Settings', icon: <FiSettings size={14} />, path: '/settings' },
+];
+
+function NavLink({ link, pathname, router, isMobile, onClose }) {
+  const active = pathname === link.path;
+  return (
+    <button
+      key={link.path}
+      onClick={() => { router.push(link.path); if (isMobile && onClose) onClose(); }}
+      style={{
+        padding: '10px 14px',
+        borderRadius: '10px',
+        border: 'none',
+        background: active ? 'var(--surface2)' : 'transparent',
+        color: active ? 'var(--text)' : 'var(--text2)',
+        fontFamily: 'inherit',
+        fontSize: 'var(--fs-sm)',
+        fontWeight: active ? 600 : 500,
+        cursor: 'pointer',
+        transition: 'all 0.15s',
+        letterSpacing: '-0.01em',
+        textAlign: 'left',
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+      }}
+      onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'var(--surface2)'; e.currentTarget.style.color = 'var(--text)'; }}}
+      onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text2)'; }}}
+    >
+      {link.icon}{link.label}
+    </button>
+  );
+}
 
 export default function Sidebar({ open, onClose, isMobile }) {
   const { user, isAdmin, isSuperAdmin, logout } = useAuth();
   const [isManager, setIsManager] = useState(false);
-  const [leaveBalance, setLeaveBalance] = useState(null);
   const router = useRouter();
   const pathname = usePathname();
 
-  const isEmployee = !isAdmin && !isManager && !!user?.code;
+  const isPureEmployee = !isAdmin && !isManager && !!user?.code;
+  const showEmployeeSection = (isAdmin || isPureEmployee) && !!user?.code;
 
   useEffect(() => {
     if (!user?.code || isAdmin) return;
     checkIsManager(user.code).then(setIsManager);
   }, [user?.code, isAdmin]);
 
-  useEffect(() => {
-    if (!isEmployee || !user?.code) return;
-    const year = new Date().getFullYear();
-    getLeaveBalance(user.code, year).then(setLeaveBalance).catch(() => setLeaveBalance(null));
-  }, [isEmployee, user?.code]);
-
-  const baseLinks = isAdmin ? [
-    { label: 'Dashboard', path: '/' },
-    { label: 'Attendance', path: '/attendance' },
-    { label: 'Team', path: '/team' },
-    { label: 'Leaves', path: '/leaves' },
-    { label: 'Settings', path: '/settings' },
-  ] : isManager ? [
-    { label: 'Dashboard', path: '/' },
-    { label: 'My Team', path: '/team/manage' },
-    { label: 'Leaves', path: '/leaves' },
-  ] : user?.code ? [
-    ...EMPLOYEE_LINKS.map(l => ({ label: l.label, icon: l.icon, path: l.path(user.code) })),
-  ] : [];
-
   const roleLabel = isSuperAdmin ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'Employee';
   const roleColor = isSuperAdmin ? '#ff3b30' : user?.role === 'admin' ? 'var(--blue)' : '#34c759';
   const roleBg = isSuperAdmin ? 'rgba(255,59,48,0.1)' : user?.role === 'admin' ? 'rgba(0,113,227,0.1)' : 'rgba(52,199,89,0.1)';
 
-  const availableLeaveTypes = ['cl', 'sl', 'rl', 'sh'];
-
   const desktopOpen = !isMobile;
   const visible = desktopOpen || open;
-
-  const isActive = (link) => pathname === link.path;
 
   return (
     <>
@@ -113,16 +126,36 @@ export default function Sidebar({ open, onClose, isMobile }) {
           </div>
         </div>
 
-        {/* Employee info card */}
-        {isEmployee && (
+        {/* ── ADMIN SECTION ── */}
+        {isAdmin && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '12px 12px', flexShrink: 0 }}>
+            <div style={{ fontSize: '9px', color: 'var(--text3)', fontWeight: 700, marginBottom: '6px', letterSpacing: '0.06em', textTransform: 'uppercase', paddingLeft: '14px' }}>
+              Admin
+            </div>
+            {ADMIN_LINKS.map(link => (
+              <NavLink key={link.path} link={link} pathname={pathname} router={router} isMobile={isMobile} onClose={onClose} />
+            ))}
+          </div>
+        )}
+
+        {/* ── EMPLOYEE SECTION ── */}
+        {showEmployeeSection && (
           <div style={{
-            padding: '12px 12px 0',
-            display: 'flex', flexDirection: 'column', gap: '6px', flexShrink: 0,
+            display: 'flex', flexDirection: 'column', gap: '2px', padding: '8px 12px',
+            borderTop: isAdmin ? '1px solid var(--border)' : 'none',
+            marginTop: isAdmin ? '0' : '0',
+            flex: isAdmin ? '0 0 auto' : 1,
           }}>
+            {/* Section label */}
+            <div style={{ fontSize: '9px', color: 'var(--text3)', fontWeight: 700, marginBottom: '6px', letterSpacing: '0.06em', textTransform: 'uppercase', paddingLeft: '14px', marginTop: isAdmin ? '4px' : '0' }}>
+              Employee
+            </div>
+
+            {/* Employee info card */}
             <div style={{
               display: 'flex', alignItems: 'center', gap: '8px',
               padding: '8px 10px', background: 'var(--surface2)',
-              borderRadius: '10px',
+              borderRadius: '10px', marginBottom: '4px', marginLeft: '0', marginRight: '0',
             }}>
               <div style={{
                 width: '28px', height: '28px', borderRadius: '50%',
@@ -144,69 +177,25 @@ export default function Sidebar({ open, onClose, isMobile }) {
                 </div>
               </div>
             </div>
+
+            {/* Employee nav links */}
+            {EMPLOYEE_LINKS.map(link => (
+              <NavLink key={link.path(user?.code)} link={{ ...link, path: link.path(user?.code) }} pathname={pathname} router={router} isMobile={isMobile} onClose={onClose} />
+            ))}
           </div>
         )}
 
-        {/* Nav links */}
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '12px 12px', flex: 1 }}>
-          {baseLinks.map(link => {
-            const active = isActive(link);
-            return (
-              <button
-                key={link.path}
-                onClick={() => { router.push(link.path); if (isMobile && onClose) onClose(); }}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: '10px',
-                  border: 'none',
-                  background: active ? 'var(--surface2)' : 'transparent',
-                  color: active ? 'var(--text)' : 'var(--text2)',
-                  fontFamily: 'inherit',
-                  fontSize: 'var(--fs-sm)',
-                  fontWeight: active ? 600 : 500,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                  letterSpacing: '-0.01em',
-                  textAlign: 'left',
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-                onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'var(--surface2)'; e.currentTarget.style.color = 'var(--text)'; }}}
-                onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text2)'; }}}
-              >
-                {link.icon}{link.label}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Leave balance strip for employees */}
-        {isEmployee && leaveBalance && (
-          <div style={{
-            padding: '8px 12px 12px', flexShrink: 0, borderTop: '1px solid var(--border)', margin: '0 12px',
-          }}>
-            <div style={{ fontSize: '10px', color: 'var(--text3)', fontWeight: 600, marginBottom: '6px', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
-              Leave Balance
-            </div>
-            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-              {availableLeaveTypes.map(type => {
-                const avail = leaveBalance[`${type}Avail`] ?? 0;
-                const total = leaveBalance[`${type}Total`] ?? 0;
-                return (
-                  <span key={type} style={{
-                    fontSize: '10px', color: 'var(--text2)',
-                    background: 'var(--surface2)', padding: '2px 8px', borderRadius: '980px',
-                    display: 'inline-flex', alignItems: 'center', gap: '3px',
-                  }}>
-                    <span style={{ fontWeight: 700, color: LEAVE_COLORS[type] }}>{type.toUpperCase()}</span>
-                    <span>{avail}/{total}</span>
-                  </span>
-                );
-              })}
-            </div>
-          </div>
+        {/* ── MANAGER LINKS ── */}
+        {!isAdmin && isManager && (
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '12px 12px', flex: 1 }}>
+            {[
+              { label: 'Dashboard', path: '/' },
+              { label: 'My Team', path: '/team/manage' },
+              { label: 'Leaves', path: '/leaves' },
+            ].map(link => (
+              <NavLink key={link.path} link={link} pathname={pathname} router={router} isMobile={isMobile} onClose={onClose} />
+            ))}
+          </nav>
         )}
 
         {/* Close button — mobile only */}
