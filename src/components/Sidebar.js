@@ -128,7 +128,7 @@ export default function Sidebar({ open, onClose, isMobile }) {
 
         {/* ── ADMIN SECTION ── */}
         {isAdmin && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '12px 12px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '12px 12px', flex: 1, minHeight: 0 }}>
             <div style={{ fontSize: '9px', color: 'var(--text3)', fontWeight: 700, marginBottom: '6px', letterSpacing: '0.06em', textTransform: 'uppercase', paddingLeft: '14px' }}>
               Admin
             </div>
@@ -143,7 +143,6 @@ export default function Sidebar({ open, onClose, isMobile }) {
           <div style={{
             display: 'flex', flexDirection: 'column', gap: '2px', padding: '8px 12px',
             borderTop: isAdmin ? '1px solid var(--border)' : 'none',
-            marginTop: isAdmin ? '0' : '0',
             flex: isAdmin ? '0 0 auto' : 1,
           }}>
             {/* Section label */}

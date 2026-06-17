@@ -269,7 +269,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-4 flex-wrap bg-surface2" style={{ borderRadius: '10px', padding: '3px', marginBottom: '24px' }}>
+      <div className="flex gap-4 bg-surface2" style={{ borderRadius: '10px', padding: '3px', marginBottom: '24px', border: '1px solid var(--border)', width: 'fit-content' }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} className="btn border-none" style={{
             padding: '6px 16px', borderRadius: '7px', fontSize: '13px',

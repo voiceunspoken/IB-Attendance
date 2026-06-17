@@ -316,6 +316,13 @@ body {
   }
 }
 
+/* ── KPI GRID (base) ── */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--gap);
+}
+
 /* ── RESPONSIVE ── */
 @media (max-width: 1024px) {
   .kpi-grid {
