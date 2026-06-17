@@ -206,12 +206,6 @@ const th = {
   borderBottom: '1px solid var(--border)'
 };
 const td = { padding: 'clamp(10px, 1vw, 13px) clamp(10px, 1.2vw, 14px)', color: 'var(--text)', whiteSpace: 'nowrap', fontSize: 'clamp(12px, 1.1vw, 13px)' };
-const badge = (bg, color) => ({
-  display: 'inline-flex', alignItems: 'center',
-  padding: '3px 10px', borderRadius: '980px',
-  fontSize: 'clamp(10px, 0.9vw, 11px)', fontWeight: 600, letterSpacing: '0.01em',
-  background: bg, color
-});
 const pageBtn = (disabled) => ({
   width: '30px', height: '30px', borderRadius: '8px',
   border: '1px solid var(--border)', background: 'transparent',

@@ -1,6 +1,6 @@
 "use client";
 import { createContext, useContext, useState, useCallback } from 'react';
-import { FiCheck, FiX, FiInfo, FiAlertTriangle } from 'react-icons/fi';
+import { FiCheck, FiX, FiInfo } from 'react-icons/fi';
 
 const ToastContext = createContext(null);
 

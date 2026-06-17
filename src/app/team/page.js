@@ -27,8 +27,6 @@ const ROLE_PERMISSIONS = [
     perms: ['View own attendance only', 'Apply for leave & regularization', 'Read-only calendar', 'No edit access'] },
 ];
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
 function RoleBadge({ role }) {
   const s = ROLE_STYLES[role] || ROLE_STYLES.employee;
   return (
@@ -121,9 +119,9 @@ export default function TeamPage() {
 
   const [confirmState, setConfirmState] = useState({ show: false, message: '', confirmLabel: 'Delete', confirmLoadingLabel: 'Deleting…', variant: 'danger', onConfirm: null });
 
-  const paginatedEmployees = employees.slice((empPage - 1) * pageSize, empPage * pageSize);
   const totalEmpPages = Math.ceil(employees.length / pageSize);
-  useEffect(() => { setEmpPage(1); }, [employees.length]);
+  const safeEmpPage = Math.min(empPage, Math.max(1, totalEmpPages));
+  const paginatedEmployees = employees.slice((safeEmpPage - 1) * pageSize, safeEmpPage * pageSize);
 
   // ── Effects ──
 
@@ -153,9 +151,7 @@ export default function TeamPage() {
       if (ms.length > 0 && !editRecord.monthYear) setEditRecord(r => ({ ...r, monthYear: ms[0] }));
       setLoading(false);
     })();
-  }, [isAdmin, isSuperAdmin, fetchTrigger]);
-
-  useEffect(() => { setUserPage(1); }, [userSearch, roleFilter]);
+  }, [isAdmin, isSuperAdmin, fetchTrigger, editRecord.monthYear]);
 
   const filteredUsers = useMemo(() => {
     return users.filter(u => {
@@ -165,8 +161,9 @@ export default function TeamPage() {
       return true;
     });
   }, [users, userSearch, roleFilter]);
-  const paginatedUsers = filteredUsers.slice((userPage - 1) * pageSize, userPage * pageSize);
   const totalUserPages = Math.ceil(filteredUsers.length / pageSize);
+  const safeUserPage = Math.min(userPage, Math.max(1, totalUserPages));
+  const paginatedUsers = filteredUsers.slice((safeUserPage - 1) * pageSize, safeUserPage * pageSize);
 
   // ── Handlers: Accounts ──
 
@@ -465,14 +462,14 @@ export default function TeamPage() {
                     style={{ padding: '6px 12px', borderRadius: '980px', border: '1px solid rgba(0,113,227,0.2)', background: 'rgba(0,113,227,0.06)', color: 'var(--blue)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, fontSize: 'var(--fs-xs)', whiteSpace: 'nowrap' }}>
                     + Promote
                   </button>
-                  <select className="input-field" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}
+                  <select className="input-field" value={roleFilter} onChange={e => { setRoleFilter(e.target.value); setUserPage(1); }}
                     style={{ width: 'auto', minWidth: '110px', padding: '6px 10px', fontSize: 'var(--fs-xs)' }}>
                     <option value="all">All roles</option>
                     <option value="super_admin">Super Admin</option>
                     <option value="admin">Admin</option>
                     <option value="employee">Employee</option>
                   </select>
-                  <SearchBar value={userSearch} onChange={setUserSearch} placeholder="Search accounts…" count={filteredUsers.length} />
+                  <SearchBar value={userSearch} onChange={v => { setUserSearch(v); setUserPage(1); }} placeholder="Search accounts…" count={filteredUsers.length} />
                 </div>
               </div>
               {users.length === 0 ? (
@@ -580,7 +577,7 @@ export default function TeamPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {pendingChanges.map(c => {
                 let payload = {};
-                try { payload = JSON.parse(c.payload); } catch {}
+                try { payload = JSON.parse(c.payload); } catch { /* invalid JSON payload */ }
                 const actionColors = {
                   create_user: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Create User' },
                   update_user: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3', label: 'Update User' },
@@ -1025,8 +1022,8 @@ export default function TeamPage() {
                 return (
                   <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <span style={{ fontSize: '16px' }}>●</span>
-                    <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text2)' }}>
-                      "<strong>{emp?.name || emp?.username}</strong>" will be promoted to <strong style={{ color: s.color }}>{s.label}</strong>.
+                      <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text2)' }}>
+                        &ldquo;<strong>{emp?.name || emp?.username}</strong>&rdquo; will be promoted to <strong style={{ color: s.color }}>{s.label}</strong>.
                     </span>
                   </div>
                 );

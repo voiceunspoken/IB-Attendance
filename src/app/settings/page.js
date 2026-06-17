@@ -13,7 +13,6 @@ import { getAuditLog } from '../../actions/audit';
 import { getMonths } from '../../actions/attendance';
 import { changePassword } from '../../actions/auth';
 import { sendAllMonthlyReports } from '../../actions/notifications';
-import { useToast } from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -21,7 +20,6 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 export default function SettingsPage() {
   const { isAdmin, isSuperAdmin, isAuthenticated, user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const toast = useToast();
   const [tab, setTab] = useState('holidays');
 
   // Holidays

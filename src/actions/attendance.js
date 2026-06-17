@@ -107,7 +107,7 @@ export async function uploadMonthData(monthYear, parsedResults, numDays) {
         sendHighAbsenceAlert(r.user.name, r.user.code, r.absent, monthYear).catch(() => {});
       }
     }
-  } catch { }
+  } catch { /* notification failure is non-critical */ }
 
   return { success: true, createdUsernames };
 }

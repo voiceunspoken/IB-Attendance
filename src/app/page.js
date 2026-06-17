@@ -10,7 +10,7 @@ import { getDepartments } from '../actions/departments';
 import { getPendingPolicies } from '../actions/shiftPolicy';
 import { getPendingAttendanceCorrections } from '../actions/attendanceChanges';
 import { getPendingSuperRegularizations, getAllLeaveRequests } from '../actions/leave';
-import { FiUsers, FiCalendar, FiClipboard, FiActivity, FiAlertTriangle, FiClock, FiHome, FiMonitor, FiAlertCircle, FiZap, FiArrowRight } from 'react-icons/fi';
+import { FiUsers, FiCalendar, FiClipboard, FiActivity, FiAlertTriangle, FiClock, FiHome, FiMonitor, FiAlertCircle, FiZap, FiArrowRight, FiGift } from 'react-icons/fi';
 
 export default function DashboardHome() {
   const { isAuthenticated, isAdmin, isSuperAdmin, user, loading: authLoading } = useAuth();
@@ -124,9 +124,24 @@ export default function DashboardHome() {
         return totalDays > 0 ? ((totalPresent / totalDays) * 100).toFixed(1) : '—';
       })()
     : '—';
+  const upcomingBirthdays = useMemo(() => {
+    const today = new Date();
+    const thisYear = today.getFullYear();
+    return employees
+      .filter(e => e.birthday && !e.disabled)
+      .map(e => {
+        const bd = new Date(e.birthday);
+        const thisYearBd = new Date(thisYear, bd.getMonth(), bd.getDate());
+        if (thisYearBd < today) thisYearBd.setFullYear(thisYear + 1);
+        return { name: e.name, date: thisYearBd, daysAway: Math.ceil((thisYearBd - today) / (1000 * 60 * 60 * 24)) };
+      })
+      .filter(e => e.daysAway <= 30)
+      .sort((a, b) => a.daysAway - b.daysAway)
+      .slice(0, 5);
+  }, [employees]);
+
   const totalPending = pendingCounts.policies + pendingCounts.corrections + pendingCounts.regularizations;
   const hasNoMonths = months.length === 0;
-  const monthLoaded = months.length > 0;
   const headerMonth = months[0];
   const formatMonth = (m) => {
     if (!m) return '';
@@ -170,8 +185,44 @@ export default function DashboardHome() {
                 <div className="skeleton" style={{ width: '70%', height: '12px', borderRadius: '4px' }} />
               </div>
             ))}
+            </div>
+
+            {/* ── Upcoming Birthdays ── */}
+            <div style={{ marginTop: '12px' }}>
+              <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '12px' }}>Upcoming Birthdays</div>
+              <div className="card" style={{ padding: '16px 20px' }}>
+                {upcomingBirthdays.length === 0 ? (
+                  <div style={{ color: 'var(--text3)', fontSize: '13px', textAlign: 'center', padding: '12px 0' }}>No birthdays in the next 30 days</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {upcomingBirthdays.map((b, i) => (
+                      <div key={b.name} style={{
+                        display: 'flex', alignItems: 'center', gap: '12px',
+                        paddingBottom: i < upcomingBirthdays.length - 1 ? '8px' : 0,
+                        borderBottom: i < upcomingBirthdays.length - 1 ? '1px solid var(--border)' : 'none',
+                      }}>
+                        <div style={{
+                          width: '40px', height: '40px', borderRadius: '10px',
+                          background: 'rgba(255,159,10,0.08)', display: 'flex',
+                          flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                        }}>
+                          <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text2)', lineHeight: 1 }}>{b.date.toLocaleString('en', { month: 'short' })}</span>
+                          <span style={{ fontSize: '16px', fontWeight: 700, lineHeight: 1.2 }}>{b.date.getDate()}</span>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '13px', fontWeight: 600 }}>{b.name}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text3)' }}>{b.daysAway === 0 ? 'Today!' : `${b.daysAway} day${b.daysAway !== 1 ? 's' : ''} away`}</div>
+                        </div>
+                        <div style={{ marginLeft: 'auto', color: 'rgba(255,159,10,0.5)' }}>
+                          <FiGift size={16} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
       ) : (
         <>
 
