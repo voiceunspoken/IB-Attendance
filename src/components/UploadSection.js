@@ -10,10 +10,25 @@ export default function UploadSection({ onFileSelected }) {
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragOver(false);
-    if (e.dataTransfer.files?.[0]) onFileSelected(e.dataTransfer.files[0]);
+    const file = e.dataTransfer.files?.[0];
+    if (file) validateAndSelect(file);
   };
   const handleChange = (e) => {
-    if (e.target.files?.[0]) onFileSelected(e.target.files[0]);
+    const file = e.target.files?.[0];
+    if (file) validateAndSelect(file);
+  };
+
+  const validateAndSelect = (file) => {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['xls', 'xlsx'].includes(ext)) {
+      alert('Please select a valid .xls or .xlsx file.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size exceeds 10MB limit.');
+      return;
+    }
+    onFileSelected(file);
   };
 
   const rules = [

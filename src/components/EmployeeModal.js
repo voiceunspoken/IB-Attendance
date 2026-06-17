@@ -104,21 +104,21 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
     if (showHeaders) {
       const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
       dayNames.forEach((d, i) => cells.push(
-        <div key={`hdr-${i}`} style={{
+        <div key={`hdr-${i}`} role="columnheader" style={{
           textAlign: 'center', fontSize: '9px', fontWeight: 600,
           color: 'var(--text2)', padding: '2px 0', letterSpacing: '0.03em', textTransform: 'uppercase'
         }}>{d}</div>
       ));
     }
 
-    for (let i = 0; i < firstDow; i++) cells.push(<div key={`empty-${i}`} />);
+    for (let i = 0; i < firstDow; i++) cells.push(<div key={`empty-${i}`} role="presentation" />);
 
     const dayMap = {};
     employee.days.forEach(d => dayMap[d.d] = d);
 
     for (let d = 1; d <= daysInMonth; d++) {
       const info = dayMap[d];
-      if (!info) { cells.push(<div key={`empty-mid-${d}`} />); continue; }
+      if (!info) { cells.push(<div key={`empty-mid-${d}`} role="presentation" />); continue; }
 
       const ovVal = overrides[`${employee.code}_${d}`];
       let bg = 'var(--surface2)', border = '1px solid var(--border)', opacity = 1, cursor = 'pointer', outline = 'none';
@@ -167,21 +167,32 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
       }
 
       const isSelected = d === selectedDay;
+      const isInteractive = cursor === 'pointer';
+      const ariaLabel = `Day ${d}, ${label || (info?.type || '')}, ${isSelected ? 'selected' : ''}`.trim();
 
       cells.push(
-        <div
+        <button
           key={`cal-${d}`}
-          onClick={(e) => info.type !== 'wo' && info.type !== 'holiday' ? openPopup(e, d) : undefined}
+          role="gridcell"
+          aria-selected={isSelected || undefined}
+          aria-label={ariaLabel}
+          tabIndex={isInteractive ? 0 : -1}
+          disabled={!isInteractive}
+          onClick={(e) => isInteractive ? openPopup(e, d) : undefined}
+          onKeyDown={(e) => { if (isInteractive && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openPopup(e, d); } }}
           style={{
             borderRadius: '5px', border, background: bg,
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            fontSize: '10px', gap: '1px', position: 'relative', cursor, opacity, outline, outlineOffset: '-2px',
+            fontSize: '10px', gap: '1px', position: 'relative', opacity, outline, outlineOffset: '-2px',
             transition: 'box-shadow 0.15s ease',
             boxShadow: isSelected ? '0 0 0 2.5px var(--blue), 0 4px 12px rgba(0,0,0,0.1)' : undefined,
             zIndex: isSelected ? 5 : undefined,
+            cursor: isInteractive ? 'pointer' : 'default',
+            fontFamily: 'inherit',
+            padding: 0,
           }}
-          onMouseEnter={e => { if (cursor === 'pointer' && !isSelected) e.currentTarget.style.background = 'var(--surface3)'; }}
-          onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = bg; if (cursor === 'pointer') e.currentTarget.style.background = bg; }}
+          onMouseEnter={e => { if (isInteractive && !isSelected) e.currentTarget.style.background = 'var(--surface3)'; }}
+          onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = bg; }}
         >
           {ovVal && (
             <div style={{
@@ -195,7 +206,7 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
           )}
           <span style={{ fontWeight: 700, fontSize: '11px', color: 'var(--text)' }}>{d}</span>
           <span style={{ fontSize: '8px', fontWeight: 600, color: 'var(--text2)', letterSpacing: '0.01em' }}>{label}</span>
-        </div>
+        </button>
       );
     }
     return cells;
@@ -462,7 +473,7 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
         </div>
 
         {/* Calendar */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '5px' }}>
+        <div role="grid" aria-label="Attendance calendar" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '5px' }}>
           {renderCalendar()}
         </div>
       </div>
@@ -485,7 +496,7 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
         </div>
 
         {/* Calendar grid — fills remaining height, weeks distribute equally */}
-        <div style={{
+        <div role="grid" aria-label="Attendance calendar" style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(7, 1fr)',
           gridTemplateRows: `repeat(${weeks}, 1fr)`,
@@ -500,6 +511,8 @@ export default function EmployeeModal({ employee, currentMonth, overrides, onClo
         {popupContent && (
           <div onClick={() => { setSelectedDay(null); setPopupDay(null); }}
             onWheel={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()}
+            onKeyDown={e => { if (e.key === 'Escape') { setSelectedDay(null); setPopupDay(null); } }}
+            role="dialog" aria-modal="true" aria-label="Day details" tabIndex={-1}
             style={{
             position: 'fixed', inset: 0, zIndex: 99998,
             background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',

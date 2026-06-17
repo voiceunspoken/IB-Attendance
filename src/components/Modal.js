@@ -1,19 +1,36 @@
 "use client";
-import { useEffect } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { FiX } from 'react-icons/fi';
 
 export default function Modal({ open, onClose, title, children, width = '440px' }) {
+  const contentRef = useRef(null);
+
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Escape') { onClose?.(); return; }
+    if (e.key === 'Tab') {
+      const el = contentRef.current;
+      if (!el) return;
+      const focusable = el.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }, [onClose]);
+
   useEffect(() => {
     if (open) {
       const prev = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = prev; };
+      document.addEventListener('keydown', handleKeyDown);
+      return () => { document.body.style.overflow = prev; document.removeEventListener('keydown', handleKeyDown); };
     }
-  }, [open]);
+  }, [open, handleKeyDown]);
 
   if (!open) return null;
   return (
-    <div onClick={onClose} onWheel={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()} style={{
+    <div onClick={onClose} onWheel={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={title || 'Dialog'} style={{
       position: 'fixed', inset: 0, zIndex: 200,
       background: 'rgba(0,0,0,0.45)',
       backdropFilter: 'blur(12px)',
@@ -22,7 +39,7 @@ export default function Modal({ open, onClose, title, children, width = '440px' 
       padding: '24px', overflow: 'hidden',
       animation: 'fadeIn 0.15s ease',
     }}>
-      <div onClick={e => e.stopPropagation()} style={{
+      <div ref={contentRef} onClick={e => e.stopPropagation()} style={{
         background: 'var(--surface)', borderRadius: '16px',
         border: '1px solid var(--border)',
         boxShadow: '0 20px 60px rgba(0,0,0,0.3)',

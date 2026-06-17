@@ -12,7 +12,7 @@ import { getMonths, uploadMonthData, fetchDashboardData } from '../../actions/at
 import { getActiveShiftPolicy } from '../../actions/shiftPolicy';
 import { getHolidays } from '../../actions/holidays';
 import { getDepartments } from '../../actions/departments';
-import { FiSearch, FiDownload, FiUpload, FiChevronDown, FiUsers, FiAlertCircle, FiClock, FiZap, FiHome, FiMonitor, FiAlertTriangle, FiClipboard } from 'react-icons/fi';
+import { FiSearch, FiDownload, FiUpload, FiChevronDown, FiUsers, FiAlertCircle, FiClock, FiZap, FiHome, FiMonitor, FiAlertTriangle, FiClipboard, FiX, FiCheck } from 'react-icons/fi';
 import { useToast } from '../../components/Toast';
 
 export default function AttendancePage() {
@@ -35,6 +35,8 @@ export default function AttendancePage() {
   const [selectedDept, setSelectedDept] = useState('');
   const [selectedSubDept, setSelectedSubDept] = useState('');
   const [currentFilter, setCurrentFilter] = useState('all');
+
+  const [previewData, setPreviewData] = useState(null);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
@@ -137,13 +139,18 @@ export default function AttendancePage() {
 
   const handleFile = (file) => {
     setUploadView(false);
-    setUploading(true);
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
         const wb = XLSX.read(e.target.result, { type: 'array', cellText: true, raw: false });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+
+        if (!rows || rows.length < 2) {
+          toast.error('File appears empty. Please check the format.');
+          setUploadView(true);
+          return;
+        }
 
         const [policy, allHolidays] = await Promise.all([
           getActiveShiftPolicy(),
@@ -158,18 +165,49 @@ export default function AttendancePage() {
           : allHolidays;
         const { results: finalResults } = parseAndAnalyze(rows, policy, yearHolidays);
 
-        await uploadMonthData(monthYearStr, finalResults, nd, user?.username);
-        await loadMonthsList();
-        setSelectedMonth(monthYearStr);
-        await loadData(monthYearStr);
+        const deptCounts = {};
+        finalResults.forEach(r => {
+          const d = r.department || 'Unknown';
+          deptCounts[d] = (deptCounts[d] || 0) + 1;
+        });
+
+        setPreviewData({
+          fileName: file.name,
+          monthYearStr,
+          monthLabel: new Date(cm.year, cm.month - 1).toLocaleString('default', { month: 'long', year: 'numeric' }),
+          results: finalResults,
+          numDays: nd,
+          totalEmployees: finalResults.length,
+          deptCounts,
+        });
       } catch (err) {
         toast.error('Error reading file: ' + err.message);
         setUploadView(true);
-      } finally {
-        setUploading(false);
       }
     };
     reader.readAsArrayBuffer(file);
+  };
+
+  const confirmUpload = async () => {
+    if (!previewData) return;
+    setUploading(true);
+    try {
+      await uploadMonthData(previewData.monthYearStr, previewData.results, previewData.numDays, user?.username);
+      setPreviewData(null);
+      await loadMonthsList();
+      setSelectedMonth(previewData.monthYearStr);
+      await loadData(previewData.monthYearStr);
+    } catch (err) {
+      toast.error('Upload failed: ' + err.message);
+      setUploadView(true);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const cancelPreview = () => {
+    setPreviewData(null);
+    setUploadView(true);
   };
 
   const exportCSV = () => {
@@ -242,7 +280,47 @@ export default function AttendancePage() {
             animation: 'spin 0.8s linear infinite', margin: '0 auto 20px'
           }} />
           <div style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '-0.03em', marginBottom: '6px' }}>Processing Data</div>
-          <div style={{ color: 'var(--text2)', fontSize: '14px' }}>Saving to database…</div>
+          <div style={{ color: 'var(--text2)', fontSize: '14px', marginBottom: '24px' }}>Saving to database…</div>
+          <button onClick={() => { setUploading(false); setUploadView(true); }} className="btn btn-secondary" style={{ fontSize: '13px', padding: '8px 20px' }}>Cancel</button>
+        </div>
+      )}
+
+      {!loading && !uploading && previewData && (
+        <div className="card" style={{ maxWidth: '560px', margin: '40px auto', padding: '32px', textAlign: 'center' }}>
+          <div style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '-0.03em', marginBottom: '4px' }}>Review Data</div>
+          <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '24px' }}>Confirm the parsed data before saving.</div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '28px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 14px', background: 'var(--surface2)', borderRadius: '8px', fontSize: '13px' }}>
+              <span style={{ color: 'var(--text2)' }}>File</span>
+              <span style={{ fontWeight: 600 }}>{previewData.fileName}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 14px', background: 'var(--surface2)', borderRadius: '8px', fontSize: '13px' }}>
+              <span style={{ color: 'var(--text2)' }}>Month</span>
+              <span style={{ fontWeight: 600 }}>{previewData.monthLabel}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 14px', background: 'var(--surface2)', borderRadius: '8px', fontSize: '13px' }}>
+              <span style={{ color: 'var(--text2)' }}>Employees</span>
+              <span style={{ fontWeight: 600 }}>{previewData.totalEmployees}</span>
+            </div>
+            {Object.entries(previewData.deptCounts).length > 0 && (
+              <div style={{ padding: '8px 14px', background: 'var(--surface2)', borderRadius: '8px', fontSize: '13px' }}>
+                <div style={{ color: 'var(--text2)', marginBottom: '6px' }}>Departments</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {Object.entries(previewData.deptCounts).map(([dept, count]) => (
+                    <span key={dept} style={{ background: 'var(--surface3)', padding: '2px 10px', borderRadius: '980px', fontSize: '12px', fontWeight: 500 }}>
+                      {dept}: {count}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+            <button onClick={confirmUpload} className="btn btn-primary" style={{ padding: '10px 24px' }}><FiCheck size={14} style={{ marginRight: '6px' }} /> Confirm Upload</button>
+            <button onClick={cancelPreview} className="btn btn-secondary" style={{ padding: '10px 24px' }}><FiX size={14} style={{ marginRight: '6px' }} /> Cancel</button>
+          </div>
         </div>
       )}
 
@@ -265,7 +343,7 @@ export default function AttendancePage() {
         </div>
       )}
 
-      {!loading && !uploading && uploadView && isAdmin && (
+      {!loading && !uploading && !previewData && uploadView && isAdmin && (
         <UploadSection onFileSelected={handleFile} />
       )}
 
