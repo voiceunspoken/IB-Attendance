@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { FiEye, FiEyeOff } from 'react-icons/fi';
 import { useAuth } from '../../components/AuthProvider';
 import { useRouter } from 'next/navigation';
 
@@ -9,6 +10,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const { login, isAuthenticated, loading } = useAuth();
   const router = useRouter();
 
@@ -58,15 +60,26 @@ export default function LoginPage() {
           </div>
           <div>
             <label className="input-label" htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              className="input-field"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                className="input-field"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                style={{ paddingRight: '40px' }}
+              />
+              <button type="button" onClick={() => setShowPassword(s => !s)} tabIndex={-1} style={{
+                position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)',
+                background: 'none', border: 'none', cursor: 'pointer', padding: '6px',
+                color: 'var(--text3)', display: 'grid', placeItems: 'center',
+                fontFamily: 'inherit', fontSize: '16px',
+              }}>
+                {showPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+              </button>
+            </div>
           </div>
 
           {error && (
