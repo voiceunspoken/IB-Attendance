@@ -661,8 +661,8 @@ export default function TeamPage() {
                 <label className="input-label">Employee Type</label>
                 <select className="input-field" value={empForm.employeeType} onChange={e => setEmpForm(f => ({ ...f, employeeType: e.target.value }))}>
                   <option value="regular">Regular</option>
-                  <option value="wfh">WFH</option>
-                  <option value="wfm">WFM (Work From Mobile)</option>
+                  <option value="wfh">WFH (Work From Home)</option>
+                  <option value="wfm">WFM (Work From Ministry)</option>
                 </select>
               </div>
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginTop: '4px' }}>
@@ -1146,7 +1146,7 @@ export default function TeamPage() {
             <select className="input-field" value={editEmpForm.employeeType} onChange={e => setEditEmpForm(f => ({ ...f, employeeType: e.target.value }))}>
               <option value="regular">Regular</option>
               <option value="wfh">WFH (Work From Home)</option>
-              <option value="wfm">WFM (Work From Mobile)</option>
+              <option value="wfm">WFM (Work From Ministry)</option>
             </select>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>

@@ -103,8 +103,8 @@ export default function MyTeamPage() {
                     <td style={tdStyle}>
                       <span style={{
                         display: 'inline-flex', padding: '1px 7px', borderRadius: '980px', fontSize: '10px', fontWeight: 600,
-                        background: m.employeeType === 'wfh' ? 'rgba(175,82,222,0.1)' : m.employeeType === 'wfm' ? 'rgba(90,200,250,0.1)' : 'rgba(52,199,89,0.1)',
-                        color: m.employeeType === 'wfh' ? '#af52de' : m.employeeType === 'wfm' ? '#5ac8fa' : '#1a7f37',
+                        background: m.employeeType === 'wfh' ? 'rgba(175,82,222,0.1)' : m.employeeType === 'wfm' ? 'rgba(52,199,89,0.1)' : 'var(--surface2)',
+                        color: m.employeeType === 'wfh' ? '#af52de' : m.employeeType === 'wfm' ? '#1a7f37' : 'var(--text2)',
                       }}>
                         {(m.employeeType || 'regular').toUpperCase()}
                       </span>
