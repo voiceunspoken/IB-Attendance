@@ -364,38 +364,76 @@ export default function DashboardHome() {
             </div>
 
             {/* ── Upcoming Holidays ── */}
-            <div>
-              <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '12px' }}>Upcoming Holidays</div>
-              <div className="card" style={{ padding: '16px 20px' }}>
-                {holidays.length === 0 ? (
-                  <div style={{ color: 'var(--text3)', fontSize: '13px', textAlign: 'center', padding: '12px 0' }}>No upcoming holidays</div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {holidays.slice(0, 5).map((h, i) => {
-                      const d = new Date(h.year, h.month - 1, h.day);
-                      return (
-                        <div key={`${h.year}-${h.month}-${h.day}`} style={{
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '12px' }}>Upcoming Holidays</div>
+                <div className="card" style={{ padding: '16px 20px' }}>
+                  {holidays.length === 0 ? (
+                    <div style={{ color: 'var(--text3)', fontSize: '13px', textAlign: 'center', padding: '12px 0' }}>No upcoming holidays</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {holidays.slice(0, 5).map((h, i) => {
+                        const d = new Date(h.year, h.month - 1, h.day);
+                        return (
+                          <div key={`${h.year}-${h.month}-${h.day}`} style={{
+                            display: 'flex', alignItems: 'center', gap: '12px',
+                            paddingBottom: i < holidays.length - 1 ? '8px' : 0,
+                            borderBottom: i < holidays.length - 1 ? '1px solid var(--border)' : 'none',
+                          }}>
+                            <div style={{
+                              width: '40px', height: '40px', borderRadius: '10px',
+                              background: 'rgba(0,113,227,0.06)', display: 'flex',
+                              flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                            }}>
+                              <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text2)', lineHeight: 1 }}>{d.toLocaleString('en', { month: 'short' })}</span>
+                              <span style={{ fontSize: '16px', fontWeight: 700, lineHeight: 1.2 }}>{h.day}</span>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '13px', fontWeight: 600 }}>{h.name}</div>
+                              <div style={{ fontSize: '11px', color: 'var(--text3)' }}>{d.toLocaleDateString('en-US', { weekday: 'long' })}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Upcoming Birthdays ── */}
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '12px' }}>Upcoming Birthdays</div>
+                <div className="card" style={{ padding: '16px 20px' }}>
+                  {upcomingBirthdays.length === 0 ? (
+                    <div style={{ color: 'var(--text3)', fontSize: '13px', textAlign: 'center', padding: '12px 0' }}>No birthdays in the next 30 days</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {upcomingBirthdays.map((b, i) => (
+                        <div key={b.name} style={{
                           display: 'flex', alignItems: 'center', gap: '12px',
-                          paddingBottom: i < holidays.length - 1 ? '8px' : 0,
-                          borderBottom: i < holidays.length - 1 ? '1px solid var(--border)' : 'none',
+                          paddingBottom: i < upcomingBirthdays.length - 1 ? '8px' : 0,
+                          borderBottom: i < upcomingBirthdays.length - 1 ? '1px solid var(--border)' : 'none',
                         }}>
                           <div style={{
                             width: '40px', height: '40px', borderRadius: '10px',
-                            background: 'rgba(0,113,227,0.06)', display: 'flex',
+                            background: 'rgba(255,159,10,0.08)', display: 'flex',
                             flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                           }}>
-                            <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text2)', lineHeight: 1 }}>{d.toLocaleString('en', { month: 'short' })}</span>
-                            <span style={{ fontSize: '16px', fontWeight: 700, lineHeight: 1.2 }}>{h.day}</span>
+                            <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text2)', lineHeight: 1 }}>{b.date.toLocaleString('en', { month: 'short' })}</span>
+                            <span style={{ fontSize: '16px', fontWeight: 700, lineHeight: 1.2 }}>{b.date.getDate()}</span>
                           </div>
                           <div>
-                            <div style={{ fontSize: '13px', fontWeight: 600 }}>{h.name}</div>
-                            <div style={{ fontSize: '11px', color: 'var(--text3)' }}>{d.toLocaleDateString('en-US', { weekday: 'long' })}</div>
+                            <div style={{ fontSize: '13px', fontWeight: 600 }}>{b.name}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--text3)' }}>{b.daysAway === 0 ? 'Today!' : `${b.daysAway} day${b.daysAway !== 1 ? 's' : ''} away`}</div>
+                          </div>
+                          <div style={{ marginLeft: 'auto', color: 'rgba(255,159,10,0.5)' }}>
+                            <FiGift size={16} />
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
