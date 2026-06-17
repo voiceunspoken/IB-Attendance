@@ -310,7 +310,7 @@ export async function getManagerLeaveRequests(managerCode) {
       status: 'pending',
       approvalStage: { in: ['pending_l2', 'pending_l1', 'pending_mgr'] }
     },
-    include: { user: { select: { code: true, name: true } } },
+    include: { user: { select: { code: true, name: true, managers: { include: { manager: { select: { code: true, name: true } } }, orderBy: { priority: 'asc' } } } } },
     orderBy: { createdAt: 'asc' }
   });
 }

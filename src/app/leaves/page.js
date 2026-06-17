@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
 import { useToast } from '../../components/Toast';
-import { FiClipboard, FiAlertTriangle } from 'react-icons/fi';
+import { FiClipboard, FiAlertTriangle, FiFileText, FiCalendar, FiClock } from 'react-icons/fi';
+import Modal from '../../components/Modal';
 import {
   getAllLeaveRequests, reviewLeaveRequest,
   getAllPendingRegularizations, reviewRegularization,
@@ -23,12 +24,8 @@ export default function LeavesPage() {
   const router = useRouter();
   const toast = useToast();
 
-  const [tab, setTab] = useState('manager_approval');
+  const [tab, setTab] = useState(isAdmin ? 'overview' : 'manager_approval');
 
-  // Switch to overview for admins after mount
-  useEffect(() => {
-    if (isAdmin && tab === 'manager_approval') setTab('overview');
-  }, [isAdmin, tab]);
   const [fetchTrigger, setFetchTrigger] = useState(0);
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [managerLeaves, setManagerLeaves] = useState([]);
@@ -43,8 +40,8 @@ export default function LeavesPage() {
   const [policy, setPolicy] = useState({ cl: 12, sl: 6, el: 4, rl: 2, sh: 6 });
   const [loading, setLoading] = useState(true);
   const [managerLoading, setManagerLoading] = useState(true);
+  const [reviewModal, setReviewModal] = useState(null);
   const [reviewNote, setReviewNote] = useState('');
-  const [reviewingId, setReviewingId] = useState(null);
   const [exporting, setExporting] = useState(false);
   const year = new Date().getFullYear();
 
@@ -172,7 +169,7 @@ export default function LeavesPage() {
 
   const handleReviewLeave = async (id, approve) => {
     await reviewLeaveRequest(id, user.username, approve, reviewNote);
-    setReviewingId(null);
+    setReviewModal(null);
     setReviewNote('');
     setFetchTrigger(t => t + 1);
   };
@@ -301,6 +298,8 @@ export default function LeavesPage() {
       {/* ── MY APPROVALS (manager + super admin) ── */}
       {!loading && tab === 'manager_approval' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Pending Your Approval — super admins skip this; they see super admin section below */}
+          {!isSuperAdmin && (
           <div className="card overflow-hidden p-0">
             <div className="card-header">
               Pending Your Approval ({managerLeaves.length})
@@ -308,61 +307,14 @@ export default function LeavesPage() {
             {managerLeaves.length === 0
               ? <div className="p-32 text-center text-muted2 text-sm">No leave requests awaiting your approval.</div>
               : managerLeaves.map(r => (
-                <div key={r.id} className="p-16-20 border-bottom flex-between items-start" style={{ gap: '16px' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name || 'Unknown'}</span>
-                      <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user?.code}</span>
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
-                      <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
-                      {r.shiftSlot && <span style={{ fontSize: '11px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
-                      <StageBadge stage={r.approvalStage} />
-                    </div>
-                    {r.sandwichCount > 0 && (
-                      <div style={{ fontSize: '11px', color: 'var(--orange)', marginBottom: '2px', fontWeight: 500 }}>
-                        <FiAlertTriangle size={11} style={{ marginRight: '2px', verticalAlign: 'middle' }} /> {r.sandwichCount === 1 ? '1st sandwich' : `${r.sandwichCount} sandwich`} leave
-                      </div>
-                    )}
-                    <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
-                      {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
-                      {' · '}{r.reason}
-                    </div>
-                    {r.prescriptionFile && <div style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '2px' }}>📎 Prescription attached</div>}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '200px' }}>
-                    {reviewingId === r.id ? (
-                      <>
-                        <input className="input-field" placeholder="Optional note…" value={reviewNote}
-                          onChange={e => setReviewNote(e.target.value)} style={{ padding: '6px 10px', fontSize: '12px' }} />
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <button className="btn btn-primary" style={{ flex: 1, padding: '6px', fontSize: '12px', background: 'var(--green)' }} onClick={() => handleReviewLeave(r.id, true)}>Approve</button>
-                          <button style={{ flex: 1, padding: '6px', fontSize: '12px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleReviewLeave(r.id, false)}>Reject</button>
-                        </div>
-                        <button className="btn btn-secondary" style={{ padding: '5px', fontSize: '11px' }} onClick={() => setReviewingId(null)}>Cancel</button>
-                      </>
-                    ) : (
-                      <button className="btn btn-secondary" style={{ padding: '6px 14px', fontSize: '12px' }} onClick={() => setReviewingId(r.id)}>Review</button>
-                    )}
-                  </div>
-                </div>
-              ))
-            }
-          </div>
-
-          {/* Super admin also sees pending_super leaves here */}
-          {isSuperAdmin && (
-            <div className="card overflow-hidden p-0">
-              <div className="card-header">
-                Pending Super Admin Approval
-              </div>
-              {leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length === 0
-                ? <div className="p-32 text-center text-muted2 text-sm">No leave requests awaiting super admin approval.</div>
-                : leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').map(r => (
-                  <div key={r.id} className="p-16-20 border-bottom flex-between items-start" style={{ gap: '16px' }}>
+                <div key={r.id} className="p-16-20 border-bottom" style={{ cursor: 'pointer', transition: 'background 0.1s' }}
+                  onClick={() => { setReviewModal(r); setReviewNote(''); }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
+                  onMouseLeave={e => e.currentTarget.style.background = ''}>
+                  <div className="flex-between items-start" style={{ gap: '16px' }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name}</span>
+                        <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name || 'Unknown'}</span>
                         <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user?.code}</span>
                         <span style={{ fontSize: '12px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
                         <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
@@ -381,20 +333,69 @@ export default function LeavesPage() {
                       </div>
                       {r.prescriptionFile && <div style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '2px' }}>📎 Prescription attached</div>}
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '200px' }}>
-                      {reviewingId === r.id ? (
-                        <>
-                          <input className="input-field" placeholder="Optional note…" value={reviewNote}
-                            onChange={e => setReviewNote(e.target.value)} style={{ padding: '6px 10px', fontSize: '12px' }} />
-                          <div style={{ display: 'flex', gap: '6px' }}>
-                            <button className="btn btn-primary" style={{ flex: 1, padding: '6px', fontSize: '12px', background: 'var(--green)' }} onClick={() => handleReviewLeave(r.id, true)}>Approve</button>
-                            <button style={{ flex: 1, padding: '6px', fontSize: '12px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleReviewLeave(r.id, false)}>Reject</button>
+                    <div style={{ fontSize: '12px', color: 'var(--text3)', whiteSpace: 'nowrap', alignSelf: 'center' }}>
+                      Click to review →
+                    </div>
+                  </div>
+                </div>
+              ))
+            }
+          </div>
+          )}
+          {/* Super admin also sees pending_super leaves here */}
+          {isSuperAdmin && (
+            <div className="card overflow-hidden p-0">
+              <div className="card-header">
+                Pending Super Admin Approval ({leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length})
+              </div>
+              {leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length === 0
+                ? <div className="p-32 text-center text-muted2 text-sm">No leave requests awaiting super admin approval.</div>
+                : leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').map(r => (
+                  <div key={r.id} className="p-16-20 border-bottom" style={{ cursor: 'pointer', transition: 'background 0.1s' }}
+                    onClick={() => { setReviewModal(r); setReviewNote(''); }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
+                    onMouseLeave={e => e.currentTarget.style.background = ''}>
+                    <div className="flex-between items-start" style={{ gap: '16px' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name}</span>
+                          <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user?.code}</span>
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
+                          <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
+                          {r.shiftSlot && <span style={{ fontSize: '11px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
+                          <StageBadge stage={r.approvalStage} />
+                        </div>
+                        {r.sandwichCount > 0 && (
+                          <div style={{ fontSize: '11px', color: 'var(--orange)', marginBottom: '2px', fontWeight: 500 }}>
+                            <FiAlertTriangle size={11} style={{ marginRight: '2px', verticalAlign: 'middle' }} /> {r.sandwichCount === 1 ? '1st sandwich' : `${r.sandwichCount} sandwich`} leave
                           </div>
-                          <button className="btn btn-secondary" style={{ padding: '5px', fontSize: '11px' }} onClick={() => setReviewingId(null)}>Cancel</button>
-                        </>
-                      ) : (
-                        <button className="btn btn-secondary" style={{ padding: '6px 14px', fontSize: '12px' }} onClick={() => setReviewingId(r.id)}>Review</button>
+                        )}
+                        <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
+                          {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                          {' · '}{r.reason}
+                        </div>
+                      {r.prescriptionFile && <div style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '2px' }}>📎 Prescription attached</div>}
+                      {/* Manager approval chain */}
+                      {r.user?.managers && r.user.managers.length > 0 && (
+                        <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '6px', display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                          {r.user.managers.map((m, i) => (
+                            <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                              <span style={{ color: 'var(--green)', fontWeight: 600 }}>✓</span>
+                              <span>{m.manager.name}</span>
+                              {i < r.user.managers.length - 1 && <span style={{ color: 'var(--text3)' }}>→</span>}
+                            </span>
+                          ))}
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: 'var(--blue)', fontWeight: 500 }}>
+                            <span>⏳</span>
+                            <span>You</span>
+                          </span>
+                        </div>
                       )}
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text3)', whiteSpace: 'nowrap', alignSelf: 'center' }}>
+                        Click to review →
+                      </div>
                     </div>
                   </div>
                 ))
@@ -626,6 +627,129 @@ export default function LeavesPage() {
             <button type="submit" className="btn btn-primary" style={{ marginTop: '8px' }}>Save Policy</button>
           </form>
         </div>
+      )}
+
+      {/* ── REVIEW MODAL ── */}
+      {reviewModal && (
+        <Modal open={true} onClose={() => { setReviewModal(null); setReviewNote(''); }} title="Review Leave Request" width="480px">
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '16px', fontWeight: 700 }}>{reviewModal.user?.name || 'Unknown'}</span>
+              <span style={{ fontSize: '13px', color: 'var(--text2)' }}>#{reviewModal.user?.code}</span>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: LEAVE_COLORS[reviewModal.leaveType], padding: '2px 10px', borderRadius: '980px', background: `${LEAVE_COLORS[reviewModal.leaveType]}15` }}>
+                {LEAVE_LABELS[reviewModal.leaveType]}
+              </span>
+              <StageBadge stage={reviewModal.approvalStage} />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+              <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '12px' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text3)', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <FiCalendar size={11} /> Duration
+                </div>
+                <div style={{ fontSize: '13px', fontWeight: 600 }}>
+                  {new Date(reviewModal.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                  {reviewModal.fromDate !== reviewModal.toDate && ` – ${new Date(reviewModal.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
+                </div>
+              </div>
+              <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '12px' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text3)', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <FiClock size={11} /> Days
+                </div>
+                <div style={{ fontSize: '13px', fontWeight: 600 }}>{reviewModal.days} day{reviewModal.days !== 1 ? 's' : ''}</div>
+              </div>
+            </div>
+
+            {reviewModal.shiftSlot && (
+              <div style={{ background: 'rgba(255,107,107,0.06)', borderRadius: '10px', padding: '10px 14px', marginBottom: '10px', fontSize: '13px' }}>
+                <span style={{ fontWeight: 600 }}>Slot:</span> {reviewModal.shiftSlot}
+              </div>
+            )}
+
+            <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '12px', lineHeight: 1.5 }}>
+              <span style={{ fontWeight: 600, color: 'var(--text)' }}>Reason:</span> {reviewModal.reason}
+            </div>
+
+            {reviewModal.sandwichCount > 0 && (
+              <div style={{ fontSize: '12px', color: 'var(--orange)', marginBottom: '10px', fontWeight: 500 }}>
+                <FiAlertTriangle size={12} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                {reviewModal.sandwichCount === 1 ? '1st sandwich' : `${reviewModal.sandwichCount} sandwich`} leave
+              </div>
+            )}
+
+            {reviewModal.prescriptionFile && (
+              <div style={{ fontSize: '12px', color: 'var(--blue)', marginBottom: '10px' }}>📎 Prescription attached</div>
+            )}
+
+            {/* Approval Progress */}
+            {reviewModal.user?.managers && reviewModal.user.managers.length > 0 && (
+              <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '12px 14px', marginBottom: '14px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '6px' }}>Approval Progress</div>
+                {(() => {
+                  const managers = reviewModal.user.managers;
+                  const currentIdx = reviewModal.currentApproverId
+                    ? managers.findIndex(m => m.managerUserId === reviewModal.currentApproverId)
+                    : -1;
+                  const stage = reviewModal.approvalStage;
+                  const mgrLabels = ['L2 Manager', 'L1 Manager'];
+                  const isMgr = i => i === 0 ? 'L2 Manager' : i === 1 ? 'L1 Manager' : `Manager ${i + 1}`;
+                  return managers.map((m, i) => {
+                    let status, color, icon;
+                    if (stage === 'approved') {
+                      status = 'Approved'; color = 'var(--green)'; icon = '✓';
+                    } else if (stage === 'rejected') {
+                      if (i < currentIdx) { status = 'Approved'; color = 'var(--green)'; icon = '✓'; }
+                      else { status = '—'; color = 'var(--text3)'; icon = '○'; }
+                    } else if (i < currentIdx) {
+                      status = 'Approved'; color = 'var(--green)'; icon = '✓';
+                    } else if (i === currentIdx) {
+                      status = 'Pending your approval'; color = 'var(--blue)'; icon = '→';
+                    } else {
+                      status = 'Pending'; color = 'var(--text3)'; icon = '○';
+                    }
+                    return (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 0', fontSize: '12px', borderBottom: i < managers.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                        <span style={{ color, fontWeight: 600, width: '16px' }}>{icon}</span>
+                        <span style={{ fontWeight: 500, color: status === 'Pending your approval' || status === 'Approved' ? 'var(--text)' : 'var(--text3)', minWidth: '90px' }}>{isMgr(i)}</span>
+                        <span style={{ color: 'var(--text2)', flex: 1 }}>{m.manager.name}</span>
+                        <span style={{ color, fontSize: '11px', fontWeight: 500, whiteSpace: 'nowrap' }}>{status}</span>
+                      </div>
+                    );
+                  });
+                })()}
+                {(stage === 'pending_super' || stage === 'approved' || stage === 'pending_mgr' || stage === 'pending_l2' || stage === 'pending_l1') && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 0', fontSize: '12px' }}>
+                    <span style={{ color: stage === 'pending_super' ? 'var(--blue)' : stage === 'approved' ? 'var(--green)' : 'var(--text3)', fontWeight: 600, width: '16px' }}>
+                      {stage === 'approved' ? '✓' : stage === 'pending_super' ? '→' : '○'}
+                    </span>
+                    <span style={{ fontWeight: 500, minWidth: '90px', color: stage === 'pending_super' || stage === 'approved' ? 'var(--text)' : 'var(--text3)' }}>Super Admin</span>
+                    <span style={{ color: 'var(--text2)', flex: 1 }}>{stage === 'approved' ? '—' : 'You'}</span>
+                    <span style={{ color: stage === 'pending_super' ? 'var(--blue)' : stage === 'approved' ? 'var(--green)' : 'var(--text3)', fontSize: '11px', fontWeight: 500 }}>
+                      {stage === 'pending_super' ? 'Pending your approval' : stage === 'approved' ? 'Approved' : 'Pending'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div style={{ marginTop: '16px' }}>
+              <label className="input-label" style={{ marginBottom: '6px' }}>Review Note <span style={{ color: 'var(--text3)', fontWeight: 400 }}>(optional)</span></label>
+              <input className="input-field" placeholder="Add a note for the employee…" value={reviewNote}
+                onChange={e => setReviewNote(e.target.value)} style={{ padding: '10px 14px', fontSize: '13px' }} />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button className="btn btn-primary" style={{ flex: 1, padding: '12px', fontSize: '14px', background: 'var(--green)' }}
+              onClick={() => handleReviewLeave(reviewModal.id, true)}>
+              Approve
+            </button>
+            <button style={{ flex: 1, padding: '12px', fontSize: '14px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.3)', background: 'rgba(255,59,48,0.08)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+              onClick={() => handleReviewLeave(reviewModal.id, false)}>
+              Reject
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   );

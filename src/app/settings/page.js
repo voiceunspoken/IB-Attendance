@@ -10,6 +10,7 @@ import {
 } from '../../actions/holidayAdmin';
 import { getActiveShiftPolicy, saveShiftPolicy, getShiftPolicyHistory, getPendingPolicies, reviewPolicy } from '../../actions/shiftPolicy';
 import { getAuditLog } from '../../actions/audit';
+import { getSuperAdminConfig, setRequireSuperApproval } from '../../actions/superAdminConfig';
 import { getMonths } from '../../actions/attendance';
 import { changePassword } from '../../actions/auth';
 import { sendAllMonthlyReports } from '../../actions/notifications';
@@ -54,6 +55,9 @@ export default function SettingsPage() {
   // Notifications
   const [notifMonth, setNotifMonth] = useState('');
   const [notifMsg, setNotifMsg] = useState('');
+
+  const [approvalConfig, setApprovalConfig] = useState(null);
+  const [approvalMsg, setApprovalMsg] = useState('');
 
   const [confirmState, setConfirmState] = useState({ show: false, message: '', confirmLabel: 'Delete', confirmLoadingLabel: 'Deleting…', variant: 'danger', onConfirm: null });
 
@@ -143,6 +147,8 @@ export default function SettingsPage() {
           setAuditLog(logs);
           const pp = await getPendingPolicies();
           setPendingPolicies(pp);
+          const ac = await getSuperAdminConfig();
+          setApprovalConfig(ac);
         }
       } catch {
         setHolidays([]);
@@ -258,6 +264,7 @@ export default function SettingsPage() {
     { key: 'shift', label: 'Shift Policy' },
     { key: 'notifications', label: 'Notifications' },
     { key: 'password', label: 'Change Password' },
+    ...(isSuperAdmin ? [{ key: 'approvals', label: 'Approvals' }] : []),
     ...(isSuperAdmin ? [{ key: 'audit', label: 'Audit Log' }] : []),
   ];
 
@@ -554,6 +561,48 @@ export default function SettingsPage() {
             {pwMsg && <div className="text-sm" style={{ color: 'var(--green)' }}>{pwMsg}</div>}
             <button type="submit" className="btn btn-primary">Update Password</button>
           </form>
+        </div>
+      )}
+
+      {/* ── APPROVALS (super_admin only) ── */}
+      {!loading && tab === 'approvals' && isSuperAdmin && (
+        <div className="flex-col gap-16" style={{ maxWidth: '560px' }}>
+          <div className="card card-body">
+            <div className="text-md text-bold mb-6">Super Admin Approval</div>
+            <div className="text-sm text-muted mb-20">
+              Controls whether leave requests and other items require final approval from a Super Admin after manager approval.
+            </div>
+            <div className="flex-between gap-16" style={{ padding: '14px 0', borderTop: '1px solid var(--border)' }}>
+              <div>
+                <div className="text-sm text-semibold">Require Super Admin Approval</div>
+                <div className="text-xs text-muted" style={{ marginTop: '2px' }}>
+                  {approvalConfig?.requireSuperApproval
+                    ? 'Leave requests need super admin final approval after managers approve.'
+                    : 'Leave requests are fully approved once managers approve; no super admin step.'}
+                </div>
+              </div>
+              <label style={{ position: 'relative', display: 'inline-block', width: '44px', height: '24px', cursor: 'pointer' }}>
+                <input type="checkbox" style={{ opacity: 0, width: 0, height: 0 }} checked={!!approvalConfig?.requireSuperApproval}
+                  onChange={async (e) => {
+                    const val = e.target.checked;
+                    setApprovalConfig(c => c ? { ...c, requireSuperApproval: val } : { requireSuperApproval: val, id: '' });
+                    await setRequireSuperApproval(val, user.username);
+                    setApprovalMsg(val ? 'Super admin approval required.' : 'Super admin approval not required.');
+                  }} />
+                <span style={{
+                  position: 'absolute', inset: 0, borderRadius: '12px', transition: '0.2s',
+                  background: approvalConfig?.requireSuperApproval ? 'var(--green)' : 'var(--border)',
+                }}>
+                  <span style={{
+                    position: 'absolute', top: '2px', left: approvalConfig?.requireSuperApproval ? '22px' : '2px',
+                    width: '20px', height: '20px', borderRadius: '50%', background: '#fff', transition: '0.2s',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  }} />
+                </span>
+              </label>
+            </div>
+            {approvalMsg && <div className="text-sm" style={{ color: 'var(--green)', marginTop: '8px' }}>{approvalMsg}</div>}
+          </div>
         </div>
       )}
 
