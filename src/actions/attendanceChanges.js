@@ -4,36 +4,75 @@ import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
 
-export async function requestAttendanceCorrection(employeeCode, monthYear, day, currentType, newType, reason, requestedBy) {
+const LEAVE_TYPES = ['cl', 'sl', 'el', 'rl', 'ul', 'sh'];
+
+export async function requestAdjustment(employeeCode, monthYear, day, currentType, newType, reason, requestedBy) {
   const user = await prisma.user.findUnique({ where: { code: employeeCode } });
   if (!user) return { error: 'Employee not found' };
 
-  const payload = JSON.stringify({ employeeCode, monthYear, day, currentType, newType, reason });
+  let warning = null;
+
+  if (LEAVE_TYPES.includes(newType)) {
+    const year = parseInt(monthYear.split('_')[1]);
+    const balance = await prisma.leaveBalance.findUnique({
+      where: { userId_year: { userId: user.id, year } }
+    });
+    if (balance) {
+      const usedKey = newType + 'Used';
+      const totalKey = newType + 'Total';
+      const used = balance[usedKey] || 0;
+      const total = balance[totalKey] || 0;
+      if (used >= total) {
+        warning = `${newType.toUpperCase()} balance exhausted (${used}/${total} used).`;
+      } else if (used + 1 > total) {
+        warning = `${newType.toUpperCase()} balance insufficient (${used}/${total} used, need 1 more).`;
+      }
+    }
+  }
+
+  const payload = JSON.stringify({ employeeCode, monthYear, day, currentType, newType, reason, warning });
 
   const change = await prisma.pendingChange.create({
     data: {
       requestedBy,
-      action: 'attendance_correction',
+      action: 'attendance_adjustment',
       payload,
       status: 'pending'
     }
   });
 
-  await logAction(requestedBy, 'attendance_correction_requested', 'pending_change', change.id,
-    `Requested correction for ${employeeCode} day ${day} ${monthYear}: ${currentType} → ${newType}`);
+  await logAction(requestedBy, 'attendance_adjustment_requested', 'pending_change', change.id,
+    `Requested adjustment for ${employeeCode} day ${day} ${monthYear}: ${currentType} → ${newType}${warning ? ' (warning: ' + warning + ')' : ''}`);
 
   revalidatePath('/');
-  return { success: true };
+  return { success: true, warning };
 }
 
-export async function getPendingAttendanceCorrections() {
-  return prisma.pendingChange.findMany({
-    where: { action: 'attendance_correction', status: 'pending' },
-    orderBy: { createdAt: 'asc' }
-  });
+function recalcTotals(logs) {
+  let present = 0, absent = 0, halfDay = 0, late = 0, ss = 0, sl = 0, rl = 0, holi = 0;
+  let lateHD = 0, ssHD = 0, maxDay = 0;
+  for (const log of logs) {
+    maxDay = Math.max(maxDay, log.day);
+    if (LEAVE_TYPES.includes(log.type)) {
+      if (log.type === 'rl') rl++;
+      else present++;
+    } else if (log.type === 'absent') absent++;
+    else if (log.type === 'holiday') holi++;
+    else if (log.type === 'half') halfDay++;
+    else if (log.type === 'present') {
+      if (log.isHD) halfDay++;
+      else present++;
+      if (log.isLate) late++;
+      if (log.isSS) ss++;
+      if (log.isSL) sl++;
+      if (log.hdReason === 'late') lateHD++;
+      if (log.hdReason === 'ss') ssHD++;
+    }
+  }
+  return { present, absent, halfDay, late, lateHD, shortShift: ss, ssHD, shortLeave: sl, rl, holi, maxDay };
 }
 
-export async function reviewAttendanceCorrection(changeId, reviewedBy, approve) {
+export async function reviewAdjustment(changeId, reviewedBy, approve) {
   const change = await prisma.pendingChange.findUnique({ where: { id: changeId } });
   if (!change) return { error: 'Change not found' };
 
@@ -42,40 +81,54 @@ export async function reviewAttendanceCorrection(changeId, reviewedBy, approve) 
   if (approve) {
     const user = await prisma.user.findUnique({ where: { code: payload.employeeCode } });
     if (user) {
-      const existing = await prisma.dailyLog.findUnique({
-        where: { userId_monthYear_day: { userId: user.id, monthYear: payload.monthYear, day: payload.day } }
+      await prisma.dailyLog.upsert({
+        where: { userId_monthYear_day: { userId: user.id, monthYear: payload.monthYear, day: parseInt(payload.day) } },
+        update: {
+          type: payload.newType,
+          isLate: false,
+          isSS: false,
+          isSL: false,
+          hdReason: null
+        },
+        create: {
+          userId: user.id, monthYear: payload.monthYear, day: parseInt(payload.day),
+          type: payload.newType,
+          raw: '',
+          isLate: false, isSS: false, isSL: false
+        }
       });
 
-      if (existing) {
-        await prisma.dailyLog.update({
-          where: { userId_monthYear_day: { userId: user.id, monthYear: payload.monthYear, day: payload.day } },
-          data: {
-            type: payload.newType,
-            isLate: false,
-            isSS: false,
-            isSL: false,
-            hdReason: null
-          }
+      const logs = await prisma.dailyLog.findMany({ where: { userId: user.id, monthYear: payload.monthYear } });
+      const t = recalcTotals(logs);
+      const numDays = t.maxDay || 31;
+      await prisma.monthRecord.upsert({
+        where: { userId_monthYear: { userId: user.id, monthYear: payload.monthYear } },
+        update: {
+          present: t.present, absent: t.absent, halfDay: t.halfDay,
+          late: t.late, lateHD: t.lateHD, shortShift: t.shortShift,
+          ssHD: t.ssHD, shortLeave: t.shortLeave, rl: t.rl, holi: t.holi,
+          numDays,
+        },
+        create: {
+          userId: user.id, monthYear: payload.monthYear,
+          present: t.present, absent: t.absent, halfDay: t.halfDay,
+          late: t.late, lateHD: t.lateHD, shortShift: t.shortShift,
+          ssHD: t.ssHD, shortLeave: t.shortLeave, rl: t.rl, holi: t.holi,
+          numDays,
+        },
+      });
+
+      if (LEAVE_TYPES.includes(payload.newType)) {
+        const year = parseInt(payload.monthYear.split('_')[1]);
+        const usedKey = payload.newType + 'Used';
+        const balance = await prisma.leaveBalance.findUnique({
+          where: { userId_year: { userId: user.id, year } }
         });
-
-        const changes = {};
-        if (payload.currentType === 'half' && (payload.newType === 'present' || payload.newType === 'absent')) {
-          changes.halfDay = { decrement: 1 };
-          if (payload.newType === 'present') changes.present = { increment: 1 };
-          if (payload.newType === 'absent') changes.absent = { increment: 1 };
-        } else if ((payload.currentType === 'present' || payload.currentType === 'absent') && payload.newType === 'half') {
-          if (payload.currentType === 'present') changes.present = { decrement: 1 };
-          if (payload.currentType === 'absent') changes.absent = { decrement: 1 };
-          changes.halfDay = { increment: 1 };
-        } else if (payload.currentType === 'absent' && payload.newType === 'present') {
-          changes.absent = { decrement: 1 };
-          changes.present = { increment: 1 };
-        }
-
-        if (Object.keys(changes).length > 0) {
-          await prisma.monthRecord.updateMany({
-            where: { userId: user.id, monthYear: payload.monthYear },
-            data: changes
+        if (balance) {
+          const currentUsed = balance[usedKey] || 0;
+          await prisma.leaveBalance.update({
+            where: { userId_year: { userId: user.id, year } },
+            data: { [usedKey]: currentUsed + 1 }
           });
         }
       }
@@ -91,8 +144,8 @@ export async function reviewAttendanceCorrection(changeId, reviewedBy, approve) 
     }
   });
 
-  await logAction(reviewedBy, approve ? 'attendance_correction_approved' : 'attendance_correction_rejected', 'pending_change', changeId,
-    `${approve ? 'Approved' : 'Rejected'} correction for ${payload.employeeCode} day ${payload.day} ${payload.monthYear}`);
+  await logAction(reviewedBy, approve ? 'attendance_adjustment_approved' : 'attendance_adjustment_rejected', 'pending_change', changeId,
+    `${approve ? 'Approved' : 'Rejected'} adjustment for ${payload.employeeCode} day ${payload.day} ${payload.monthYear}: ${payload.currentType} → ${payload.newType}`);
 
   revalidatePath('/');
   return { success: true };

@@ -13,7 +13,6 @@ import {
   getAllLeaveBalances, upsertLeavePolicy, getLeavePolicy,
   getLeaveBalancesForExport, getManagerLeaveRequests
 } from '../../actions/leave';
-import { getPendingAttendanceCorrections, reviewAttendanceCorrection } from '../../actions/attendanceChanges';
 import { getManagedEmployees } from '../../actions/departments';
 
 const LEAVE_LABELS = { cl: 'CL', sl: 'SL', el: 'EL', rl: 'RL', sh: 'SH' };
@@ -33,7 +32,6 @@ export default function LeavesPage() {
   const [managerLeaves, setManagerLeaves] = useState([]);
   const [regularizations, setRegularizations] = useState([]);
   const [superRegularizations, setSuperRegularizations] = useState([]);
-  const [attendanceCorrections, setAttendanceCorrections] = useState([]);
   const [balances, setBalances] = useState([]);
   const [balancePage, setBalancePage] = useState(1);
   const balancePageSize = 20;
@@ -133,7 +131,6 @@ export default function LeavesPage() {
 
   useEffect(() => {
     if (!isAdmin) return;
-    if (!isSuperAdmin && tab === 'corrections') setTab('requests');
     setLoading(true);
     (async () => {
       try {
@@ -151,8 +148,6 @@ export default function LeavesPage() {
         if (isSuperAdmin) {
           const supRegs = await getPendingSuperRegularizations();
           setSuperRegularizations(supRegs);
-          const ac = await getPendingAttendanceCorrections();
-          setAttendanceCorrections(ac);
         }
         if (pol) setPolicy({ cl: pol.cl, sl: pol.sl, el: pol.el, rl: pol.rl, sh: pol.sh ?? 6 });
       } catch {
@@ -161,7 +156,6 @@ export default function LeavesPage() {
         setRegularizations([]);
         setBalances([]);
         setSuperRegularizations([]);
-        setAttendanceCorrections([]);
       } finally {
         setLoading(false);
         setManagerLoading(false);
@@ -235,13 +229,9 @@ export default function LeavesPage() {
           { key: 'overview', label: `All Requests (${leaveRequests.length})` },
           { key: 'manager_approval', label: `My Approvals${managerLeaves.length > 0 ? ` (${managerLeaves.length})` : ''}` },
           { key: 'regularize', label: `Regularizations${regularizations.length > 0 ? ` (${regularizations.length})` : ''}` },
-          { key: 'corrections', label: `Attendance Corrections${attendanceCorrections.length > 0 ? ` (${attendanceCorrections.length})` : ''}` },
           { key: 'balances', label: 'Leave Balances' },
           { key: 'policy', label: 'Policy' },
-        ]).filter(t => {
-          if (t.key === 'corrections') return isSuperAdmin;
-          return true;
-        }).map(t => (
+        ]).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             padding: '6px 16px', borderRadius: '7px', fontSize: '13px', fontWeight: 500,
             border: 'none', cursor: 'pointer', fontFamily: 'inherit',
@@ -469,48 +459,6 @@ export default function LeavesPage() {
               }
             </div>
           )}
-        </div>
-      )}
-
-      {/* ── ATTENDANCE CORRECTIONS (super admin) ── */}
-      {!loading && tab === 'corrections' && isSuperAdmin && (
-        <div className="card overflow-hidden p-0">
-          <div className="card-header">
-            Pending Attendance Corrections ({attendanceCorrections.length})
-          </div>
-          {attendanceCorrections.length === 0
-            ? <div className="p-32 text-center text-muted2 text-sm">No pending corrections.</div>
-            : attendanceCorrections.map(c => {
-                const p = JSON.parse(c.payload);
-                return (
-                  <div key={c.id} className="p-16-20 border-bottom flex-between" style={{ gap: '16px' }}>
-                    <div>
-                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px' }}>
-                        <span style={{ fontWeight: 600, fontSize: '14px' }}>{p.employeeCode}</span>
-                        <span style={{ fontSize: '12px', color: 'var(--text2)' }}>Day {p.day} · {p.monthYear}</span>
-                      </div>
-                      <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
-                        {p.currentType} → <strong style={{ color: 'var(--blue)' }}>{p.newType}</strong>
-                        {' · '}{p.reason}
-                      </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '2px' }}>
-                        Requested by {c.requestedBy} · {new Date(c.createdAt).toLocaleString()}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: '12px', background: 'var(--green)' }}
-                        onClick={async () => { await reviewAttendanceCorrection(c.id, user.username, true); const ac = await getPendingAttendanceCorrections(); setAttendanceCorrections(ac); }}>
-                        Approve
-                      </button>
-                      <button style={{ padding: '6px 14px', fontSize: '12px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
-                        onClick={async () => { await reviewAttendanceCorrection(c.id, user.username, false); const ac = await getPendingAttendanceCorrections(); setAttendanceCorrections(ac); }}>
-                        Reject
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-          }
         </div>
       )}
 

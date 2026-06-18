@@ -37,7 +37,6 @@ model User {
 
   records         MonthRecord[]
   dailyLogs       DailyLog[]
-  overrides       Override[]
   leaveBalances   LeaveBalance[]
   leaveRequests   LeaveRequest[]
   regularizations RegularizationRequest[]
@@ -107,7 +106,7 @@ model PunchLog {
 model PendingChange {
   id           String   @id @default(cuid())
   requestedBy  String   // username of admin who made the change
-  action       String   // "policy_update" | "toggleOverride" | "clearOverrides" | "uploadMonth" | "deleteMonth"
+  action       String   // "policy_update" | "uploadMonth" | "deleteMonth" | "attendance_adjustment" | "create_user" | "update_user" | "delete_user"
   payload      String   // JSON stringified payload
   status       String   @default("pending") // "pending" | "approved" | "rejected"
   reviewedBy   String?  // super_admin username who reviewed
@@ -158,19 +157,6 @@ model DailyLog {
   isSS       Boolean  @default(false)
   isSL       Boolean  @default(false)
   hdReason   String?  // null | "late" | "ss" — why this day was marked half-day
-
-  @@unique([userId, monthYear, day])
-}
-
-model Override {
-  id         String   @id @default(cuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  monthYear  String
-  day        Int
-
-  type       String   // "wfm", "wfm-hd", "wfh", "wos", "wos-hd"
 
   @@unique([userId, monthYear, day])
 }

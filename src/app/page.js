@@ -7,7 +7,6 @@ import { getAllEmployees, getMonths, fetchDashboardData } from '../actions/atten
 import { getUpcomingHolidays } from '../actions/holidays';
 import { getDepartments } from '../actions/departments';
 import { getPendingPolicies } from '../actions/shiftPolicy';
-import { getPendingAttendanceCorrections } from '../actions/attendanceChanges';
 import { getPendingSuperRegularizations, getAllLeaveRequests } from '../actions/leave';
 import { FiUsers, FiCalendar, FiAlertTriangle, FiArrowRight, FiGift } from 'react-icons/fi';
 
@@ -22,7 +21,7 @@ export default function DashboardHome() {
   const [months, setMonths] = useState([]);
   const [monthData, setMonthData] = useState(undefined);
   const [holidays, setHolidays] = useState([]);
-  const [pendingCounts, setPendingCounts] = useState({ policies: 0, corrections: 0, regularizations: 0, leaves: 0 });
+  const [pendingCounts, setPendingCounts] = useState({ policies: 0, regularizations: 0, leaves: 0 });
   const [loading, setLoading] = useState(true);
 
   const [dataError, setDataError] = useState(false);
@@ -74,12 +73,11 @@ export default function DashboardHome() {
 
       if (isSuperAdmin) {
         try {
-          const [pp, ac, sr] = await Promise.all([
+          const [pp, sr] = await Promise.all([
             getPendingPolicies(),
-            getPendingAttendanceCorrections(),
             getPendingSuperRegularizations()
           ]);
-          setPendingCounts({ policies: pp.length, corrections: ac.length, regularizations: sr.length });
+          setPendingCounts({ policies: pp.length, regularizations: sr.length });
         } catch { /* ignore */ }
       }
 
@@ -95,7 +93,7 @@ export default function DashboardHome() {
   }, [isAuthenticated, isAdmin, user, authLoading, router]);
 
   const activeEmployees = employees.filter(e => !e.disabled).length;
-  const totalPending = pendingCounts.policies + pendingCounts.corrections + pendingCounts.regularizations + pendingCounts.leaves;
+  const totalPending = pendingCounts.policies + pendingCounts.regularizations + pendingCounts.leaves;
 
   // Upcoming birthdays within next 14 days
   const upcomingBirthdays = employees

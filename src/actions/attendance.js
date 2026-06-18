@@ -136,9 +136,6 @@ export async function fetchDashboardData(monthYear) {
     include: {
       user: {
         include: {
-          overrides: {
-            where: { monthYear }
-          },
           dailyLogs: {
             where: { monthYear }
           },
@@ -191,44 +188,8 @@ export async function fetchDashboardData(monthYear) {
       holi: record.holi,
       numDays: record.numDays,
       days,
-      overrides: record.user.overrides.reduce((acc, ov) => {
-        acc[`${record.user.code}_${ov.day}`] = ov.type;
-        return acc;
-      }, {})
     };
   });
-}
-
-export async function toggleOverride(employeeCode, monthYear, day, type, performedBy = 'admin') {
-  const auth = await requireAdmin(performedBy);
-  if (auth) return auth;
-  const user = await prisma.user.findUnique({ where: { code: employeeCode } });
-  if (!user) return { error: "Employee not found" };
-
-  if (type === 'clear') {
-    await prisma.override.deleteMany({ where: { userId: user.id, monthYear, day } });
-    await logAction(performedBy, 'override_cleared', 'employee', user.id, `Cleared override for ${employeeCode} day ${day} ${monthYear}`);
-  } else {
-    await prisma.override.upsert({
-      where: { userId_monthYear_day: { userId: user.id, monthYear, day } },
-      update: { type },
-      create: { userId: user.id, monthYear, day, type }
-    });
-    await logAction(performedBy, 'override_applied', 'employee', user.id, `Applied ${type} override for ${employeeCode} day ${day} ${monthYear}`);
-  }
-  revalidatePath('/');
-  return { success: true };
-}
-
-export async function clearAllOverrides(employeeCode, monthYear, performedBy = 'admin') {
-  const auth = await requireAdmin(performedBy);
-  if (auth) return auth;
-  const user = await prisma.user.findUnique({ where: { code: employeeCode } });
-  if (!user) return { error: "Employee not found" };
-  await prisma.override.deleteMany({ where: { userId: user.id, monthYear } });
-  await logAction(performedBy, 'overrides_cleared_all', 'employee', user.id, `Cleared all overrides for ${employeeCode} ${monthYear}`);
-  revalidatePath('/');
-  return { success: true };
 }
 
 export async function getEmployeeHistory(code) {
@@ -236,7 +197,6 @@ export async function getEmployeeHistory(code) {
     where: { code },
     include: {
       records: { orderBy: { monthYear: 'desc' } },
-      overrides: true,
       dailyLogs: true,
       department: { select: { id: true, name: true } },
       subDepartment: { select: { id: true, name: true } },
@@ -289,7 +249,6 @@ export async function deleteEmployee(code, performedBy = 'admin') {
   await prisma.regularizationRequest.deleteMany({ where: { userId: user.id } });
   await prisma.leaveRequest.deleteMany({ where: { userId: user.id } });
   await prisma.leaveBalance.deleteMany({ where: { userId: user.id } });
-  await prisma.override.deleteMany({ where: { userId: user.id } });
   await prisma.dailyLog.deleteMany({ where: { userId: user.id } });
   await prisma.monthRecord.deleteMany({ where: { userId: user.id } });
   await prisma.userManager.deleteMany({ where: { userId: user.id } });
@@ -307,7 +266,6 @@ export async function deleteMonthRecord(employeeCode, monthYear, performedBy = '
   if (!user) return { error: 'Employee not found.' };
   await prisma.monthRecord.deleteMany({ where: { userId: user.id, monthYear } });
   await prisma.dailyLog.deleteMany({ where: { userId: user.id, monthYear } });
-  await prisma.override.deleteMany({ where: { userId: user.id, monthYear } });
   await logAction(performedBy, 'month_deleted', 'employee', user.id, `Deleted ${monthYear} record for ${employeeCode}`);
   revalidatePath('/');
   return { success: true };

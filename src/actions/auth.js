@@ -54,7 +54,6 @@ export async function deleteUser(userId, deletedBy = 'admin') {
   await prisma.regularizationRequest.deleteMany({ where: { userId } });
   await prisma.leaveRequest.deleteMany({ where: { userId } });
   await prisma.leaveBalance.deleteMany({ where: { userId } });
-  await prisma.override.deleteMany({ where: { userId } });
   await prisma.dailyLog.deleteMany({ where: { userId } });
   await prisma.monthRecord.deleteMany({ where: { userId } });
   await prisma.userManager.deleteMany({ where: { userId } });

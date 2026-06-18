@@ -4,8 +4,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
 import { getUsers, deleteUser, updateUser, toggleDisableUser, promoteToAdmin, getPendingChanges, reviewPendingChange } from '../../actions/auth';
-import { getAllEmployees, addEmployee, deleteEmployee, deleteMonthRecord, updateMonthRecord, getMonths } from '../../actions/attendance';
+import { getAllEmployees, addEmployee, deleteEmployee, deleteMonthRecord, getMonths } from '../../actions/attendance';
 import { updateEmployeeDetails, requestNameChange, reviewNameChange } from '../../actions/employees';
+import { reviewAdjustment } from '../../actions/attendanceChanges';
 import { getDepartments, addDepartment, deleteDepartment, addSubDepartment, deleteSubDepartment, getDesignations, addDesignation, deleteDesignation, setEmployeeManagers, getEmployeeManagers, setDepartmentManager, setSubDepartmentManager } from '../../actions/departments';
 import Modal from '../../components/Modal';
 import ConfirmModal from '../../components/ConfirmModal';
@@ -93,8 +94,6 @@ export default function TeamPage() {
   const [months, setMonths] = useState([]);
   const [empForm, setEmpForm] = useState({ code: '', name: '', employeeType: 'regular', departmentId: '', designationId: '' });
   const [empMsg, setEmpMsg] = useState('');
-  const [editRecord, setEditRecord] = useState({ empCode: '', monthYear: '', present: '', absent: '', late: '', lateHD: '', shortShift: '', ssHD: '', rl: '', holi: '' });
-  const [editRecordMsg, setEditRecordMsg] = useState('');
 
   // ── Combined edit state ──
   const [editRow, setEditRow] = useState(null);
@@ -166,7 +165,6 @@ export default function TeamPage() {
         setMonths(ms);
         setPendingChanges(pending);
         setPromotableEmployees(u.filter(x => x.code && x.role === 'employee'));
-        if (ms.length > 0 && !editRecord.monthYear) setEditRecord(r => ({ ...r, monthYear: ms[0] }));
       } catch {
         setUsers([]);
         setEmployees([]);
@@ -179,7 +177,7 @@ export default function TeamPage() {
         setLoading(false);
       }
     })();
-  }, [isAdmin, isSuperAdmin, fetchTrigger, editRecord.monthYear]);
+  }, [isAdmin, isSuperAdmin, fetchTrigger]);
 
   const filteredUsers = useMemo(() => {
     return displayPeople.filter(p => {
@@ -218,6 +216,8 @@ export default function TeamPage() {
     const ch = pendingChanges.find(c => c.id === changeId);
     if (ch?.action === 'update_employee_name') {
       await reviewNameChange(changeId, user.username, approve);
+    } else if (ch?.action === 'attendance_adjustment') {
+      await reviewAdjustment(changeId, user.username, approve);
     } else {
       await reviewPendingChange(changeId, user.username, approve);
     }
@@ -355,15 +355,6 @@ export default function TeamPage() {
       show: true, message: `Delete ${name}'s data for ${monthYear}? This cannot be undone.`,
       onConfirm: async () => { await deleteMonthRecord(code, monthYear, user.username); toast.success('Month record deleted.'); },
     });
-  };
-
-  const handleEditRecord = async (e) => {
-    e.preventDefault();
-    setEditRecordMsg('');
-    if (!editRecord.empCode || !editRecord.monthYear) return setEditRecordMsg('Select employee and month.');
-    const result = await updateMonthRecord(editRecord.empCode, editRecord.monthYear, editRecord, user.username);
-    if (result.error) return setEditRecordMsg(result.error);
-    setEditRecordMsg('Record updated successfully.');
   };
 
   // ── Handlers: Departments ──
@@ -854,45 +845,6 @@ export default function TeamPage() {
                 Delete Month
               </button>
             </div>
-          </div>
-
-          <div className="card" style={{ padding: '22px 24px' }}>
-            <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '6px' }}>Edit Month Record</div>
-            <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '16px' }}>Manually correct attendance counts for a specific employee and month.</div>
-            <form onSubmit={handleEditRecord} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div>
-                  <label className="input-label">Employee</label>
-                  <select className="input-field" value={editRecord.empCode} onChange={e => setEditRecord(r => ({ ...r, empCode: e.target.value }))}>
-                    <option value="">— Select —</option>
-                    {employees.map(e => <option key={e.code} value={e.code}>{e.name} ({e.code})</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="input-label">Month</label>
-                  <select className="input-field" value={editRecord.monthYear} onChange={e => setEditRecord(r => ({ ...r, monthYear: e.target.value }))}>
-                    <option value="">— Select —</option>
-                    {months.map(m => <option key={m} value={m}>{formatMonth(m)}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-                {[
-                  { key: 'present', label: 'Present' }, { key: 'absent', label: 'Absent' },
-                  { key: 'late', label: 'Late' }, { key: 'lateHD', label: 'HD(Late)' },
-                  { key: 'shortShift', label: 'Short Shift' }, { key: 'ssHD', label: 'HD(SS)' },
-                  { key: 'rl', label: 'RL' }, { key: 'holi', label: 'Holiday' },
-                ].map(({ key, label }) => (
-                  <div key={key}>
-                    <label className="input-label">{label}</label>
-                    <input type="number" min={0} className="input-field" style={{ padding: '7px 10px' }} placeholder="—" value={editRecord[key]}
-                      onChange={e => setEditRecord(r => ({ ...r, [key]: e.target.value }))} />
-                  </div>
-                ))}
-              </div>
-              {editRecordMsg && <div style={{ fontSize: '13px', color: editRecordMsg.includes('success') ? 'var(--green)' : 'var(--red)' }}>{editRecordMsg}</div>}
-              <button type="submit" className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>Save Changes</button>
-            </form>
           </div>
         </div>
       )}

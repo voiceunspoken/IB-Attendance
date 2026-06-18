@@ -3,10 +3,8 @@
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../components/AuthProvider';
-import { toggleOverride, clearAllOverrides } from '../../../actions/attendance';
-import { requestAttendanceCorrection } from '../../../actions/attendanceChanges';
+import { requestAdjustment } from '../../../actions/attendanceChanges';
 import EmployeeModal from '../../../components/EmployeeModal';
-import Modal from '../../../components/Modal';
 import { useToast } from '../../../components/Toast';
 import { useEmployeeData } from './context';
 import { FiDownload } from 'react-icons/fi';
@@ -17,16 +15,11 @@ export default function AttendancePage({ params }) {
 
   const { role, isAuthenticated, user, loading: authLoading } = useAuth();
   const isAdmin = role === 'admin' || role === 'super_admin';
-  const { emp, rlHolidays, setEmp } = useEmployeeData();
+  const { emp, rlHolidays } = useEmployeeData();
   const router = useRouter();
   const toast = useToast();
 
   const [selectedMonthIndex, setSelectedMonthIndex] = useState(0);
-  const [bulkOverrideFrom, setBulkOverrideFrom] = useState('');
-  const [bulkOverrideTo, setBulkOverrideTo] = useState('');
-  const [bulkOverrideType, setBulkOverrideType] = useState('wfm');
-  const [bulkOverrideModal, setBulkOverrideModal] = useState(false);
-  const [bulkLoading, setBulkLoading] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
@@ -45,92 +38,28 @@ export default function AttendancePage({ params }) {
     code: emp.code, name: emp.name,
     present: currentRecord.present, absent: currentRecord.absent,
     late: currentRecord.late, shortShift: currentRecord.shortShift,
+    rl: currentRecord.rl,
     days: emp.dailyLogs.filter(log => log.monthYear === currentRecord.monthYear).map(dl => ({
       d: dl.day, type: dl.type, raw: dl.raw, inT: dl.inT, outT: dl.outT,
       isLate: dl.isLate, isSS: dl.isSS, isSL: dl.isSL, hdReason: dl.hdReason
     }))
   };
 
-  const currentMonthOverrides = {};
-  emp.overrides.filter(o => o.monthYear === currentRecord.monthYear)
-    .forEach(o => { currentMonthOverrides[`${emp.code}_${o.day}`] = o.type; });
-
   const formatMonth = (my) => {
     const [m, y] = my.split('_');
     return new Date(y, parseInt(m) - 1).toLocaleString('default', { month: 'short', year: 'numeric' });
   };
 
-  const computeOverrideCounts = () => {
-    let wfm = 0, wfmhd = 0, wfh = 0, wos = 0, woshd = 0;
-    Object.keys(currentMonthOverrides).forEach(k => {
-      const v = currentMonthOverrides[k];
-      if (v === 'wfm') wfm++;
-      else if (v === 'wfm-hd') wfmhd++;
-      else if (v === 'wfh') wfh++;
-      else if (v === 'wos') wos++;
-      else if (v === 'wos-hd') woshd++;
-    });
-    return { wfm, wfmhd, wfh, wos, woshd };
-  };
-  const ovCounts = computeOverrideCounts();
-  const kpiStats = [
-    { val: formattedEmployee.present, label: 'Present', color: 'var(--green)' },
-    { val: formattedEmployee.absent, label: 'Absent', color: 'var(--red)' },
-    { val: formattedEmployee.late, label: 'Late', color: 'var(--yellow)' },
-    { val: formattedEmployee.shortShift, label: 'Short Shifts', color: 'var(--orange)' },
-    { val: ovCounts.wfm + ovCounts.wfmhd, label: 'WFM', color: 'var(--green)' },
-    { val: ovCounts.wfh, label: 'WFH', color: 'var(--purple)' },
-    { val: ovCounts.wos + ovCounts.woshd, label: 'WOS', color: 'var(--teal)' },
-  ];
-
-  const handleApplyOverride = async (empCode, day, type) => {
-    setEmp(prev => {
-      const p = { ...prev };
-      if (type === 'clear') p.overrides = p.overrides.filter(o => !(o.day === day && o.monthYear === currentRecord.monthYear));
-      else {
-        const existing = p.overrides.find(o => o.day === day && o.monthYear === currentRecord.monthYear);
-        if (existing) existing.type = type;
-        else p.overrides.push({ day, monthYear: currentRecord.monthYear, type });
-      }
-      return p;
-    });
-    await toggleOverride(code, currentRecord.monthYear, day, type);
-  };
-
-  const handleRemoveOverride = (empCode, day) => handleApplyOverride(empCode, day, 'clear');
-  const handleClearAllOverrides = async () => {
-    setEmp(prev => ({ ...prev, overrides: prev.overrides.filter(o => o.monthYear !== currentRecord.monthYear) }));
-    await clearAllOverrides(code, currentRecord.monthYear);
-  };
-
-  const handleProposeCorrection = async (empCode, day, currentType, newType, reason) => {
+  const handleAdjust = async (empCode, day, currentType, newType, reason) => {
     const monthYear = currentRecord.monthYear;
-    const result = await requestAttendanceCorrection(empCode, monthYear, day, currentType, newType, reason, user?.username);
+    const result = await requestAdjustment(empCode, monthYear, day, currentType, newType, reason, user?.username);
     if (result.error) return toast.error(result.error);
-    toast.success('Correction request submitted for super admin approval.');
+    if (result.warning) toast.warning(result.warning);
+    toast.success('Adjustment request submitted for super admin approval.');
+    return result;
   };
 
-  const handleBulkOverride = async () => {
-    const f = parseInt(bulkOverrideFrom);
-    const t = parseInt(bulkOverrideTo) || f;
-    if (!f || isNaN(f)) return toast.error('Please enter a valid start date.');
-    const dIM = new Date(modalCurrentMonth.year, modalCurrentMonth.month, 0).getDate();
-    const start = Math.max(1, Math.min(f, dIM));
-    const end = Math.max(start, Math.min(t, dIM));
-    setBulkLoading(true);
-    for (let d = start; d <= end; d++) {
-      const info = formattedEmployee.days.find(x => x.d === d);
-      if (info && info.type !== 'wo' && info.type !== 'holiday') {
-        await handleApplyOverride(formattedEmployee.code, d, bulkOverrideType);
-      }
-    }
-    setBulkLoading(false);
-    setBulkOverrideFrom('');
-    setBulkOverrideTo('');
-    setBulkOverrideModal(false);
-  };
-
-  const downloadPDF = async (record, empData, ovs) => {
+  const downloadPDF = async (record, empData) => {
     const { jsPDF } = await import('jspdf');
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const [mo, yr] = record.monthYear.split('_');
@@ -198,17 +127,17 @@ export default function AttendancePage({ params }) {
     let col = firstDow;
     for (let d = 1; d <= daysInMonth; d++) {
       const info = dayMap[d];
-      const ov = ovs[`${empData.code}_${d}`];
       const bx = 14 + col * cellW;
 
       let bg = [245, 245, 247], textCol = [29, 29, 31], label = '';
-      if (ov) { bg = [220, 245, 225]; label = ov.toUpperCase(); }
-      else if (info?.type === 'absent') { bg = [255, 235, 234]; textCol = [200, 50, 40]; label = 'A'; }
+      if (info?.type === 'absent') { bg = [255, 235, 234]; textCol = [200, 50, 40]; label = 'A'; }
       else if (info?.type === 'present') { bg = [234, 248, 238]; label = 'P'; }
       else if (info?.type === 'holiday') { bg = [255, 245, 220]; label = 'H'; }
       else if (info?.type === 'wo') { bg = [240, 240, 240]; textCol = [180, 180, 180]; label = 'WO'; }
       else if (info?.type === 'rl') { bg = [240, 230, 250]; label = 'RL'; }
       else if (info?.type === 'half') { bg = [255, 245, 220]; label = 'HD'; }
+      else if (['cl', 'sl', 'el', 'ul', 'sh'].includes(info?.type)) { bg = [230, 240, 255]; label = info.type.toUpperCase(); }
+      else if (['wfh', 'wfm', 'wos'].includes(info?.type)) { bg = [240, 230, 250]; label = info.type.toUpperCase(); }
       if (info?.isLate) label = 'L';
       if (info?.isSS) label = 'SS';
 
@@ -246,7 +175,13 @@ export default function AttendancePage({ params }) {
             disabled={selectedMonthIndex === emp.records.length - 1}>▶</button>
         </div>
         <div style={{ flex: 1, display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-evenly', fontSize: '11px', color: 'var(--text2)' }}>
-          {kpiStats.map(s => (
+          {[
+            { val: formattedEmployee.present, label: 'Present', color: 'var(--green)' },
+            { val: formattedEmployee.absent, label: 'Absent', color: 'var(--red)' },
+            { val: formattedEmployee.late, label: 'Late', color: 'var(--yellow)' },
+            { val: formattedEmployee.shortShift, label: 'Short Shifts', color: 'var(--orange)' },
+            { val: formattedEmployee.rl, label: 'RL', color: 'var(--purple)' },
+          ].map(s => (
             <span key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
               <span style={{ fontWeight: 700, color: s.color }}>{s.val}</span>
               <span>{s.label}</span>
@@ -254,14 +189,8 @@ export default function AttendancePage({ params }) {
           ))}
         </div>
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-          {isAdmin && (
-            <button className="btn btn-secondary" style={{ fontSize: '10px', padding: '4px 10px' }}
-              onClick={() => setBulkOverrideModal(true)}>
-              Override
-            </button>
-          )}
           <button className="btn btn-outline" style={{ fontSize: '10px', padding: '4px 10px' }}
-            onClick={() => downloadPDF(currentRecord, emp, currentMonthOverrides)}>
+            onClick={() => downloadPDF(currentRecord, emp)}>
             <FiDownload size={10} /> PDF
           </button>
         </div>
@@ -271,54 +200,13 @@ export default function AttendancePage({ params }) {
         <EmployeeModal
           employee={formattedEmployee}
           currentMonth={modalCurrentMonth}
-          overrides={currentMonthOverrides}
           onClose={() => {}}
-          onApplyOverride={handleApplyOverride}
-          onRemoveOverride={handleRemoveOverride}
-          onClearAllOverrides={handleClearAllOverrides}
           readOnly={!isAdmin}
-          onProposeCorrection={isAdmin ? handleProposeCorrection : undefined}
+          onAdjust={isAdmin ? handleAdjust : undefined}
           rlEligibleDays={rlHolidays}
           mode="inline"
         />
       </div>
-
-      <Modal open={bulkOverrideModal} onClose={() => setBulkOverrideModal(false)} title="Manual Override" width="420px">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            <div>
-              <label className="input-label">From Date</label>
-              <input type="number" min="1" max="31" placeholder="5" value={bulkOverrideFrom}
-                onChange={e => setBulkOverrideFrom(e.target.value)} className="input-field"
-                style={{ padding: '8px 10px' }} />
-            </div>
-            <div>
-              <label className="input-label">To Date</label>
-              <input type="number" min="1" max="31" placeholder="same" value={bulkOverrideTo}
-                onChange={e => setBulkOverrideTo(e.target.value)} className="input-field"
-                style={{ padding: '8px 10px' }} />
-            </div>
-          </div>
-          <div>
-            <label className="input-label">Type</label>
-            <select value={bulkOverrideType} onChange={e => setBulkOverrideType(e.target.value)}
-              className="input-field" style={{ padding: '8px 10px' }}>
-              <option value="wfm">WFM — Full Day</option>
-              <option value="wfm-hd">WFM — Half Day</option>
-              <option value="wfh">WFH</option>
-              <option value="wos">WOS — Full Day</option>
-              <option value="wos-hd">WOS — Half Day</option>
-            </select>
-          </div>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-            <button className="btn btn-primary" style={{ flex: 1, padding: '9px', opacity: bulkLoading ? 0.7 : 1 }}
-              disabled={bulkLoading}
-              onClick={() => handleBulkOverride()}>{bulkLoading ? 'Applying…' : 'Apply'}</button>
-            <button className="btn btn-secondary" style={{ flex: 1, padding: '9px' }}
-              onClick={() => { setBulkOverrideModal(false); }}>Cancel</button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }
