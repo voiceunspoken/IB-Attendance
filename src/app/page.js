@@ -248,10 +248,17 @@ export default function DashboardHome() {
                             <span className="text-xs text-semibold text-muted" style={{ lineHeight: 1 }}>{d.toLocaleString('en', { month: 'short' })}</span>
                             <span style={{ fontSize: '16px', fontWeight: 700, lineHeight: 1.2 }}>{h.day}</span>
                           </div>
-                          <div>
-                            <div className="text-sm text-semibold">{h.name}</div>
-                            <div className="text-xs text-muted2">{d.toLocaleDateString('en-US', { weekday: 'long' })}</div>
-                          </div>
+                            <div>
+                              <div className="text-sm text-semibold" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                {h.name}
+                                <span style={{
+                                  fontSize: '10px', fontWeight: 600, padding: '1px 7px', borderRadius: '4px',
+                                  background: (h.isRestricted || h.type === 'optional') ? 'rgba(175,82,222,0.1)' : 'rgba(0,113,227,0.1)',
+                                  color: (h.isRestricted || h.type === 'optional') ? '#7b2d8b' : '#0071e3',
+                                }}>{(h.isRestricted || h.type === 'optional') ? 'RL' : 'Gazetted'}</span>
+                              </div>
+                              <div className="text-xs text-muted2">{d.toLocaleDateString('en-US', { weekday: 'long' })}</div>
+                            </div>
                         </div>
                       );
                     })}

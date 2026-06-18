@@ -225,6 +225,11 @@ body {
   width: 100%;
 }
 
+body.modal-open .page-wrapper {
+  max-width: none;
+  margin: 0;
+}
+
 /* Auth */
 .auth-container {
   min-height: 100vh;

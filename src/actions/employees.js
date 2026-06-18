@@ -1,8 +1,9 @@
 "use server";
 
 import { prisma } from '../lib/prisma';
-import { requireAdmin } from '../lib/auth-guard';
+import { requireAdmin, requireSuperAdmin } from '../lib/auth-guard';
 import { revalidatePath } from 'next/cache';
+import { logAction } from './audit';
 import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
@@ -41,6 +42,60 @@ export async function updateEmployeeDetails(code, fields, performedBy) {
   if (fields.designationId !== undefined) data.designationId = fields.designationId || null;
 
   await prisma.user.update({ where: { code }, data });
+  revalidatePath('/');
+  return { success: true };
+}
+
+export async function requestNameChange(code, newName, currentName, requestedBy) {
+  const auth = await requireAdmin(requestedBy);
+  if (auth) return auth;
+
+  const requester = await prisma.user.findUnique({ where: { username: requestedBy } });
+  if (!requester) return { error: 'Requester not found.' };
+
+  // Super admin applies directly
+  if (requester.role === 'super_admin') {
+    await prisma.user.update({ where: { code }, data: { name: newName } });
+    await logAction(requestedBy, 'name_updated', 'employee', requester.id,
+      `Updated ${code} name directly: "${currentName}" → "${newName}"`);
+    revalidatePath('/');
+    return { success: true, direct: true };
+  }
+
+  // Admin creates a pending change for super admin approval
+  await prisma.pendingChange.create({
+    data: {
+      requestedBy,
+      action: 'update_employee_name',
+      payload: JSON.stringify({ code, currentName, newName }),
+      status: 'pending',
+    },
+  });
+  await logAction(requestedBy, 'name_change_requested', 'employee', requester.id,
+    `Requested name change for ${code}: "${currentName}" → "${newName}"`);
+  revalidatePath('/');
+  return { success: true, direct: false };
+}
+
+export async function reviewNameChange(changeId, reviewedBy, approve) {
+  const auth = await requireSuperAdmin(reviewedBy);
+  if (auth) return auth;
+
+  const change = await prisma.pendingChange.findUnique({ where: { id: changeId } });
+  if (!change || change.action !== 'update_employee_name') return { error: 'Invalid change request.' };
+  if (change.status !== 'pending') return { error: 'Change already reviewed.' };
+
+  if (approve) {
+    const { code, newName } = JSON.parse(change.payload);
+    await prisma.user.update({ where: { code }, data: { name: newName } });
+  }
+
+  await prisma.pendingChange.update({
+    where: { id: changeId },
+    data: { status: approve ? 'approved' : 'rejected', reviewedBy, reviewedAt: new Date() },
+  });
+  await logAction(reviewedBy, approve ? 'name_change_approved' : 'name_change_rejected', 'pending_change', changeId,
+    `${approve ? 'Approved' : 'Rejected'} name change: ${change.payload}`);
   revalidatePath('/');
   return { success: true };
 }

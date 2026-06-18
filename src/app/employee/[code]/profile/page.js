@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '../../../../components/AuthProvider';
 import { updateEmployeeDetails, uploadAvatar } from '../../../../actions/employees';
+import { changePassword } from '../../../../actions/auth';
 import { useToast } from '../../../../components/Toast';
 import { useEmployeeData } from '../context';
-import { FiCamera, FiUpload } from 'react-icons/fi';
+import { FiCamera, FiUpload, FiLock } from 'react-icons/fi';
 
 export default function ProfilePage({ params }) {
   const unwrappedParams = use(params);
@@ -27,6 +28,11 @@ export default function ProfilePage({ params }) {
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
+  const [pwForm, setPwForm] = useState({ current: '', newPw: '', confirm: '' });
+  const [pwError, setPwError] = useState('');
+  const [pwMsg, setPwMsg] = useState('');
+  const [changingPw, setChangingPw] = useState(false);
+
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
     if (!authLoading && isAuthenticated && !isAdmin && user?.code && user.code !== code) {
@@ -41,6 +47,19 @@ export default function ProfilePage({ params }) {
     if (result.error) return toast.error(result.error);
     toast.success('Birthday saved.');
     triggerRefetch();
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPwError(''); setPwMsg('');
+    if (pwForm.newPw !== pwForm.confirm) return setPwError('New passwords do not match.');
+    if (pwForm.newPw.length < 6) return setPwError('Password must be at least 6 characters.');
+    setChangingPw(true);
+    const result = await changePassword(user.id, pwForm.current, pwForm.newPw);
+    setChangingPw(false);
+    if (result.error) return setPwError(result.error);
+    setPwMsg('Password changed successfully.');
+    setPwForm({ current: '', newPw: '', confirm: '' });
   };
 
   const handleUploadAvatar = async () => {
@@ -95,6 +114,38 @@ export default function ProfilePage({ params }) {
             onClick={handleSaveBirthday}>{savingBirthday ? 'Saving…' : 'Save'}</button>
         </div>
       </div>
+
+      <div style={{ borderTop: '1px solid var(--border)', margin: '20px 0' }} />
+
+      <div className="text-base text-bold mb-12 flex items-center gap-8"><FiLock size={14} /> Change Password</div>
+      <form onSubmit={handleChangePassword} style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div>
+            <label className="input-label">Current Password</label>
+            <input className="input-field" type="password" value={pwForm.current}
+              onChange={e => setPwForm(f => ({ ...f, current: e.target.value }))} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <div>
+              <label className="input-label">New Password</label>
+              <input className="input-field" type="password" value={pwForm.newPw}
+                onChange={e => setPwForm(f => ({ ...f, newPw: e.target.value }))} />
+            </div>
+            <div>
+              <label className="input-label">Confirm New Password</label>
+              <input className="input-field" type="password" value={pwForm.confirm}
+                onChange={e => setPwForm(f => ({ ...f, confirm: e.target.value }))} />
+            </div>
+          </div>
+          {pwError && <div style={{ fontSize: '12px', color: 'var(--red)' }}>{pwError}</div>}
+          {pwMsg && <div style={{ fontSize: '12px', color: 'var(--green)' }}>{pwMsg}</div>}
+          <div>
+            <button type="submit" className="btn btn-primary" style={{ opacity: changingPw ? 0.7 : 1 }} disabled={changingPw}>
+              {changingPw ? 'Changing…' : 'Change Password'}
+            </button>
+          </div>
+        </div>
+      </form>
 
       <div>
         <label className="input-label">Profile Picture</label>

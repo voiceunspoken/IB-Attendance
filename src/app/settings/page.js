@@ -181,11 +181,9 @@ export default function SettingsPage() {
       message: 'Remove this holiday?',
       confirmLabel: 'Remove',
       onConfirm: async () => {
-        if (isSuperAdmin) {
-          await deletePendingHoliday(id, user.username);
-        } else {
-          await deleteHoliday(id);
-        }
+        const result = await deleteHoliday(id);
+        if (result.error) { toast.error(result.error); return; }
+        toast.success('Holiday removed.');
         const [h, ph] = await Promise.all([getHolidays(year), getPendingHolidays(year)]);
         setHolidays(h);
         setPendingHolidays(ph);
