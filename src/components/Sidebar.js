@@ -13,6 +13,7 @@ const NAV_CONFIG = {
       { label: 'Attendance', icon: <FiCalendar size={14} />, path: '/attendance' },
       { label: 'Team', icon: <FiUsers size={14} />, path: '/team' },
       { label: 'Leaves', icon: <FiFileText size={14} />, path: '/leaves' },
+      { label: 'Audit', icon: <FiFileText size={14} />, path: '/audit' },
       { label: 'Settings', icon: <FiSettings size={14} />, path: '/settings' },
     ]},
   ],
@@ -23,6 +24,7 @@ const NAV_CONFIG = {
       { label: 'Attendance', icon: <FiCalendar size={14} />, path: '/attendance' },
       { label: 'Team', icon: <FiUsers size={14} />, path: '/team' },
       { label: 'Leaves', icon: <FiFileText size={14} />, path: '/leaves' },
+      { label: 'Audit', icon: <FiFileText size={14} />, path: '/audit' },
       { label: 'Settings', icon: <FiSettings size={14} />, path: '/settings' },
     ]},
     { section: 'Employee', links: [

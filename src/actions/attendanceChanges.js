@@ -150,3 +150,30 @@ export async function reviewAdjustment(changeId, reviewedBy, approve) {
   revalidatePath('/');
   return { success: true };
 }
+
+function parseTimeString(t) {
+  if (!t || typeof t !== 'string') return null;
+  const m = t.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  return parseInt(m[1]) * 60 + parseInt(m[2]);
+}
+
+export async function updatePunchTimes(employeeCode, monthYear, day, inTStr, outTStr, reason, updatedBy) {
+  const user = await prisma.user.findUnique({ where: { code: employeeCode } });
+  if (!user) return { error: 'Employee not found' };
+
+  const inT = parseTimeString(inTStr);
+  const outT = parseTimeString(outTStr);
+
+  const updated = await prisma.dailyLog.upsert({
+    where: { userId_monthYear_day: { userId: user.id, monthYear, day: parseInt(day) } },
+    update: { inT, outT },
+    create: { userId: user.id, monthYear, day: parseInt(day), type: 'present', raw: '', inT, outT }
+  });
+
+  await logAction(updatedBy, 'punch_time_updated', 'daily_log', updated.id,
+    `Updated punch times for ${employeeCode} day ${day} ${monthYear}: ${inTStr}–${outTStr}${reason ? ' (' + reason + ')' : ''}`);
+
+  revalidatePath('/');
+  return { success: true };
+}

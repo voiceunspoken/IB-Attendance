@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../components/AuthProvider';
-import { requestAdjustment } from '../../../actions/attendanceChanges';
+import { requestAdjustment, updatePunchTimes } from '../../../actions/attendanceChanges';
 import EmployeeModal from '../../../components/EmployeeModal';
 import { useToast } from '../../../components/Toast';
 import { useEmployeeData } from './context';
@@ -56,6 +56,12 @@ export default function AttendancePage({ params }) {
     if (result.error) return toast.error(result.error);
     if (result.warning) toast.warning(result.warning);
     toast.success('Adjustment request submitted for super admin approval.');
+    return result;
+  };
+
+  const handlePunchUpdate = async (empCode, day, inTStr, outTStr, reason) => {
+    const monthYear = currentRecord.monthYear;
+    const result = await updatePunchTimes(empCode, monthYear, day, inTStr, outTStr, reason, user?.username);
     return result;
   };
 
@@ -205,6 +211,8 @@ export default function AttendancePage({ params }) {
           onAdjust={isAdmin ? handleAdjust : undefined}
           rlEligibleDays={rlHolidays}
           mode="inline"
+          isAdmin={isAdmin}
+          onPunchUpdate={isAdmin ? handlePunchUpdate : undefined}
         />
       </div>
     </div>

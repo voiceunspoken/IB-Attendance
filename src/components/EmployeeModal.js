@@ -21,13 +21,17 @@ const ADJUST_TYPES = [
   { value: 'wos', label: 'WOS (On Site)' },
 ];
 
-export default function EmployeeModal({ employee, currentMonth, onClose, readOnly = false, onAdjust, rlEligibleDays = [], mode = 'modal' }) {
+export default function EmployeeModal({ employee, currentMonth, onClose, readOnly = false, onAdjust, rlEligibleDays = [], mode = 'modal', isAdmin = false, onPunchUpdate }) {
   const [popupDay, setPopupDay] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
   const [popupPos, setPopupPos] = useState({ x: 0, y: 0 });
   const [adjustType, setAdjustType] = useState('present');
   const [adjustReason, setAdjustReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [punchInStr, setPunchInStr] = useState('');
+  const [punchOutStr, setPunchOutStr] = useState('');
+  const [punchReason, setPunchReason] = useState('');
+  const [punchSubmitting, setPunchSubmitting] = useState(false);
 
   const toast = useToast();
   const fmtTime = (m) => m != null ? `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` : '';
@@ -64,6 +68,9 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
     setPopupDay(day);
     setAdjustType('present');
     setAdjustReason('');
+    setPunchInStr(info.inT != null ? fmtTime(info.inT) : '');
+    setPunchOutStr(info.outT != null ? fmtTime(info.outT) : '');
+    setPunchReason('');
   };
 
   const { year: calYear, month: calMonth } = currentMonth || { year: 2026, month: 3 };
@@ -285,6 +292,50 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
               fontSize: 'var(--fs-sm)', fontWeight: 600, fontFamily: 'inherit', width: '100%', opacity: submitting ? 0.7 : 1
             }} disabled={submitting}>
               {submitting ? 'Submitting…' : 'Submit Adjustment Request'}
+            </button>
+          </>
+        )}
+
+        {/* ── Punch Time Correction (admin only, direct save) ── */}
+        {isAdmin && onPunchUpdate && di.inT != null && (
+          <>
+            {sectionDiv}
+            <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--text3)', marginBottom: '8px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              Punch Time Correction
+            </div>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+              <div style={{ flex: 1 }}>
+                <label className="input-label" style={{ fontSize: '10px' }}>In</label>
+                <input className="input-field" type="text" placeholder="HH:MM" value={punchInStr}
+                  onChange={e => setPunchInStr(e.target.value)}
+                  style={{ width: '100%', padding: '7px 10px', fontSize: 'var(--fs-sm)', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label className="input-label" style={{ fontSize: '10px' }}>Out</label>
+                <input className="input-field" type="text" placeholder="HH:MM" value={punchOutStr}
+                  onChange={e => setPunchOutStr(e.target.value)}
+                  style={{ width: '100%', padding: '7px 10px', fontSize: 'var(--fs-sm)', boxSizing: 'border-box' }} />
+              </div>
+            </div>
+            <input className="input-field" placeholder="Reason (optional)…"
+              value={punchReason}
+              onChange={e => setPunchReason(e.target.value)}
+              style={{ width: '100%', padding: '7px 10px', fontSize: 'var(--fs-sm)', marginBottom: '6px', boxSizing: 'border-box' }} />
+            <button onClick={async () => {
+              setPunchSubmitting(true);
+              const result = await onPunchUpdate(employee.code, popupDay, punchInStr, punchOutStr, punchReason);
+              setPunchSubmitting(false);
+              if (result?.error) return toast.error(result.error);
+              toast.success('Punch times updated.');
+              setPunchReason('');
+              setSelectedDay(null);
+              setPopupDay(null);
+            }} style={{
+              padding: '7px 14px', borderRadius: '9px', border: '1px solid var(--orange)',
+              background: 'rgba(255,107,53,0.08)', color: 'var(--orange)', cursor: punchSubmitting ? 'default' : 'pointer',
+              fontSize: 'var(--fs-sm)', fontWeight: 600, fontFamily: 'inherit', width: '100%', opacity: punchSubmitting ? 0.7 : 1
+            }} disabled={punchSubmitting}>
+              {punchSubmitting ? 'Saving…' : 'Save Punch Times'}
             </button>
           </>
         )}

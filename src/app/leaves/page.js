@@ -11,9 +11,12 @@ import {
   getAllPendingRegularizations, reviewRegularization,
   getPendingSuperRegularizations, reviewRegularizationSuper,
   getAllLeaveBalances, upsertLeavePolicy, getLeavePolicy,
-  getLeaveBalancesForExport, getManagerLeaveRequests
+  getLeaveBalancesForExport, getManagerLeaveRequests,
+  adminUpdateLeaveBalance
 } from '../../actions/leave';
 import { getManagedEmployees } from '../../actions/departments';
+import { getPendingChanges } from '../../actions/auth';
+import { reviewAdjustment } from '../../actions/attendanceChanges';
 
 const LEAVE_LABELS = { cl: 'CL', sl: 'SL', el: 'EL', rl: 'RL', sh: 'SH' };
 const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b' };
@@ -43,6 +46,10 @@ export default function LeavesPage() {
   const [reviewModal, setReviewModal] = useState(null);
   const [reviewNote, setReviewNote] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [pendingChanges, setPendingChanges] = useState([]);
+  const [collapsed, setCollapsed] = useState({ leaves: false, regs: false, adjustments: false });
+  const [editBalanceTarget, setEditBalanceTarget] = useState(null);
+  const [editBalanceForm, setEditBalanceForm] = useState({ clTotal: 0, slTotal: 0, elTotal: 0, rlTotal: 0, shTotal: 0 });
   const year = new Date().getFullYear();
 
   // Export range state
@@ -106,6 +113,27 @@ export default function LeavesPage() {
     }
   };
 
+  const handleEditBalance = async (e) => {
+    e.preventDefault();
+    if (!editBalanceTarget) return;
+    await adminUpdateLeaveBalance(editBalanceTarget.code, year, editBalanceForm);
+    toast.success('Leave balance updated for ' + editBalanceTarget.name);
+    setEditBalanceTarget(null);
+    setFetchTrigger(t => t + 1);
+  };
+
+  const openEditBalance = (entry) => {
+    const b = entry.balance || {};
+    setEditBalanceForm({
+      clTotal: b.clTotal ?? 12,
+      slTotal: b.slTotal ?? 6,
+      elTotal: b.elTotal ?? 4,
+      rlTotal: b.rlTotal ?? 2,
+      shTotal: b.shTotal ?? 6,
+    });
+    setEditBalanceTarget(entry);
+  };
+
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
   }, [isAuthenticated, authLoading, router]);
@@ -146,8 +174,12 @@ export default function LeavesPage() {
         setRegularizations(regs);
         setBalances(bal);
         if (isSuperAdmin) {
-          const supRegs = await getPendingSuperRegularizations();
+          const [supRegs, pcs] = await Promise.all([
+            getPendingSuperRegularizations(),
+            getPendingChanges()
+          ]);
           setSuperRegularizations(supRegs);
+          setPendingChanges(pcs.filter(c => c.action === 'attendance_adjustment'));
         }
         if (pol) setPolicy({ cl: pol.cl, sl: pol.sl, el: pol.el, rl: pol.rl, sh: pol.sh ?? 6 });
       } catch {
@@ -156,6 +188,7 @@ export default function LeavesPage() {
         setRegularizations([]);
         setBalances([]);
         setSuperRegularizations([]);
+        setPendingChanges([]);
       } finally {
         setLoading(false);
         setManagerLoading(false);
@@ -177,6 +210,11 @@ export default function LeavesPage() {
 
   const handleSuperReviewReg = async (id, approve) => {
     await reviewRegularizationSuper(id, user.username, approve);
+    setFetchTrigger(t => t + 1);
+  };
+
+  const handleReviewAdjustment = async (changeId, approve) => {
+    await reviewAdjustment(changeId, user.username, approve);
     setFetchTrigger(t => t + 1);
   };
 
@@ -244,46 +282,194 @@ export default function LeavesPage() {
 
       {loading && <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text2)', fontSize: '14px' }}>Loading…</div>}
 
-      {/* ── ALL REQUESTS (admin overview — read only) ── */}
+      {/* ── PENDING APPROVALS (unified overview) ── */}
       {!loading && tab === 'overview' && (
-        <div className="card overflow-hidden p-0">
-          <div className="card-header">
-            All Leave Requests ({leaveRequests.length})
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* ── Section 1: Leave Approvals ── */}
+          <div className="card overflow-hidden p-0">
+            <div className="card-header" style={{ cursor: 'pointer', userSelect: 'none' }}
+              onClick={() => setCollapsed(c => ({ ...c, leaves: !c.leaves }))}>
+              <span>Pending Leave Approvals</span>
+              <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400 }}>
+                {collapsed.leaves ? 'Show' : 'Hide'} ({managerLeaves.length})
+              </span>
+            </div>
+            {!collapsed.leaves && (
+              managerLeaves.length === 0 && leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length === 0
+                ? <div className="p-32 text-center text-muted2 text-sm">No pending leave approvals.</div>
+                : <>
+                    {/* Manager queue */}
+                    {managerLeaves.length > 0 && (
+                      <div style={{ padding: '8px 16px', fontSize: '11px', fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', background: 'var(--surface2)', borderBottom: '1px solid var(--border)' }}>
+                        Awaiting Your Approval — {managerLeaves.length}
+                      </div>
+                    )}
+                    {managerLeaves.map(r => (
+                      <div key={r.id} className="p-14-20 border-bottom" style={{ cursor: 'pointer', transition: 'background 0.1s' }}
+                        onClick={() => { setReviewModal(r); setReviewNote(''); }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
+                        onMouseLeave={e => e.currentTarget.style.background = ''}>
+                        <div className="flex-between items-start" style={{ gap: '12px' }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user?.name || 'Unknown'}</span>
+                              <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user?.code}</span>
+                              <span style={{ fontSize: '11px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
+                              <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
+                              {r.shiftSlot && <span style={{ fontSize: '10px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 6px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
+                              <StageBadge stage={r.approvalStage} />
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                              {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                              {' · '}{r.reason}
+                            </div>
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--text3)', whiteSpace: 'nowrap' }}>Review →</div>
+                        </div>
+                      </div>
+                    ))}
+                    {/* Super admin pending */}
+                    {isSuperAdmin && leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length > 0 && (
+                      <>
+                        <div style={{ padding: '8px 16px', fontSize: '11px', fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', background: 'var(--surface2)', borderBottom: '1px solid var(--border)' }}>
+                          Super Admin Queue — {leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length}
+                        </div>
+                        {leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').map(r => (
+                          <div key={r.id} className="p-14-20 border-bottom" style={{ cursor: 'pointer', transition: 'background 0.1s' }}
+                            onClick={() => { setReviewModal(r); setReviewNote(''); }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
+                            onMouseLeave={e => e.currentTarget.style.background = ''}>
+                            <div className="flex-between items-start" style={{ gap: '12px' }}>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
+                                  <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user?.name}</span>
+                                  <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user?.code}</span>
+                                  <span style={{ fontSize: '11px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
+                                  <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
+                                  {r.shiftSlot && <span style={{ fontSize: '10px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 6px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
+                                  <StageBadge stage={r.approvalStage} />
+                                </div>
+                                <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                                  {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                  {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                                  {' · '}{r.reason}
+                                </div>
+                              </div>
+                              <div style={{ fontSize: '11px', color: 'var(--text3)', whiteSpace: 'nowrap' }}>Review →</div>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </>
+            )}
           </div>
-          {leaveRequests.length === 0
-            ? <div className="p-32 text-center">
-                <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.25 }}><FiClipboard size={36} /></div>
-                <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px', color: 'var(--text2)' }}>No leave requests yet</div>
-                <div style={{ fontSize: '13px', color: 'var(--text3)', marginBottom: '16px' }}>Employees can apply for leave from their profile page.</div>
+
+          {/* ── Section 2: Regularizations ── */}
+          <div className="card overflow-hidden p-0">
+            <div className="card-header" style={{ cursor: 'pointer', userSelect: 'none' }}
+              onClick={() => setCollapsed(c => ({ ...c, regs: !c.regs }))}>
+              <span>Pending Regularizations</span>
+              <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400 }}>
+                {collapsed.regs ? 'Show' : 'Hide'} ({regularizations.length + superRegularizations.length})
+              </span>
+            </div>
+            {!collapsed.regs && (
+              regularizations.length === 0 && superRegularizations.length === 0
+                ? <div className="p-32 text-center text-muted2 text-sm">No pending regularizations.</div>
+                : <>
+                    {regularizations.map(r => (
+                      <div key={r.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
+                        <div>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px' }}>
+                            <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user.name}</span>
+                            <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user.code}</span>
+                            <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                            {r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`}
+                            {' · '}{r.reason}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                          <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '11px', background: 'var(--green)' }} onClick={() => handleReviewReg(r.id, true)}>Approve</button>
+                          <button style={{ padding: '5px 12px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleReviewReg(r.id, false)}>Reject</button>
+                        </div>
+                      </div>
+                    ))}
+                    {isSuperAdmin && superRegularizations.length > 0 && (
+                      <>
+                        {regularizations.length > 0 && <div style={{ height: '1px', background: 'var(--border)' }} />}
+                        <div style={{ padding: '8px 16px', fontSize: '11px', fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', background: 'var(--surface2)' }}>
+                          Super Admin — {superRegularizations.length}
+                        </div>
+                        {superRegularizations.map(r => (
+                          <div key={r.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
+                            <div>
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px' }}>
+                                <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user.name}</span>
+                                <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user.code}</span>
+                                <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                              </div>
+                              <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                                {r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`}
+                                {' · '}{r.reason}
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                              <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '11px', background: 'var(--green)' }} onClick={() => handleSuperReviewReg(r.id, true)}>Final Approve</button>
+                              <button style={{ padding: '5px 12px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleSuperReviewReg(r.id, false)}>Reject</button>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </>
+            )}
+          </div>
+
+          {/* ── Section 3: Attendance Adjustments (super_admin only) ── */}
+          {isSuperAdmin && (
+            <div className="card overflow-hidden p-0">
+              <div className="card-header" style={{ cursor: 'pointer', userSelect: 'none' }}
+                onClick={() => setCollapsed(c => ({ ...c, adjustments: !c.adjustments }))}>
+                <span>Pending Adjustments</span>
+                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400 }}>
+                  {collapsed.adjustments ? 'Show' : 'Hide'} ({pendingChanges.length})
+                </span>
               </div>
-            : leaveRequests.map(r => (
-              <div key={r.id} className="p-16-20 border-bottom flex-between items-start" style={{ gap: '16px' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name || 'Unknown'}</span>
-                    <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user?.code}</span>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
-                    <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
-                    {r.shiftSlot && <span style={{ fontSize: '11px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
-                    {statusBadge(r.status)}
-                    <StageBadge stage={r.approvalStage} />
-                  </div>
-                  {r.sandwichCount > 0 && (
-                    <div style={{ fontSize: '11px', color: 'var(--orange)', marginBottom: '2px', fontWeight: 500 }}>
-                      <FiAlertTriangle size={11} style={{ marginRight: '2px', verticalAlign: 'middle' }} /> {r.sandwichCount === 1 ? '1st sandwich' : `${r.sandwichCount} sandwich`} leave
-                    </div>
-                  )}
-                  <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
-                    {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
-                    {' · '}{r.reason}
-                  </div>
-                  {r.prescriptionFile && <div style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '2px' }}>📎 Prescription attached</div>}
-                  {r.reviewNote && <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '3px', fontStyle: 'italic' }}>Note: {r.reviewNote}</div>}
-                </div>
-              </div>
-            ))
-          }
+              {!collapsed.adjustments && (
+                pendingChanges.length === 0
+                  ? <div className="p-32 text-center text-muted2 text-sm">No pending adjustments.</div>
+                  : pendingChanges.map(c => {
+                      let payload = {};
+                      try { payload = JSON.parse(c.payload); } catch {}
+                      return (
+                        <div key={c.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
+                          <div>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 600, fontSize: '13px' }}>{payload.employeeCode}</span>
+                              <span style={{ fontSize: '11px', color: 'var(--text2)' }}>Day {payload.day} · {payload.monthYear}</span>
+                              <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{payload.currentType} → {payload.newType}</span>
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                              <span style={{ color: 'var(--text3)' }}>by </span><strong>{c.requestedBy}</strong>
+                              <span style={{ color: 'var(--text3)' }}> · {new Date(c.createdAt).toLocaleString()}</span>
+                            </div>
+                            {payload.reason && <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '2px' }}>Reason: {payload.reason}</div>}
+                            {payload.warning && <div style={{ fontSize: '11px', color: 'var(--orange)', marginTop: '2px', fontWeight: 500 }}>⚠ {payload.warning}</div>}
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                            <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '11px', background: 'var(--green)' }} onClick={() => handleReviewAdjustment(c.id, true)}>Approve</button>
+                            <button style={{ padding: '5px 12px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleReviewAdjustment(c.id, false)}>Reject</button>
+                          </div>
+                        </div>
+                      );
+                    })
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -505,27 +691,35 @@ export default function LeavesPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
                 <tr>
-                  {['Employee', 'CL Avail', 'SL Avail', 'EL Avail', 'RL Avail', 'SH Avail', 'CL Used', 'SL Used', 'EL Used', 'RL Used', 'SH Used'].map(h => (
+                  {['Employee', 'CL Avail', 'SL Avail', 'EL Avail', 'RL Avail', 'SH Avail', 'CL Used', 'SL Used', 'EL Used', 'RL Used', 'SH Used', 'Actions'].map(h => (
                     <th key={h} style={{ background: 'var(--surface2)', padding: '10px 14px', textAlign: 'left', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text2)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {paginatedBalances.map(({ code, name, balance }) => balance && (
-                  <tr key={code} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '11px 14px', fontWeight: 500 }}>{name} <span style={{ color: 'var(--text3)', fontSize: '11px' }}>#{code}</span></td>
-                    {['cl', 'sl', 'el', 'rl', 'sh'].map(t => (
-                      <td key={t} style={{ padding: '11px 14px', color: (balance[`${t}Avail`] ?? 0) <= 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>
-                        {balance[`${t}Avail`] ?? 0}
+                {paginatedBalances.map((entry) => {
+                  const { code, name, balance } = entry;
+                  if (!balance) return null;
+                  return (
+                    <tr key={code} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '11px 14px', fontWeight: 500 }}>{name} <span style={{ color: 'var(--text3)', fontSize: '11px' }}>#{code}</span></td>
+                      {['cl', 'sl', 'el', 'rl', 'sh'].map(t => (
+                        <td key={t} style={{ padding: '11px 14px', color: (balance[`${t}Avail`] ?? 0) <= 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>
+                          {balance[`${t}Avail`] ?? 0}
+                        </td>
+                      ))}
+                      {['cl', 'sl', 'el', 'rl', 'sh'].map(t => (
+                        <td key={t} style={{ padding: '11px 14px', color: 'var(--text2)' }}>
+                          {balance[`${t}Used`] ?? 0}
+                        </td>
+                      ))}
+                      <td style={{ padding: '11px 14px' }}>
+                        <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '11px' }}
+                          onClick={() => openEditBalance(entry)}>Edit</button>
                       </td>
-                    ))}
-                    {['cl', 'sl', 'el', 'rl', 'sh'].map(t => (
-                      <td key={t} style={{ padding: '11px 14px', color: 'var(--text2)' }}>
-                        {balance[`${t}Used`] ?? 0}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+                    </tr>
+                  );
+                })}
               </tbody>
               </table>
             </div>
@@ -699,6 +893,37 @@ export default function LeavesPage() {
               Reject
             </button>
           </div>
+        </Modal>
+      )}
+
+      {/* ── EDIT BALANCE MODAL ── */}
+      {editBalanceTarget && (
+        <Modal open={true} onClose={() => setEditBalanceTarget(null)} title={`Edit Leave Balance — ${editBalanceTarget.name}`} width="440px">
+          <form onSubmit={handleEditBalance}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
+              {['clTotal', 'slTotal', 'elTotal', 'rlTotal', 'shTotal'].map(k => {
+                const labels = { clTotal: 'CL (Casual Leave)', slTotal: 'SL (Sick Leave)', elTotal: 'EL (Earned Leave)', rlTotal: 'RL (Restricted Holiday)', shTotal: 'SH (Short Leave)' };
+                return (
+                  <div key={k}>
+                    <label className="input-label">{labels[k]}</label>
+                    <input className="input-field" type="number" min={0} max={60}
+                      value={editBalanceForm[k]}
+                      onChange={e => setEditBalanceForm(f => ({ ...f, [k]: parseInt(e.target.value) || 0 }))}
+                      style={{ width: '100%', padding: '10px 14px', boxSizing: 'border-box' }} />
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button type="submit" className="btn btn-primary" style={{ flex: 1, padding: '12px', fontSize: '14px', background: 'var(--green)' }}>
+                Save
+              </button>
+              <button type="button" style={{ flex: 1, padding: '12px', fontSize: '14px', borderRadius: '980px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text2)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
+                onClick={() => setEditBalanceTarget(null)}>
+                Cancel
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
     </div>
