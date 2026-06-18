@@ -527,6 +527,14 @@ export async function reviewRegularizationSuper(requestId, superReviewedBy, appr
   return { request: req };
 }
 
+export async function getAllRegularizations() {
+  return prisma.regularizationRequest.findMany({
+    include: { user: { select: { code: true, name: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 200
+  });
+}
+
 function parseTime(t) {
   if (!t) return null;
   const [h, m] = t.split(':').map(Number);

@@ -88,8 +88,8 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
       const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
       dayNames.forEach((d, i) => cells.push(
         <div key={`hdr-${i}`} role="columnheader" style={{
-          textAlign: 'center', fontSize: '9px', fontWeight: 600,
-          color: 'var(--text2)', padding: '2px 0', letterSpacing: '0.03em', textTransform: 'uppercase'
+          textAlign: 'center', fontSize: '12px', fontWeight: 600,
+          color: 'var(--text2)', padding: '4px 0', letterSpacing: '0.03em', textTransform: 'uppercase'
         }}>{d}</div>
       ));
     }
@@ -167,8 +167,8 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
           onMouseEnter={e => { if (isInteractive && !isSelected) e.currentTarget.style.background = 'var(--surface3)'; }}
           onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = bg; }}
         >
-          <span style={{ fontWeight: 700, fontSize: '11px', color: 'var(--text)' }}>{d}</span>
-          <span style={{ fontSize: '8px', fontWeight: 600, color: 'var(--text2)', letterSpacing: '0.01em', display: 'flex', alignItems: 'center', gap: '2px' }}>
+          <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text)' }}>{d}</span>
+          <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text2)', letterSpacing: '0.01em', display: 'flex', alignItems: 'center', gap: '2px' }}>
             {rlDay?.isBirthday ? <FiGift size={8} /> : rlDay && !rlDay.isBirthday ? <FiCheck size={8} /> : null}
             {label}
           </span>
@@ -410,8 +410,8 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', marginBottom: '4px' }}>
           {dayNames.map((d, i) => (
             <div key={`il-hdr-${i}`} style={{
-              textAlign: 'center', fontSize: '9px', fontWeight: 600,
-              color: 'var(--text2)', padding: '2px 0', letterSpacing: '0.03em', textTransform: 'uppercase'
+              textAlign: 'center', fontSize: '12px', fontWeight: 600,
+              color: 'var(--text2)', padding: '4px 0', letterSpacing: '0.03em', textTransform: 'uppercase'
             }}>{d}</div>
           ))}
         </div>

@@ -3,9 +3,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
-import { getAllLeaveRequests } from '../../actions/leave';
+import { getAllLeaveRequests, getAllRegularizations } from '../../actions/leave';
+import { getPendingChangesHistory } from '../../actions/auth';
 import { getAuditLog } from '../../actions/audit';
-import { FiClipboard, FiSun, FiUser, FiCalendar, FiFileText, FiSettings, FiAward, FiRefreshCw, FiFilter } from 'react-icons/fi';
+import { FiClipboard, FiSun, FiUser, FiCalendar, FiFileText, FiSettings, FiAward, FiRefreshCw, FiFilter, FiTool } from 'react-icons/fi';
 
 const LEAVE_LABELS = { cl: 'CL', sl: 'SL', el: 'EL', rl: 'RL', sh: 'SH' };
 const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b' };
@@ -16,10 +17,12 @@ export default function AuditPage() {
   const isSuperAdmin = role === 'super_admin';
   const router = useRouter();
 
-  const [tab, setTab] = useState('leave_history');
+  const [tab, setTab] = useState('activity_history');
 
-  // Leave history
+  // Activity history data
   const [leaveRequests, setLeaveRequests] = useState([]);
+  const [regularizations, setRegularizations] = useState([]);
+  const [pendingChanges, setPendingChanges] = useState([]);
   const [lhLoading, setLhLoading] = useState(true);
 
   // Audit log
@@ -103,10 +106,18 @@ export default function AuditPage() {
     (async () => {
       setLhLoading(true);
       try {
-        const reqs = await getAllLeaveRequests();
+        const [reqs, regs, pcs] = await Promise.all([
+          getAllLeaveRequests(),
+          getAllRegularizations(),
+          getPendingChangesHistory()
+        ]);
         setLeaveRequests(reqs);
+        setRegularizations(regs);
+        setPendingChanges(pcs);
       } catch {
         setLeaveRequests([]);
+        setRegularizations([]);
+        setPendingChanges([]);
       } finally {
         setLhLoading(false);
       }
@@ -115,7 +126,7 @@ export default function AuditPage() {
   }, [isAdmin, isSuperAdmin, fetchAuditLog]);
 
   const tabs = [
-    { key: 'leave_history', label: `Leave History (${leaveRequests.length})` },
+    { key: 'activity_history', label: `Activity History (${leaveRequests.length + regularizations.length + pendingChanges.length})` },
     ...(isSuperAdmin ? [{ key: 'audit_log', label: 'Audit Log' }] : []),
   ];
 
@@ -125,7 +136,7 @@ export default function AuditPage() {
     <div className="page-wrapper animate-fade-in">
       <div style={{ marginBottom: '20px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '-0.04em' }}>Audit</h1>
-        <p style={{ color: 'var(--text2)', fontSize: '14px', marginTop: '4px' }}>Leave request history and system audit log.</p>
+        <p style={{ color: 'var(--text2)', fontSize: '14px', marginTop: '4px' }}>Activity history and system audit log.</p>
       </div>
 
       {/* Tabs */}
@@ -141,44 +152,128 @@ export default function AuditPage() {
         ))}
       </div>
 
-      {/* ── LEAVE HISTORY ── */}
-      {tab === 'leave_history' && (
-        <div className="card overflow-hidden p-0">
-          <div className="card-header">
-            All Leave Requests ({leaveRequests.length})
-          </div>
+      {/* ── ACTIVITY HISTORY ── */}
+      {tab === 'activity_history' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {lhLoading ? (
             <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text2)', fontSize: '14px' }}>Loading…</div>
-          ) : leaveRequests.length === 0 ? (
-            <div className="p-32 text-center">
-              <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.25 }}><FiClipboard size={36} /></div>
-              <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px', color: 'var(--text2)' }}>No leave requests yet</div>
-              <div style={{ fontSize: '13px', color: 'var(--text3)', marginBottom: '16px' }}>Employees can apply for leave from their profile page.</div>
-            </div>
           ) : (
-            <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
-              {leaveRequests.map(r => (
-                <div key={r.id} className="p-16-20 border-bottom flex-between items-start" style={{ gap: '16px' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name || 'Unknown'}</span>
-                      <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user?.code}</span>
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
-                      <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
-                      {r.shiftSlot && <span style={{ fontSize: '11px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
-                      {statusBadge(r.status)}
-                    </div>
-                    <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
-                      {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
-                      {' · '}{r.reason}
-                    </div>
-                    {r.prescriptionFile && <div style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '2px' }}>📎 Prescription attached</div>}
-                    {r.reviewNote && <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '3px', fontStyle: 'italic' }}>Note: {r.reviewNote}</div>}
-                  </div>
+            <>
+              {/* Leave Requests */}
+              <div className="card overflow-hidden p-0">
+                <div className="card-header">
+                  Leave Requests ({leaveRequests.length})
                 </div>
-              ))}
-            </div>
+                {leaveRequests.length === 0 ? (
+                  <div className="p-32 text-center">
+                    <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.25 }}><FiClipboard size={36} /></div>
+                    <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px', color: 'var(--text2)' }}>No leave requests yet</div>
+                  </div>
+                ) : (
+                  <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                    {leaveRequests.map(r => (
+                      <div key={r.id} className="p-14-20 border-bottom flex-between items-start" style={{ gap: '12px' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user?.name || 'Unknown'}</span>
+                            <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user?.code}</span>
+                            <span style={{ fontSize: '11px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
+                            <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
+                            {r.shiftSlot && <span style={{ fontSize: '10px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 6px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
+                            {statusBadge(r.status)}
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                            {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                            {' · '}{r.reason}
+                          </div>
+                          {r.reviewNote && <div style={{ fontSize: '10px', color: 'var(--text3)', marginTop: '2px', fontStyle: 'italic' }}>Note: {r.reviewNote}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Regularizations */}
+              <div className="card overflow-hidden p-0">
+                <div className="card-header">
+                  Regularizations ({regularizations.length})
+                </div>
+                {regularizations.length === 0 ? (
+                  <div className="p-32 text-center">
+                    <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.25, color: 'var(--text3)' }}><FiTool size={36} /></div>
+                    <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px', color: 'var(--text2)' }}>No regularizations yet</div>
+                  </div>
+                ) : (
+                  <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                    {regularizations.map(r => (
+                      <div key={r.id} className="p-14-20 border-bottom flex-between items-start" style={{ gap: '12px' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user?.name || 'Unknown'}</span>
+                            <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user?.code}</span>
+                            <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                            {statusBadge(r.status === 'approved' && r.superStatus === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : 'pending')}
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                            {r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`}
+                            {' · '}{r.reason}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Pending Changes (name changes, adjustments) */}
+              <div className="card overflow-hidden p-0">
+                <div className="card-header">
+                  Pending Changes ({pendingChanges.length})
+                </div>
+                {pendingChanges.length === 0 ? (
+                  <div className="p-32 text-center">
+                    <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.25, color: 'var(--text3)' }}><FiAward size={36} /></div>
+                    <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px', color: 'var(--text2)' }}>No pending changes yet</div>
+                  </div>
+                ) : (
+                  <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                    {pendingChanges.map(c => {
+                      let payload = {};
+                      try { payload = JSON.parse(c.payload); } catch {}
+                      const actionLabels = {
+                        update_employee_name: 'Name Change',
+                        attendance_adjustment: 'Attendance Adjustment',
+                      };
+                      const actionLabel = actionLabels[c.action] || c.action;
+                      return (
+                        <div key={c.id} className="p-14-20 border-bottom" style={{ gap: '12px' }}>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 600, fontSize: '13px' }}>{payload.employeeName || payload.employeeCode || 'Unknown'}</span>
+                            {payload.employeeCode && <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{payload.employeeCode}</span>}
+                            <span style={{ fontSize: '10px', background: 'rgba(90,200,250,0.1)', color: '#5ac8fa', padding: '1px 6px', borderRadius: '980px', fontWeight: 500 }}>{actionLabel}</span>
+                            {statusBadge(c.status)}
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                            <span style={{ color: 'var(--text3)' }}>by </span>{c.requestedBy}
+                            <span style={{ color: 'var(--text3)' }}> · {new Date(c.createdAt).toLocaleString()}</span>
+                          </div>
+                          {payload.reason && <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '2px' }}>Reason: {payload.reason}</div>}
+                          {payload.warning && <div style={{ fontSize: '11px', color: 'var(--orange)', marginTop: '2px', fontWeight: 500 }}>⚠ {payload.warning}</div>}
+                          {payload.currentType && payload.newType && (
+                            <div style={{ fontSize: '11px', color: 'var(--text2)' }}>{payload.currentType} → {payload.newType}</div>
+                          )}
+                          {payload.day && payload.monthYear && (
+                            <div style={{ fontSize: '11px', color: 'var(--text2)' }}>Day {payload.day} · {payload.monthYear}</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
       )}

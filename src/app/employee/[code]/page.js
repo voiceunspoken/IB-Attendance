@@ -168,6 +168,10 @@ export default function AttendancePage({ params }) {
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ marginBottom: '8px', padding: '0' }}>
+        <h1 style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text)' }}>{emp.name}</h1>
+        <div style={{ fontSize: '13px', color: 'var(--text2)', marginTop: '2px' }}>#{emp.code}</div>
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <button onClick={() => setSelectedMonthIndex(Math.max(0, selectedMonthIndex - 1))}

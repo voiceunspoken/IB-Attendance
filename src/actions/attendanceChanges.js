@@ -30,7 +30,7 @@ export async function requestAdjustment(employeeCode, monthYear, day, currentTyp
     }
   }
 
-  const payload = JSON.stringify({ employeeCode, monthYear, day, currentType, newType, reason, warning });
+  const payload = JSON.stringify({ employeeCode, employeeName: user.name, monthYear, day, currentType, newType, reason, warning });
 
   const change = await prisma.pendingChange.create({
     data: {

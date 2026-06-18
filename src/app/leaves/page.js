@@ -449,7 +449,8 @@ export default function LeavesPage() {
                         <div key={c.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
                           <div>
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
-                              <span style={{ fontWeight: 600, fontSize: '13px' }}>{payload.employeeCode}</span>
+                              <span style={{ fontWeight: 600, fontSize: '13px' }}>{payload.employeeName || payload.employeeCode}</span>
+                              {payload.employeeCode && <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{payload.employeeCode}</span>}
                               <span style={{ fontSize: '11px', color: 'var(--text2)' }}>Day {payload.day} · {payload.monthYear}</span>
                               <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{payload.currentType} → {payload.newType}</span>
                             </div>
