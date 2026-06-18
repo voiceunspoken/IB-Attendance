@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
 import UploadSection from '../../components/UploadSection';
-import KPIStrip from '../../components/KPIStrip';
 import EmployeeTable from '../../components/EmployeeTable';
 import * as XLSX from 'xlsx';
 import { parseAndAnalyze } from '../../utils/attendanceParser';
@@ -12,7 +11,7 @@ import { getMonths, uploadMonthData, fetchDashboardData } from '../../actions/at
 import { getActiveShiftPolicy } from '../../actions/shiftPolicy';
 import { getHolidays } from '../../actions/holidays';
 import { getDepartments } from '../../actions/departments';
-import { FiSearch, FiDownload, FiUpload, FiChevronDown, FiUsers, FiAlertCircle, FiClock, FiZap, FiHome, FiMonitor, FiAlertTriangle, FiClipboard, FiX, FiCheck } from 'react-icons/fi';
+import { FiSearch, FiDownload, FiUpload, FiChevronDown, FiX, FiCheck } from 'react-icons/fi';
 import { useToast } from '../../components/Toast';
 
 export default function AttendancePage() {
@@ -232,25 +231,6 @@ export default function AttendancePage() {
     a.click();
   };
 
-  const totalPunchMissing = allResults.reduce((s, r) => s + r.punchMissing, 0);
-
-  const kpis = () => {
-    if (!allResults.length) return [];
-    const totalWFM = Object.values(overrides).filter(v => v === 'wfm').length;
-    const totalWFMHD = Object.values(overrides).filter(v => v === 'wfm-hd').length;
-    const totalWFH = Object.values(overrides).filter(v => v === 'wfh').length;
-    return [
-      { label: 'Employees', value: allResults.length, sub: 'Analyzed this month', color: '#0071e3', icon: <FiUsers size={18} /> },
-      { label: 'Absences', value: allResults.reduce((s, x) => s + x.absent, 0), sub: 'Working days missed', color: '#ff3b30', icon: <FiAlertCircle size={18} /> },
-      { label: 'Late Marks', value: allResults.reduce((s, x) => s + x.late, 0), sub: 'After 10:15 AM', color: '#ff9f0a', icon: <FiClock size={18} /> },
-      { label: 'Short Shifts', value: allResults.reduce((s, x) => s + x.shortShift, 0), sub: 'Under 9 hrs', color: '#ff6b35', icon: <FiZap size={18} /> },
-      { label: 'WFM Days', value: totalWFM + totalWFMHD, sub: `Full: ${totalWFM} · Half: ${totalWFMHD}`, color: '#34c759', icon: <FiMonitor size={18} /> },
-      { label: 'WFH Days', value: totalWFH, sub: 'Work from home', color: '#af52de', icon: <FiHome size={18} /> },
-      { label: 'Missed Punches', value: totalPunchMissing, sub: 'Present days w/o punch', color: '#ff6b35', icon: <FiAlertTriangle size={18} />, onClick: () => setCurrentFilter('punchmissing') },
-      { label: 'HD Deductions', value: allResults.reduce((s, x) => s + x.lateHD + x.ssHD, 0), sub: 'Late + short shifts', color: '#ff3b30', icon: <FiClipboard size={18} /> },
-    ];
-  };
-
   const formatMonth = (m) => {
     const [month, year] = m.split('_');
     return new Date(year, parseInt(month) - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
@@ -374,8 +354,6 @@ export default function AttendancePage() {
               {isAdmin && <button className="btn btn-primary" onClick={() => setUploadView(true)}><FiUpload size={14} /> Upload New</button>}
             </div>
           </div>
-
-          <KPIStrip kpis={kpis()} />
 
           <div className="card" style={{ padding: '16px 20px', marginBottom: 'var(--gap)' }}>
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '10px' }}>

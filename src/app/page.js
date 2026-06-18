@@ -1,16 +1,15 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../components/AuthProvider';
-import KPIStrip from '../components/KPIStrip';
 import { getAllEmployees, getMonths, fetchDashboardData } from '../actions/attendance';
 import { getUpcomingHolidays } from '../actions/holidays';
 import { getDepartments } from '../actions/departments';
 import { getPendingPolicies } from '../actions/shiftPolicy';
 import { getPendingAttendanceCorrections } from '../actions/attendanceChanges';
 import { getPendingSuperRegularizations, getAllLeaveRequests } from '../actions/leave';
-import { FiUsers, FiCalendar, FiClipboard, FiActivity, FiAlertTriangle, FiClock, FiHome, FiMonitor, FiAlertCircle, FiZap, FiArrowRight, FiGift } from 'react-icons/fi';
+import { FiUsers, FiCalendar, FiClipboard, FiActivity, FiAlertTriangle, FiArrowRight } from 'react-icons/fi';
 
 export default function DashboardHome() {
   const { isAuthenticated, isAdmin, isSuperAdmin, user, loading: authLoading } = useAuth();
@@ -94,27 +93,6 @@ export default function DashboardHome() {
     }
   }, [isAuthenticated, isAdmin, user, authLoading, router]);
 
-  const kpis = useMemo(() => {
-    if (!monthData || !monthData.length) return [];
-    const allResults = monthData;
-    const overrides = {};
-    allResults.forEach(r => { Object.assign(overrides, r.overrides); });
-    const totalWFM = Object.values(overrides).filter(v => v === 'wfm').length;
-    const totalWFMHD = Object.values(overrides).filter(v => v === 'wfm-hd').length;
-    const totalWFH = Object.values(overrides).filter(v => v === 'wfh').length;
-    const totalPunchMissing = allResults.reduce((s, r) => s + (r.punchMissing || 0), 0);
-    return [
-      { label: 'Employees', value: allResults.length, sub: 'Analyzed this month', color: '#0071e3', icon: <FiUsers size={18} /> },
-      { label: 'Absences', value: allResults.reduce((s, x) => s + (x.absent || 0), 0), sub: 'Working days missed', color: '#ff3b30', icon: <FiAlertCircle size={18} /> },
-      { label: 'Late Marks', value: allResults.reduce((s, x) => s + (x.late || 0), 0), sub: 'After 10:15 AM', color: '#ff9f0a', icon: <FiClock size={18} /> },
-      { label: 'Short Shifts', value: allResults.reduce((s, x) => s + (x.shortShift || 0), 0), sub: 'Under 9 hrs', color: '#ff6b35', icon: <FiZap size={18} /> },
-      { label: 'WFM Days', value: totalWFM + totalWFMHD, sub: `Full: ${totalWFM} · Half: ${totalWFMHD}`, color: '#34c759', icon: <FiMonitor size={18} /> },
-      { label: 'WFH Days', value: totalWFH, sub: 'Work from home', color: '#af52de', icon: <FiHome size={18} /> },
-      { label: 'Missed Punches', value: totalPunchMissing, sub: 'Present days w/o punch', color: '#ff6b35', icon: <FiAlertTriangle size={18} /> },
-      { label: 'HD Deductions', value: allResults.reduce((s, x) => s + (x.lateHD || 0) + (x.ssHD || 0), 0), sub: 'Late + short shifts', color: '#ff3b30', icon: <FiClipboard size={18} /> },
-    ];
-  }, [monthData]);
-
   const activeEmployees = employees.filter(e => !e.disabled).length;
   const deptCount = departments.length;
   const attendanceRate = monthData && monthData.length
@@ -124,22 +102,6 @@ export default function DashboardHome() {
         return totalDays > 0 ? ((totalPresent / totalDays) * 100).toFixed(1) : '—';
       })()
     : '—';
-  const upcomingBirthdays = useMemo(() => {
-    const today = new Date();
-    const thisYear = today.getFullYear();
-    return employees
-      .filter(e => e.birthday && !e.disabled)
-      .map(e => {
-        const bd = new Date(e.birthday);
-        const thisYearBd = new Date(thisYear, bd.getMonth(), bd.getDate());
-        if (thisYearBd < today) thisYearBd.setFullYear(thisYear + 1);
-        return { name: e.name, date: thisYearBd, daysAway: Math.ceil((thisYearBd - today) / (1000 * 60 * 60 * 24)) };
-      })
-      .filter(e => e.daysAway <= 30)
-      .sort((a, b) => a.daysAway - b.daysAway)
-      .slice(0, 5);
-  }, [employees]);
-
   const totalPending = pendingCounts.policies + pendingCounts.corrections + pendingCounts.regularizations;
   const hasNoMonths = months.length === 0;
   const headerMonth = months[0];
@@ -189,42 +151,8 @@ export default function DashboardHome() {
                 <div className="skeleton" style={{ width: '70%', height: '12px', borderRadius: '4px' }} />
               </div>
             ))}
-            </div>
-
-            {/* ── Upcoming Birthdays (loading skeleton) ── */}
-            <div style={{ marginTop: '12px' }}>
-              <div className="text-base text-bold mb-12">Upcoming Birthdays</div>
-              <div className="card card-body-sm">
-                {upcomingBirthdays.length === 0 ? (
-                  <div className="text-sm text-muted2 text-center" style={{ padding: '12px 0' }}>No birthdays in the next 30 days</div>
-                ) : (
-                  <div className="flex-col gap-8">
-                    {upcomingBirthdays.map((b, i) => (
-                      <div key={b.name} className="flex items-center gap-12" style={{
-                        paddingBottom: i < upcomingBirthdays.length - 1 ? '8px' : 0,
-                        borderBottom: i < upcomingBirthdays.length - 1 ? '1px solid var(--border)' : 'none',
-                      }}>
-                        <div className="flex-col items-center grid-center flex-shrink-0" style={{
-                          width: '40px', height: '40px', borderRadius: '10px',
-                          background: 'rgba(255,159,10,0.08)',
-                        }}>
-                          <span className="text-xs text-semibold text-muted" style={{ lineHeight: 1 }}>{b.date.toLocaleString('en', { month: 'short' })}</span>
-                          <span style={{ fontSize: '16px', fontWeight: 700, lineHeight: 1.2 }}>{b.date.getDate()}</span>
-                        </div>
-                        <div>
-                          <div className="text-sm text-semibold">{b.name}</div>
-                          <div className="text-xs text-muted2">{b.daysAway === 0 ? 'Today!' : `${b.daysAway} day${b.daysAway !== 1 ? 's' : ''} away`}</div>
-                        </div>
-                        <div style={{ marginLeft: 'auto', color: 'rgba(255,159,10,0.5)' }}>
-                          <FiGift size={16} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
+        </div>
       ) : (
         <>
 
@@ -320,13 +248,6 @@ export default function DashboardHome() {
             </div>
           )}
 
-          {/* ── Monthly KPI Strip ── */}
-          {kpis.length > 0 && (
-            <div style={{ marginBottom: 'var(--gap)' }}>
-              <KPIStrip kpis={kpis} />
-            </div>
-          )}
-
           {/* ── Quick Access + Upcoming Holidays ── */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 'var(--gap)', alignItems: 'start' }}>
             <div>
@@ -400,39 +321,6 @@ export default function DashboardHome() {
                 </div>
               </div>
 
-              {/* ── Upcoming Birthdays ── */}
-              <div>
-                <div className="text-base text-bold mb-12">Upcoming Birthdays</div>
-                <div className="card card-body-sm">
-                  {upcomingBirthdays.length === 0 ? (
-                    <div className="text-sm text-muted2 text-center" style={{ padding: '12px 0' }}>No birthdays in the next 30 days</div>
-                  ) : (
-                    <div className="flex-col gap-8">
-                      {upcomingBirthdays.map((b, i) => (
-                        <div key={b.name} className="flex items-center gap-12" style={{
-                          paddingBottom: i < upcomingBirthdays.length - 1 ? '8px' : 0,
-                          borderBottom: i < upcomingBirthdays.length - 1 ? '1px solid var(--border)' : 'none',
-                        }}>
-                          <div className="flex-col items-center grid-center flex-shrink-0" style={{
-                            width: '40px', height: '40px', borderRadius: '10px',
-                            background: 'rgba(255,159,10,0.08)',
-                          }}>
-                            <span className="text-xs text-semibold text-muted" style={{ lineHeight: 1 }}>{b.date.toLocaleString('en', { month: 'short' })}</span>
-                            <span style={{ fontSize: '16px', fontWeight: 700, lineHeight: 1.2 }}>{b.date.getDate()}</span>
-                          </div>
-                          <div>
-                            <div className="text-sm text-semibold">{b.name}</div>
-                            <div className="text-xs text-muted2">{b.daysAway === 0 ? 'Today!' : `${b.daysAway} day${b.daysAway !== 1 ? 's' : ''} away`}</div>
-                          </div>
-                          <div style={{ marginLeft: 'auto', color: 'rgba(255,159,10,0.5)' }}>
-                            <FiGift size={16} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
           </div>
 
