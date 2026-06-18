@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from '../lib/prisma';
+import { requireAdmin } from '../lib/auth-guard';
 import { revalidatePath } from 'next/cache';
 import sharp from 'sharp';
 import fs from 'fs';
@@ -21,7 +22,14 @@ export async function getEmployeeDetails(code) {
   });
 }
 
-export async function updateEmployeeDetails(code, fields) {
+export async function updateEmployeeDetails(code, fields, performedBy) {
+  const sensitiveFields = ['employeeType', 'departmentId', 'subDepartmentId', 'designationId'];
+  const hasSensitiveChanges = sensitiveFields.some(f => fields[f] !== undefined);
+  if (hasSensitiveChanges) {
+    const auth = await requireAdmin(performedBy);
+    if (auth) return auth;
+  }
+
   const data = {};
   if (fields.name !== undefined) data.name = fields.name;
   if (fields.birthday !== undefined) data.birthday = fields.birthday ? new Date(fields.birthday) : null;

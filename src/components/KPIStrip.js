@@ -8,7 +8,6 @@ export default function KPIStrip({ kpis }) {
       className="kpi-grid"
       style={{
         display: 'grid',
-        gridTemplateColumns: `repeat(${kpis.length}, 1fr)`,
         gap: 'var(--gap)',
         marginBottom: 'calc(var(--gap) * 1.5)',
       }}

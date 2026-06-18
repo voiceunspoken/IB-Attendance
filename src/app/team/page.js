@@ -304,7 +304,7 @@ export default function TeamPage() {
   const handleEditEmployee = async (e) => {
     e.preventDefault();
     if (!editEmp) return;
-    const result = await updateEmployeeDetails(editEmp.code, editEmpForm);
+    const result = await updateEmployeeDetails(editEmp.code, editEmpForm, user?.username);
     if (result.error) return setEditEmpMsg(result.error);
     await setEmployeeManagers(editEmp.code, editEmpManagers, user.username);
     setEditEmpMsg('Saved successfully.');

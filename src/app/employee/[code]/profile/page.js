@@ -35,7 +35,7 @@ export default function ProfilePage({ params }) {
 
   const handleSaveBirthday = async () => {
     setSavingBirthday(true);
-    const result = await updateEmployeeDetails(code, { birthday: profileBirthday || null });
+    const result = await updateEmployeeDetails(code, { birthday: profileBirthday || null }, user?.username);
     setSavingBirthday(false);
     if (result.error) return toast.error(result.error);
     toast.success('Birthday saved.');

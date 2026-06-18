@@ -326,7 +326,7 @@ export default function AttendancePage() {
 
       {loading && !uploading && !uploadView && (
         <div className="animate-fade-in">
-          <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 'var(--gap)', marginBottom: 'calc(var(--gap) * 1.5)' }}>
+          <div className="kpi-grid" style={{ display: 'grid', gap: 'var(--gap)', marginBottom: 'calc(var(--gap) * 1.5)' }}>
             {[...Array(8)].map((_, i) => (
               <div key={i} className="card" style={{ padding: '22px' }}>
                 <div className="skeleton" style={{ width: '36px', height: '36px', borderRadius: '10px', marginBottom: '12px' }} />

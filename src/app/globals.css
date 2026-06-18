@@ -324,9 +324,19 @@ body {
 }
 
 /* ── RESPONSIVE ── */
-@media (max-width: 1024px) {
+@media (max-width: 1100px) {
   .kpi-grid {
-    grid-template-columns: repeat(4, 1fr) !important;
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (max-width: 768px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 480px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -505,10 +515,6 @@ body {
 }
 
 @media (max-width: 480px) {
-  .kpi-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-  }
-
   .auth-card {
     padding: 24px 16px;
   }
