@@ -15,7 +15,8 @@ import { FiSearch, FiDownload, FiUpload, FiChevronDown, FiX, FiCheck } from 'rea
 import { useToast } from '../../components/Toast';
 
 export default function AttendancePage() {
-  const { isAuthenticated, isAdmin, user, loading: authLoading } = useAuth();
+  const { role, isAuthenticated, user, loading: authLoading } = useAuth();
+  const isAdmin = role === 'admin' || role === 'super_admin';
   const router = useRouter();
   const toast = useToast();
 

@@ -12,7 +12,9 @@ import { getPendingSuperRegularizations, getAllLeaveRequests } from '../actions/
 import { FiUsers, FiCalendar, FiClipboard, FiActivity, FiAlertTriangle, FiArrowRight } from 'react-icons/fi';
 
 export default function DashboardHome() {
-  const { isAuthenticated, isAdmin, isSuperAdmin, user, loading: authLoading } = useAuth();
+  const { role, isAuthenticated, user, loading: authLoading } = useAuth();
+  const isAdmin = role === 'admin' || role === 'super_admin';
+  const isSuperAdmin = role === 'super_admin';
   const router = useRouter();
 
   const [employees, setEmployees] = useState([]);

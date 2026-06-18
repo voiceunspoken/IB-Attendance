@@ -15,7 +15,8 @@ export default function AttendancePage({ params }) {
   const unwrappedParams = use(params);
   const code = unwrappedParams.code;
 
-  const { isAuthenticated, isAdmin, user, loading: authLoading } = useAuth();
+  const { role, isAuthenticated, user, loading: authLoading } = useAuth();
+  const isAdmin = role === 'admin' || role === 'super_admin';
   const { emp, rlHolidays, setEmp } = useEmployeeData();
   const router = useRouter();
   const toast = useToast();

@@ -59,7 +59,9 @@ function SearchBar({ value, onChange, placeholder, count }) {
 }
 
 export default function TeamPage() {
-  const { isAdmin, isSuperAdmin, isAuthenticated, user, loading: authLoading } = useAuth();
+  const { role, isAuthenticated, user, loading: authLoading } = useAuth();
+  const isAdmin = role === 'admin' || role === 'super_admin';
+  const isSuperAdmin = role === 'super_admin';
   const router = useRouter();
   const toast = useToast();
 

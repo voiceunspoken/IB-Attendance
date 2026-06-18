@@ -10,7 +10,8 @@ export default function RegularizePage({ params }) {
   const unwrappedParams = use(params);
   const code = unwrappedParams.code;
 
-  const { isAuthenticated, isAdmin, user, loading: authLoading } = useAuth();
+  const { role, isAuthenticated, user, loading: authLoading } = useAuth();
+  const isAdmin = role === 'admin' || role === 'super_admin';
   const { emp, triggerRefetch } = useEmployeeData();
   const router = useRouter();
 

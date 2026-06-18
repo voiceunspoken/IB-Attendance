@@ -18,7 +18,6 @@ export default function AppShell({ children }) {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Close sidebar on navigation
   useEffect(() => {
     if (!sidebarOpen) return;
     const id = setTimeout(() => setSidebarOpen(false), 0);
@@ -27,13 +26,17 @@ export default function AppShell({ children }) {
 
   const isLoginPage = pathname === '/login';
 
-  // Login page: no sidebar, full width
   if (isLoginPage) {
-    return <main style={{ minHeight: '100vh' }}>{children}</main>;
+    return <main style={{ minHeight: '100dvh' }}>{children}</main>;
   }
 
   return (
-    <div style={{ display: 'flex', height: '100%', position: 'relative' }}>
+    <div style={{
+      display: 'flex',
+      height: '100dvh',
+      overflow: 'hidden',
+      position: 'relative',
+    }}>
       {isAuthenticated && (
         <Sidebar
           open={sidebarOpen}
@@ -42,7 +45,6 @@ export default function AppShell({ children }) {
         />
       )}
 
-      {/* Hamburger button — mobile only, visible when sidebar is closed */}
       {isAuthenticated && isMobile && !sidebarOpen && (
         <button
           onClick={() => setSidebarOpen(true)}
@@ -58,9 +60,11 @@ export default function AppShell({ children }) {
         >☰</button>
       )}
 
-      {/* Main content area — add padding on mobile for hamburger */}
       <main style={{
-        flex: 1, minWidth: 0, minHeight: 0,
+        flex: 1,
+        minWidth: 0,
+        overflowY: 'auto',
+        overflowX: 'hidden',
         paddingTop: isAuthenticated && isMobile && !sidebarOpen ? '56px' : '0',
         transition: 'padding-top 0.2s ease',
       }}>

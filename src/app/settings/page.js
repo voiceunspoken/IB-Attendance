@@ -20,7 +20,9 @@ import { FiSun, FiClock, FiPlus, FiUser, FiCalendar, FiFileText, FiSettings, FiA
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 export default function SettingsPage() {
-  const { isAdmin, isSuperAdmin, isAuthenticated, user, loading: authLoading } = useAuth();
+  const { role, isAuthenticated, user, loading: authLoading } = useAuth();
+  const isAdmin = role === 'admin' || role === 'super_admin';
+  const isSuperAdmin = role === 'super_admin';
   const router = useRouter();
   const [tab, setTab] = useState('holidays');
 

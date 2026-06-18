@@ -6,27 +6,53 @@ import { useState, useEffect } from 'react';
 import { FiCalendar, FiFileText, FiTool, FiUser, FiHome, FiUsers, FiSettings } from 'react-icons/fi';
 import { checkIsManager } from '../actions/manager';
 
-const EMPLOYEE_LINKS = [
-  { label: 'Attendance', icon: <FiCalendar size={14} />, path: (code) => `/employee/${code}` },
-  { label: 'Leave Requests', icon: <FiFileText size={14} />, path: (code) => `/employee/${code}/leaves` },
-  { label: 'Regularization', icon: <FiTool size={14} />, path: (code) => `/employee/${code}/regularize` },
-  { label: 'Profile', icon: <FiUser size={14} />, path: (code) => `/employee/${code}/profile` },
-];
+const NAV_CONFIG = {
+  super_admin: [
+    { section: 'Super Admin', links: [
+      { label: 'Dashboard', icon: <FiHome size={14} />, path: '/' },
+      { label: 'Attendance', icon: <FiCalendar size={14} />, path: '/attendance' },
+      { label: 'Team', icon: <FiUsers size={14} />, path: '/team' },
+      { label: 'Leaves', icon: <FiFileText size={14} />, path: '/leaves' },
+      { label: 'Settings', icon: <FiSettings size={14} />, path: '/settings' },
+    ]},
+  ],
 
-const ADMIN_LINKS = [
-  { label: 'Dashboard', icon: <FiHome size={14} />, path: '/' },
-  { label: 'Attendance', icon: <FiCalendar size={14} />, path: '/attendance' },
-  { label: 'Team', icon: <FiUsers size={14} />, path: '/team' },
-  { label: 'Leaves', icon: <FiFileText size={14} />, path: '/leaves' },
-  { label: 'Settings', icon: <FiSettings size={14} />, path: '/settings' },
-];
+  admin: [
+    { section: 'Admin', links: [
+      { label: 'Dashboard', icon: <FiHome size={14} />, path: '/' },
+      { label: 'Attendance', icon: <FiCalendar size={14} />, path: '/attendance' },
+      { label: 'Team', icon: <FiUsers size={14} />, path: '/team' },
+      { label: 'Leaves', icon: <FiFileText size={14} />, path: '/leaves' },
+      { label: 'Settings', icon: <FiSettings size={14} />, path: '/settings' },
+    ]},
+    { section: 'Employee', links: [
+      { label: 'Attendance', icon: <FiCalendar size={14} />, path: (code) => `/employee/${code}` },
+      { label: 'Leave Requests', icon: <FiFileText size={14} />, path: (code) => `/employee/${code}/leaves` },
+      { label: 'Regularization', icon: <FiTool size={14} />, path: (code) => `/employee/${code}/regularize` },
+      { label: 'Profile', icon: <FiUser size={14} />, path: (code) => `/employee/${code}/profile` },
+    ]},
+  ],
+
+  employee: [
+    { section: 'Employee', links: [
+      { label: 'Attendance', icon: <FiCalendar size={14} />, path: (code) => `/employee/${code}` },
+      { label: 'Leave Requests', icon: <FiFileText size={14} />, path: (code) => `/employee/${code}/leaves` },
+      { label: 'Regularization', icon: <FiTool size={14} />, path: (code) => `/employee/${code}/regularize` },
+      { label: 'Profile', icon: <FiUser size={14} />, path: (code) => `/employee/${code}/profile` },
+    ]},
+  ],
+};
 
 function NavLink({ link, pathname, router, isMobile, onClose }) {
-  const active = pathname === link.path;
+  const resolvedPath = typeof link.path === 'function' ? link.path('') : link.path;
+  const active = pathname === resolvedPath;
+
   return (
     <button
-      key={link.path}
-      onClick={() => { router.push(link.path); if (isMobile && onClose) onClose(); }}
+      onClick={() => {
+        router.push(resolvedPath);
+        if (isMobile && onClose) onClose();
+      }}
       style={{
         padding: '10px 14px',
         borderRadius: '10px',
@@ -53,23 +79,48 @@ function NavLink({ link, pathname, router, isMobile, onClose }) {
   );
 }
 
+function NavSection({ section, userCode, pathname, router, isMobile, onClose }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+      <div style={{
+        fontSize: '9px', color: 'var(--text3)', fontWeight: 700, marginBottom: '6px',
+        letterSpacing: '0.06em', textTransform: 'uppercase', paddingLeft: '14px',
+      }}>
+        {section.section}
+      </div>
+      {section.links.map(link => {
+        const resolvedPath = typeof link.path === 'function' ? link.path(userCode) : link.path;
+        return (
+          <NavLink
+            key={resolvedPath}
+            link={{ ...link, path: resolvedPath }}
+            pathname={pathname}
+            router={router}
+            isMobile={isMobile}
+            onClose={onClose}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Sidebar({ open, onClose, isMobile }) {
-  const { user, isAdmin, isSuperAdmin, logout } = useAuth();
+  const { user, role, logout } = useAuth();
   const [isManager, setIsManager] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
-  const isPureEmployee = !isAdmin && !isManager && !!user?.code;
-  const showEmployeeSection = (isAdmin || isPureEmployee) && !!user?.code;
-
   useEffect(() => {
-    if (!user?.code || isAdmin) return;
+    if (!user?.code || role === 'admin' || role === 'super_admin') return;
     checkIsManager(user.code).then(setIsManager);
-  }, [user?.code, isAdmin]);
+  }, [user?.code, role]);
 
-  const roleLabel = isSuperAdmin ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'Employee';
-  const roleColor = isSuperAdmin ? '#ff3b30' : user?.role === 'admin' ? 'var(--blue)' : '#34c759';
-  const roleBg = isSuperAdmin ? 'rgba(255,59,48,0.1)' : user?.role === 'admin' ? 'rgba(0,113,227,0.1)' : 'rgba(52,199,89,0.1)';
+  const roleLabel = role === 'super_admin' ? 'Super Admin' : role === 'admin' ? 'Admin' : role === 'employee' ? 'Employee' : '';
+  const roleColor = role === 'super_admin' ? '#ff3b30' : role === 'admin' ? 'var(--blue)' : '#34c759';
+  const roleBg = role === 'super_admin' ? 'rgba(255,59,48,0.1)' : role === 'admin' ? 'rgba(0,113,227,0.1)' : 'rgba(52,199,89,0.1)';
+
+  const navSections = NAV_CONFIG[role] || [];
 
   const desktopOpen = !isMobile;
   const visible = desktopOpen || open;
@@ -94,18 +145,17 @@ export default function Sidebar({ open, onClose, isMobile }) {
         borderRight: '1px solid var(--border)',
         display: 'flex',
         flexDirection: 'column',
-        minHeight: '100vh',
-        height: '100vh',
-        position: isMobile ? 'fixed' : 'sticky',
+        height: '100%',
+        overflowY: 'auto',
+        position: isMobile ? 'fixed' : 'relative',
         top: 0,
         left: 0,
         zIndex: isMobile ? 310 : 1,
-        overflowY: 'auto',
         transform: isMobile ? (open ? 'translateX(0)' : 'translateX(-100%)') : 'none',
         transition: 'transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
         visibility: visible ? 'visible' : 'hidden',
       }}>
-        {/* Logo */}
+        {/* ── Logo ── */}
         <div
           onClick={() => { router.push('/'); if (onClose) onClose(); }}
           style={{
@@ -126,93 +176,44 @@ export default function Sidebar({ open, onClose, isMobile }) {
           </div>
         </div>
 
-        {/* ── ADMIN SECTION ── */}
-        {isAdmin && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '12px 12px', flex: 1, minHeight: 0 }}>
-            <div style={{ fontSize: '9px', color: 'var(--text3)', fontWeight: 700, marginBottom: '6px', letterSpacing: '0.06em', textTransform: 'uppercase', paddingLeft: '14px' }}>
-              Admin
-            </div>
-            {ADMIN_LINKS.map(link => (
-              <NavLink key={link.path} link={link} pathname={pathname} router={router} isMobile={isMobile} onClose={onClose} />
-            ))}
-          </div>
-        )}
+        {/* ── Nav sections (data-driven per role) ── */}
+        <nav style={{
+          display: 'flex', flexDirection: 'column', gap: '20px',
+          padding: '12px 12px', flex: 1,
+        }}>
+          {navSections.map(section => (
+            <NavSection
+              key={section.section}
+              section={section}
+              userCode={user?.code}
+              pathname={pathname}
+              router={router}
+              isMobile={isMobile}
+              onClose={onClose}
+            />
+          ))}
+        </nav>
 
-        {/* ── EMPLOYEE SECTION ── */}
-        {showEmployeeSection && (
-          <div style={{
-            display: 'flex', flexDirection: 'column', gap: '2px', padding: '8px 12px',
-            borderTop: isAdmin ? '1px solid var(--border)' : 'none',
-            flex: isAdmin ? '0 0 auto' : 1,
-          }}>
-            {/* Section label */}
-            <div style={{ fontSize: '9px', color: 'var(--text3)', fontWeight: 700, marginBottom: '6px', letterSpacing: '0.06em', textTransform: 'uppercase', paddingLeft: '14px', marginTop: isAdmin ? '4px' : '0' }}>
-              Employee
-            </div>
-
-            {/* Employee info card */}
+        {/* ── Manager links (non-admin managers only) ── */}
+        {role === 'employee' && isManager && (
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '8px 12px', borderTop: '1px solid var(--border)' }}>
             <div style={{
-              display: 'flex', alignItems: 'center', gap: '8px',
-              padding: '8px 10px', background: 'var(--surface2)',
-              borderRadius: '10px', marginBottom: '4px', marginLeft: '0', marginRight: '0',
+              fontSize: '9px', color: 'var(--text3)', fontWeight: 700, marginBottom: '6px',
+              letterSpacing: '0.06em', textTransform: 'uppercase', paddingLeft: '14px',
             }}>
-              <div style={{
-                width: '28px', height: '28px', borderRadius: '50%',
-                background: roleBg, display: 'grid', placeItems: 'center',
-                fontSize: '12px', fontWeight: 700, color: roleColor, flexShrink: 0,
-              }}>
-                {user?.username?.charAt(0).toUpperCase()}
-              </div>
-              <div style={{ lineHeight: 1.2, minWidth: 0 }}>
-                <div style={{
-                  fontSize: 'var(--fs-sm)', fontWeight: 600,
-                  color: 'var(--text)', letterSpacing: '-0.01em',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
-                  {user?.username}
-                </div>
-                <div style={{ fontSize: '10px', color: 'var(--text2)', fontFamily: 'monospace' }}>
-                  #{user?.code}
-                </div>
-              </div>
+              Manager
             </div>
-
-            {/* Employee nav links */}
-            {EMPLOYEE_LINKS.map(link => (
-              <NavLink key={link.path(user?.code)} link={{ ...link, path: link.path(user?.code) }} pathname={pathname} router={router} isMobile={isMobile} onClose={onClose} />
-            ))}
-          </div>
-        )}
-
-        {/* ── MANAGER LINKS ── */}
-        {!isAdmin && isManager && (
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '12px 12px', flex: 1 }}>
             {[
-              { label: 'Dashboard', path: '/' },
-              { label: 'My Team', path: '/team/manage' },
-              { label: 'Leaves', path: '/leaves' },
+              { label: 'Dashboard', icon: <FiHome size={14} />, path: '/' },
+              { label: 'My Team', icon: <FiUsers size={14} />, path: '/team/manage' },
+              { label: 'Leaves', icon: <FiFileText size={14} />, path: '/leaves' },
             ].map(link => (
               <NavLink key={link.path} link={link} pathname={pathname} router={router} isMobile={isMobile} onClose={onClose} />
             ))}
           </nav>
         )}
 
-        {/* Close button — mobile only */}
-        {isMobile && (
-          <button
-            onClick={onClose}
-            style={{
-              padding: '10px 14px', margin: '0 12px',
-              borderRadius: '10px', border: '1px solid var(--border)',
-              background: 'var(--surface2)', color: 'var(--text2)',
-              cursor: 'pointer', fontFamily: 'inherit',
-              fontSize: 'var(--fs-sm)', fontWeight: 500,
-              textAlign: 'center', width: 'calc(100% - 24px)',
-            }}
-          >✕ Close</button>
-        )}
-
-        {/* User pill + Sign Out */}
+        {/* ── User pill + Sign Out ── */}
         <div style={{
           borderTop: '1px solid var(--border)', padding: '16px 16px 20px',
           display: 'flex', flexDirection: 'column', gap: '10px', flexShrink: 0,
