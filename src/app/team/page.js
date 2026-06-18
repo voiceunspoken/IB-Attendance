@@ -442,7 +442,7 @@ export default function TeamPage() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '4px', background: 'var(--surface3)', borderRadius: '10px', padding: '3px', marginBottom: '24px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '4px', background: 'var(--surface3)', borderRadius: '10px', padding: '3px', marginBottom: '24px', flexWrap: 'wrap', width: 'fit-content' }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             padding: '6px 16px', borderRadius: '7px', fontSize: '13px', fontWeight: 500,

@@ -87,8 +87,8 @@ export default function EmployeeTable({ results, onOpenDetail, currentPage, setC
   };
 
   return (
-    <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
-      <div style={{ overflowX: 'auto', maxHeight: '540px', overflowY: 'auto' }}>
+    <div className="card" style={{ overflow: 'hidden', padding: 0, borderRadius: 'inherit' }}>
+      <div style={{ overflowX: 'auto', maxHeight: '720px', overflowY: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'center' }}>
           <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
             <tr>

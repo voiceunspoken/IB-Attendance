@@ -9,7 +9,7 @@ import { getDepartments } from '../actions/departments';
 import { getPendingPolicies } from '../actions/shiftPolicy';
 import { getPendingAttendanceCorrections } from '../actions/attendanceChanges';
 import { getPendingSuperRegularizations, getAllLeaveRequests } from '../actions/leave';
-import { FiUsers, FiCalendar, FiClipboard, FiActivity, FiAlertTriangle, FiArrowRight } from 'react-icons/fi';
+import { FiUsers, FiCalendar, FiAlertTriangle, FiArrowRight, FiGift } from 'react-icons/fi';
 
 export default function DashboardHome() {
   const { role, isAuthenticated, user, loading: authLoading } = useAuth();
@@ -22,8 +22,7 @@ export default function DashboardHome() {
   const [months, setMonths] = useState([]);
   const [monthData, setMonthData] = useState(undefined);
   const [holidays, setHolidays] = useState([]);
-  const [pendingLeaves, setPendingLeaves] = useState(0);
-  const [pendingCounts, setPendingCounts] = useState({ policies: 0, corrections: 0, regularizations: 0 });
+  const [pendingCounts, setPendingCounts] = useState({ policies: 0, corrections: 0, regularizations: 0, leaves: 0 });
   const [loading, setLoading] = useState(true);
 
   const [dataError, setDataError] = useState(false);
@@ -61,8 +60,8 @@ export default function DashboardHome() {
 
       try {
         const leaveReqs = await getAllLeaveRequests();
-        setPendingLeaves(leaveReqs.filter(r => r.status === 'pending').length);
-      } catch { setPendingLeaves(0); }
+        setPendingCounts(prev => ({ ...prev, leaves: leaveReqs.filter(r => r.status === 'pending').length }));
+      } catch { /* ignore */ }
 
       if (mons.length > 0) {
         try {
@@ -96,15 +95,23 @@ export default function DashboardHome() {
   }, [isAuthenticated, isAdmin, user, authLoading, router]);
 
   const activeEmployees = employees.filter(e => !e.disabled).length;
-  const deptCount = departments.length;
-  const attendanceRate = monthData && monthData.length
-    ? (() => {
-        const totalPresent = monthData.reduce((s, r) => s + (r.present || 0), 0);
-        const totalDays = monthData.reduce((s, r) => s + (r.numDays || 0), 0);
-        return totalDays > 0 ? ((totalPresent / totalDays) * 100).toFixed(1) : '—';
-      })()
-    : '—';
-  const totalPending = pendingCounts.policies + pendingCounts.corrections + pendingCounts.regularizations;
+  const totalPending = pendingCounts.policies + pendingCounts.corrections + pendingCounts.regularizations + pendingCounts.leaves;
+
+  // Upcoming birthdays within next 14 days
+  const upcomingBirthdays = employees
+    .filter(e => e.birthday)
+    .map(e => {
+      const bd = new Date(e.birthday);
+      const today = new Date();
+      const thisYear = today.getFullYear();
+      const next = new Date(thisYear, bd.getMonth(), bd.getDate());
+      if (next < today) next.setFullYear(thisYear + 1);
+      const diffDays = Math.ceil((next - today) / (1000 * 60 * 60 * 24));
+      return { ...e, nextBirthday: next, diffDays };
+    })
+    .filter(e => e.diffDays <= 14)
+    .sort((a, b) => a.diffDays - b.diffDays)
+    .slice(0, 5);
   const hasNoMonths = months.length === 0;
   const headerMonth = months[0];
   const formatMonth = (m) => {
@@ -133,7 +140,7 @@ export default function DashboardHome() {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
           </div>
           <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '-0.04em', margin: '0 0 4px' }}>
-            Welcome back{user?.name ? `, ${user.name.split(' ')[0]}` : ''}
+            Welcome back{user?.name ? `, ${user.name.split(' ')[0].replace(/\b\w/g, c => c.toUpperCase())}` : ''}
           </h1>
           <p className="text-sm" style={{ opacity: 0.75, margin: 0 }}>
             {headerMonth ? `Attendance overview for ${formatMonth(headerMonth)}` : 'Attendance Portal'}
@@ -146,7 +153,7 @@ export default function DashboardHome() {
       {loading ? (
         <div className="animate-fade-in">
           <div className="kpi-grid" style={{ gap: 'var(--gap)', marginBottom: 'var(--gap)' }}>
-            {[...Array(4)].map((_, i) => (
+            {[...Array(2)].map((_, i) => (
               <div key={i} className="card p-24">
                 <div className="skeleton" style={{ width: '40px', height: '40px', borderRadius: '12px', marginBottom: '14px' }} />
                 <div className="skeleton" style={{ width: '50%', height: '32px', borderRadius: '8px', marginBottom: '6px' }} />
@@ -170,24 +177,6 @@ export default function DashboardHome() {
               </div>
             </div>
             <div className="card flex items-center gap-16" style={{ padding: '20px 24px' }}>
-              <div className="grid-center" style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'linear-gradient(135deg, #34c759, #68e088)', color: '#fff', flexShrink: 0 }}>
-                <FiActivity size={22} />
-              </div>
-              <div>
-                <div style={{ fontSize: '24px', fontWeight: 700, lineHeight: 1.2 }}>{attendanceRate}{attendanceRate !== '—' ? '%' : ''}</div>
-                <div className="text-sm text-muted">Attendance Rate</div>
-              </div>
-            </div>
-            <div className="card flex items-center gap-16" style={{ padding: '20px 24px' }}>
-              <div className="grid-center" style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'linear-gradient(135deg, #ff9f0a, #ffc75a)', color: '#fff', flexShrink: 0 }}>
-                <FiClipboard size={22} />
-              </div>
-              <div>
-                <div style={{ fontSize: '24px', fontWeight: 700, lineHeight: 1.2 }}>{pendingLeaves}</div>
-                <div className="text-sm text-muted">Pending Leave Requests</div>
-              </div>
-            </div>
-            <div className="card flex items-center gap-16" style={{ padding: '20px 24px' }}>
               <div className="grid-center" style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'linear-gradient(135deg, #ff3b30, #ff6b6b)', color: '#fff', flexShrink: 0 }}>
                 <FiAlertTriangle size={22} />
               </div>
@@ -205,124 +194,70 @@ export default function DashboardHome() {
             </div>
           </div>
 
-          {/* ── Pending Approvals (Super Admin) ── */}
-          {isSuperAdmin && totalPending > 0 && (
-            <div className="card p-22-24" style={{ marginBottom: 'var(--gap)' }}>
-              <div className="flex-between mb-16">
-                <div className="text-base text-bold flex items-center gap-8">
-                  <FiAlertTriangle size={16} /> Pending Approvals
-                </div>
-                <button className="btn btn-outline" style={{ fontSize: '12px', padding: '4px 12px' }}
-                  onClick={async () => {
-                    const [pp, ac, sr] = await Promise.all([
-                      getPendingPolicies(),
-                      getPendingAttendanceCorrections(),
-                      getPendingSuperRegularizations()
-                    ]);
-                    setPendingCounts({ policies: pp.length, corrections: ac.length, regularizations: sr.length });
-                  }}>
-                  ↻ Refresh
-                </button>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                {pendingCounts.policies > 0 && (
-                  <div style={{ padding: '14px 16px', borderRadius: '12px', background: 'rgba(255,159,10,0.08)', border: '1px solid rgba(255,159,10,0.2)' }}>
-                    <div style={{ fontSize: '22px', fontWeight: 700, color: '#ff9f0a' }}>{pendingCounts.policies}</div>
-                    <div className="text-xs text-muted mb-6">Shift Polic{pendingCounts.policies !== 1 ? 'ies' : 'y'}</div>
-                    <button className="btn btn-secondary" style={{ fontSize: '11px', padding: '3px 10px' }} onClick={() => router.push('/settings')}>Review →</button>
-                  </div>
-                )}
-                {pendingCounts.corrections > 0 && (
-                  <div style={{ padding: '14px 16px', borderRadius: '12px', background: 'rgba(175,82,222,0.08)', border: '1px solid rgba(175,82,222,0.2)' }}>
-                    <div style={{ fontSize: '22px', fontWeight: 700, color: '#af52de' }}>{pendingCounts.corrections}</div>
-                    <div className="text-xs text-muted mb-6">Attendance Corrections</div>
-                    <button className="btn btn-secondary" style={{ fontSize: '11px', padding: '3px 10px' }} onClick={() => router.push('/leaves')}>Review →</button>
-                  </div>
-                )}
-                {pendingCounts.regularizations > 0 && (
-                  <div style={{ padding: '14px 16px', borderRadius: '12px', background: 'rgba(90,200,250,0.08)', border: '1px solid rgba(90,200,250,0.2)' }}>
-                    <div style={{ fontSize: '22px', fontWeight: 700, color: '#5ac8fa' }}>{pendingCounts.regularizations}</div>
-                    <div className="text-xs text-muted mb-6">Regularizations</div>
-                    <button className="btn btn-secondary" style={{ fontSize: '11px', padding: '3px 10px' }} onClick={() => router.push('/leaves')}>Review →</button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── Quick Access + Upcoming Holidays ── */}
+          {/* ── Upcoming Birthdays + Upcoming Holidays ── */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 'var(--gap)', alignItems: 'start' }}>
             <div>
-              <div className="text-base text-bold mb-12">Quick Access</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                <div className="card" style={{ padding: '20px', cursor: 'pointer', transition: 'all 0.2s' }}
-                  onClick={() => router.push('/attendance')}
-                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.08)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}>
-                  <div className="grid-center" style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(0,113,227,0.1)', color: '#0071e3', marginBottom: '12px' }}>
-                    <FiCalendar size={18} />
+              <div className="text-base text-bold mb-12">Upcoming Birthdays</div>
+              <div className="card card-body-sm">
+                {upcomingBirthdays.length === 0 ? (
+                  <div className="text-sm text-muted2 text-center" style={{ padding: '12px 0' }}>No upcoming birthdays</div>
+                ) : (
+                  <div className="flex-col gap-8">
+                    {upcomingBirthdays.map((e, i) => {
+                      const d = e.nextBirthday;
+                      return (
+                        <div key={e.code} className="flex items-center gap-12" style={{
+                          paddingBottom: i < upcomingBirthdays.length - 1 ? '8px' : 0,
+                          borderBottom: i < upcomingBirthdays.length - 1 ? '1px solid var(--border)' : 'none',
+                        }}>
+                          <div className="flex-col items-center grid-center flex-shrink-0" style={{
+                            width: '40px', height: '40px', borderRadius: '10px',
+                            background: 'rgba(255,159,10,0.08)',
+                          }}>
+                            <FiGift size={18} style={{ color: '#ff9f0a' }} />
+                          </div>
+                          <div>
+                            <div className="text-sm text-semibold">{e.name.replace(/\b\w/g, c => c.toUpperCase())}</div>
+                            <div className="text-xs text-muted2">{d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}{e.diffDays === 0 ? ' — Today!' : e.diffDays === 1 ? ' — Tomorrow!' : ` — in ${e.diffDays} days`}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div className="text-md text-bold mb-2">Attendance</div>
-                  <div className="text-xs text-muted2">{months.length > 0 ? `${months.length} month${months.length !== 1 ? 's' : ''} loaded` : 'Upload monthly data'}</div>
-                </div>
-                <div className="card" style={{ padding: '20px', cursor: 'pointer', transition: 'all 0.2s' }}
-                  onClick={() => router.push('/team')}
-                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.08)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}>
-                  <div className="grid-center" style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(52,199,89,0.1)', color: '#34c759', marginBottom: '12px' }}>
-                    <FiUsers size={18} />
-                  </div>
-                  <div className="text-md text-bold mb-2">Team</div>
-                  <div className="text-xs text-muted2">{deptCount} department{deptCount !== 1 ? 's' : ''} · {activeEmployees} employees</div>
-                </div>
-                <div className="card" style={{ padding: '20px', cursor: 'pointer', transition: 'all 0.2s' }}
-                  onClick={() => router.push('/leaves')}
-                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.08)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}>
-                  <div className="grid-center" style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(255,159,10,0.1)', color: '#ff9f0a', marginBottom: '12px' }}>
-                    <FiClipboard size={18} />
-                  </div>
-                  <div className="text-md text-bold mb-2">Leaves</div>
-                  <div className="text-xs text-muted2">{pendingLeaves > 0 ? `${pendingLeaves} pending request${pendingLeaves !== 1 ? 's' : ''}` : 'No pending requests'}</div>
-                </div>
+                )}
               </div>
             </div>
-
-            {/* ── Upcoming Holidays ── */}
-            <div className="flex-col" style={{ gap: 'var(--gap)' }}>
-              <div>
-                <div className="text-base text-bold mb-12">Upcoming Holidays</div>
-                <div className="card card-body-sm">
-                  {holidays.length === 0 ? (
-                    <div className="text-sm text-muted2 text-center" style={{ padding: '12px 0' }}>No upcoming holidays</div>
-                  ) : (
-                    <div className="flex-col gap-8">
-                      {holidays.slice(0, 5).map((h, i) => {
-                        const d = new Date(h.year, h.month - 1, h.day);
-                        return (
-                          <div key={`${h.year}-${h.month}-${h.day}`} className="flex items-center gap-12" style={{
-                            paddingBottom: i < holidays.length - 1 ? '8px' : 0,
-                            borderBottom: i < holidays.length - 1 ? '1px solid var(--border)' : 'none',
+            <div>
+              <div className="text-base text-bold mb-12">Upcoming Holidays</div>
+              <div className="card card-body-sm">
+                {holidays.length === 0 ? (
+                  <div className="text-sm text-muted2 text-center" style={{ padding: '12px 0' }}>No upcoming holidays</div>
+                ) : (
+                  <div className="flex-col gap-8">
+                    {holidays.slice(0, 5).map((h, i) => {
+                      const d = new Date(h.year, h.month - 1, h.day);
+                      return (
+                        <div key={`${h.year}-${h.month}-${h.day}`} className="flex items-center gap-12" style={{
+                          paddingBottom: i < holidays.length - 1 ? '8px' : 0,
+                          borderBottom: i < holidays.length - 1 ? '1px solid var(--border)' : 'none',
+                        }}>
+                          <div className="flex-col items-center grid-center flex-shrink-0" style={{
+                            width: '40px', height: '40px', borderRadius: '10px',
+                            background: 'rgba(0,113,227,0.06)',
                           }}>
-                            <div className="flex-col items-center grid-center flex-shrink-0" style={{
-                              width: '40px', height: '40px', borderRadius: '10px',
-                              background: 'rgba(0,113,227,0.06)',
-                            }}>
-                              <span className="text-xs text-semibold text-muted" style={{ lineHeight: 1 }}>{d.toLocaleString('en', { month: 'short' })}</span>
-                              <span style={{ fontSize: '16px', fontWeight: 700, lineHeight: 1.2 }}>{h.day}</span>
-                            </div>
-                            <div>
-                              <div className="text-sm text-semibold">{h.name}</div>
-                              <div className="text-xs text-muted2">{d.toLocaleDateString('en-US', { weekday: 'long' })}</div>
-                            </div>
+                            <span className="text-xs text-semibold text-muted" style={{ lineHeight: 1 }}>{d.toLocaleString('en', { month: 'short' })}</span>
+                            <span style={{ fontSize: '16px', fontWeight: 700, lineHeight: 1.2 }}>{h.day}</span>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                          <div>
+                            <div className="text-sm text-semibold">{h.name}</div>
+                            <div className="text-xs text-muted2">{d.toLocaleDateString('en-US', { weekday: 'long' })}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-
             </div>
           </div>
 

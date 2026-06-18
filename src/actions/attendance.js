@@ -56,46 +56,61 @@ export async function uploadMonthData(monthYear, parsedResults, numDays, perform
       createdUsernames.push({ code: r.code, name: r.name, username });
     }
 
+    // Upsert each daily log (incremental — preserves days not in this file)
+    for (const d of r.days) {
+      await prisma.dailyLog.upsert({
+        where: { userId_monthYear_day: { userId: user.id, monthYear, day: d.d } },
+        update: {
+          type: d.type, raw: d.raw || '',
+          inT: d.inT ?? null, outT: d.outT ?? null,
+          isLate: d.isLate || false, isSS: d.isSS || false,
+          isSL: d.isSL || false, hdReason: d.hdReason || null,
+        },
+        create: {
+          userId: user.id, monthYear, day: d.d,
+          type: d.type, raw: d.raw || '',
+          inT: d.inT ?? null, outT: d.outT ?? null,
+          isLate: d.isLate || false, isSS: d.isSS || false,
+          isSL: d.isSL || false, hdReason: d.hdReason || null,
+        },
+      });
+    }
+
+    // Recalculate monthRecord totals from all stored daily logs
+    const logs = await prisma.dailyLog.findMany({ where: { userId: user.id, monthYear } });
+    let dbPresent = 0, dbAbsent = 0, dbHalfDay = 0, dbLate = 0, dbSS = 0, dbSL = 0, dbRL = 0, dbHoli = 0;
+    let dbLateHD = 0, dbSsHD = 0, maxDay = 0;
+    for (const log of logs) {
+      maxDay = Math.max(maxDay, log.day);
+      if (log.type === 'absent') { dbAbsent++; }
+      else if (log.type === 'rl') { dbRL++; }
+      else if (log.type === 'holiday') { dbHoli++; }
+      else if (log.type === 'half') { dbHalfDay++; }
+      else if (log.type === 'present') {
+        if (log.isHD) { dbHalfDay++; } else { dbPresent++; }
+        if (log.isLate) dbLate++;
+        if (log.isSS) dbSS++;
+        if (log.isSL) dbSL++;
+        if (log.hdReason === 'late') dbLateHD++;
+        if (log.hdReason === 'ss') dbSsHD++;
+      }
+    }
     await prisma.monthRecord.upsert({
       where: { userId_monthYear: { userId: user.id, monthYear } },
       update: {
-        present: r.present, absent: r.absent, halfDay: r.halfDay,
-        late: r.late, lateHD: r.lateHD, shortShift: r.shortShift,
-        ssHD: r.ssHD, shortLeave: r.shortLeave, rl: r.rl, holi: r.holi, numDays
+        present: dbPresent, absent: dbAbsent, halfDay: dbHalfDay,
+        late: dbLate, lateHD: dbLateHD, shortShift: dbSS,
+        ssHD: dbSsHD, shortLeave: dbSL, rl: dbRL, holi: dbHoli,
+        numDays: maxDay || numDays,
       },
       create: {
         userId: user.id, monthYear,
-        present: r.present, absent: r.absent, halfDay: r.halfDay,
-        late: r.late, lateHD: r.lateHD, shortShift: r.shortShift,
-        ssHD: r.ssHD, shortLeave: r.shortLeave, rl: r.rl, holi: r.holi, numDays
-      }
+        present: dbPresent, absent: dbAbsent, halfDay: dbHalfDay,
+        late: dbLate, lateHD: dbLateHD, shortShift: dbSS,
+        ssHD: dbSsHD, shortLeave: dbSL, rl: dbRL, holi: dbHoli,
+        numDays: maxDay || numDays,
+      },
     });
-
-    await prisma.dailyLog.deleteMany({
-      where: { userId: user.id, monthYear }
-    });
-
-    const dailyLogData = r.days.map(d => ({
-      userId: user.id,
-      monthYear,
-      day: d.d,
-      type: d.type,
-      raw: d.raw || "",
-      inT: d.inT ?? null,
-      outT: d.outT ?? null,
-      isLate: d.isLate || false,
-      isSS: d.isSS || false,
-      isSL: d.isSL || false,
-      hdReason: d.hdReason || null
-    }));
-
-    const chunkSize = 50;
-    for (let i = 0; i < dailyLogData.length; i += chunkSize) {
-      const chunk = dailyLogData.slice(i, i + chunkSize);
-      if (chunk.length > 0) {
-        await prisma.dailyLog.createMany({ data: chunk });
-      }
-    }
   }
 
   revalidatePath('/');
