@@ -51,6 +51,7 @@ export async function deleteUser(userId, deletedBy = 'admin') {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return { error: 'User not found.' };
   await prisma.punchLog.deleteMany({ where: { userId } });
+  await prisma.wfhRequest.deleteMany({ where: { userId } });
   await prisma.regularizationRequest.deleteMany({ where: { userId } });
   await prisma.leaveRequest.deleteMany({ where: { userId } });
   await prisma.leaveBalance.deleteMany({ where: { userId } });

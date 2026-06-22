@@ -41,12 +41,15 @@ export async function uploadMonthData(monthYear, parsedResults, numDays, perform
   if (auth) return auth;
   const createdUsernames = [];
 
+  const processedUserIds = new Set();
+
   for (const r of parsedResults) {
     const user = await prisma.user.upsert({
       where: { code: r.code },
       update: { name: r.name },
       create: { code: r.code, name: r.name, username: r.code, password: '' },
     });
+    processedUserIds.add(user.id);
 
     if (!user.username || user.username === user.code) {
       const username = await generateUsername(r.name);
@@ -56,8 +59,21 @@ export async function uploadMonthData(monthYear, parsedResults, numDays, perform
       createdUsernames.push({ code: r.code, name: r.name, username });
     }
 
-    // Upsert each daily log (incremental — preserves days not in this file)
+    // Upsert each daily log — skip days where web punch data or approved WFH exists
     for (const d of r.days) {
+      const dayStart = new Date(parseInt(monthYear.split('_')[1]), parseInt(monthYear.split('_')[0]) - 1, d.d, 0, 0, 0, 0);
+      const dayEnd = new Date(parseInt(monthYear.split('_')[1]), parseInt(monthYear.split('_')[0]) - 1, d.d, 23, 59, 59, 999);
+      const hasWebPunch = await prisma.punchLog.findFirst({
+        where: { userId: user.id, date: { gte: dayStart, lte: dayEnd } }
+      });
+      if (hasWebPunch) continue;
+
+      const wfhDate = new Date(parseInt(monthYear.split('_')[1]), parseInt(monthYear.split('_')[0]) - 1, d.d);
+      const hasWfh = await prisma.wfhRequest.findFirst({
+        where: { userId: user.id, date: wfhDate, status: 'approved' }
+      });
+      if (hasWfh) continue;
+
       await prisma.dailyLog.upsert({
         where: { userId_monthYear_day: { userId: user.id, monthYear, day: d.d } },
         update: {
@@ -76,41 +92,19 @@ export async function uploadMonthData(monthYear, parsedResults, numDays, perform
       });
     }
 
-    // Recalculate monthRecord totals from all stored daily logs
-    const logs = await prisma.dailyLog.findMany({ where: { userId: user.id, monthYear } });
-    let dbPresent = 0, dbAbsent = 0, dbHalfDay = 0, dbLate = 0, dbSS = 0, dbSL = 0, dbRL = 0, dbHoli = 0;
-    let dbLateHD = 0, dbSsHD = 0, maxDay = 0;
-    for (const log of logs) {
-      maxDay = Math.max(maxDay, log.day);
-      if (log.type === 'absent') { dbAbsent++; }
-      else if (log.type === 'rl') { dbRL++; }
-      else if (log.type === 'holiday') { dbHoli++; }
-      else if (log.type === 'half') { dbHalfDay++; }
-      else if (log.type === 'present') {
-        if (log.isHD) { dbHalfDay++; } else { dbPresent++; }
-        if (log.isLate) dbLate++;
-        if (log.isSS) dbSS++;
-        if (log.isSL) dbSL++;
-        if (log.hdReason === 'late') dbLateHD++;
-        if (log.hdReason === 'ss') dbSsHD++;
-      }
+    await recalculateMonthRecord(user.id, monthYear, numDays);
+  }
+
+  // Also generate month records for users not in the XLSX who have DailyLogs for this month
+  const allLogUsers = await prisma.dailyLog.findMany({
+    where: { monthYear },
+    select: { userId: true },
+    distinct: ['userId']
+  });
+  for (const { userId } of allLogUsers) {
+    if (!processedUserIds.has(userId)) {
+      await recalculateMonthRecord(userId, monthYear, numDays);
     }
-    await prisma.monthRecord.upsert({
-      where: { userId_monthYear: { userId: user.id, monthYear } },
-      update: {
-        present: dbPresent, absent: dbAbsent, halfDay: dbHalfDay,
-        late: dbLate, lateHD: dbLateHD, shortShift: dbSS,
-        ssHD: dbSsHD, shortLeave: dbSL, rl: dbRL, holi: dbHoli,
-        numDays: maxDay || numDays,
-      },
-      create: {
-        userId: user.id, monthYear,
-        present: dbPresent, absent: dbAbsent, halfDay: dbHalfDay,
-        late: dbLate, lateHD: dbLateHD, shortShift: dbSS,
-        ssHD: dbSsHD, shortLeave: dbSL, rl: dbRL, holi: dbHoli,
-        numDays: maxDay || numDays,
-      },
-    });
   }
 
   revalidatePath('/');
@@ -128,6 +122,42 @@ export async function uploadMonthData(monthYear, parsedResults, numDays, perform
   } catch { /* notification failure is non-critical */ }
 
   return { success: true, createdUsernames };
+}
+
+async function recalculateMonthRecord(userId, monthYear, numDays = 31) {
+  const logs = await prisma.dailyLog.findMany({ where: { userId, monthYear } });
+  let present = 0, absent = 0, halfDay = 0, late = 0, ss = 0, sl = 0, rl = 0, holi = 0, wfh = 0;
+  let lateHD = 0, ssHD = 0, maxDay = 0;
+  for (const log of logs) {
+    maxDay = Math.max(maxDay, log.day);
+    if (log.type === 'absent') { absent++; }
+    else if (log.type === 'rl') { rl++; }
+    else if (log.type === 'holiday') { holi++; }
+    else if (log.type === 'half') { halfDay++; }
+    else if (log.type === 'wfh') { wfh++; }
+    else if (log.type === 'present') {
+      if (log.isHD) { halfDay++; } else { present++; }
+      if (log.isLate) late++;
+      if (log.isSS) ss++;
+      if (log.isSL) sl++;
+      if (log.hdReason === 'late') lateHD++;
+      if (log.hdReason === 'ss') ssHD++;
+    }
+  }
+  await prisma.monthRecord.upsert({
+    where: { userId_monthYear: { userId, monthYear } },
+    update: {
+      present: present + wfh, absent, halfDay,
+      late, lateHD, shortShift: ss, ssHD, shortLeave: sl, rl, holi,
+      numDays: maxDay || numDays,
+    },
+    create: {
+      userId, monthYear,
+      present: present + wfh, absent, halfDay,
+      late, lateHD, shortShift: ss, ssHD, shortLeave: sl, rl, holi,
+      numDays: maxDay || numDays,
+    },
+  });
 }
 
 export async function fetchDashboardData(monthYear) {
@@ -246,6 +276,7 @@ export async function deleteEmployee(code, performedBy = 'admin') {
   const user = await prisma.user.findUnique({ where: { code } });
   if (!user) return { error: 'Employee not found.' };
   await prisma.punchLog.deleteMany({ where: { userId: user.id } });
+  await prisma.wfhRequest.deleteMany({ where: { userId: user.id } });
   await prisma.regularizationRequest.deleteMany({ where: { userId: user.id } });
   await prisma.leaveRequest.deleteMany({ where: { userId: user.id } });
   await prisma.leaveBalance.deleteMany({ where: { userId: user.id } });

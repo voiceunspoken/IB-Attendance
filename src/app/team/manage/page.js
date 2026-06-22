@@ -103,8 +103,8 @@ export default function MyTeamPage() {
                     <td style={tdStyle}>
                       <span style={{
                         display: 'inline-flex', padding: '1px 7px', borderRadius: '980px', fontSize: '10px', fontWeight: 600,
-                        background: m.employeeType === 'wfh' ? 'rgba(175,82,222,0.1)' : m.employeeType === 'wfm' ? 'rgba(52,199,89,0.1)' : 'var(--surface2)',
-                        color: m.employeeType === 'wfh' ? '#af52de' : m.employeeType === 'wfm' ? '#1a7f37' : 'var(--text2)',
+                        background: m.employeeType === 'hybrid' ? 'rgba(175,82,222,0.1)' : 'var(--surface2)',
+                        color: m.employeeType === 'hybrid' ? '#af52de' : 'var(--text2)',
                       }}>
                         {(m.employeeType || 'regular').toUpperCase()}
                       </span>
@@ -131,8 +131,7 @@ export default function MyTeamPage() {
               {[
                 { label: 'Total Members', value: team.length, color: '#0071e3' },
                 { label: 'Regular', value: team.filter(m => m.employeeType === 'regular' || !m.employeeType).length, color: '#34c759' },
-                { label: 'WFH', value: team.filter(m => m.employeeType === 'wfh').length, color: '#af52de' },
-                { label: 'WFM', value: team.filter(m => m.employeeType === 'wfm').length, color: '#5ac8fa' },
+                { label: 'Hybrid', value: team.filter(m => m.employeeType === 'hybrid').length, color: '#af52de' },
                 { label: 'Pending Approvals', value: pendingLeaves.length, color: '#ff9f0a' },
               ].map(s => (
                 <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>

@@ -4,7 +4,9 @@ import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../components/AuthProvider';
 import { requestAdjustment, updatePunchTimes } from '../../../actions/attendanceChanges';
+import { getWfhRequests } from '../../../actions/wfh';
 import EmployeeModal from '../../../components/EmployeeModal';
+import ClockWidget from '../../../components/ClockWidget';
 import { useToast } from '../../../components/Toast';
 import { useEmployeeData } from './context';
 import { FiDownload } from 'react-icons/fi';
@@ -21,6 +23,7 @@ export default function AttendancePage({ params }) {
   const toast = useToast();
 
   const [selectedMonthIndex, setSelectedMonthIndex] = useState(0);
+  const [hasWfhToday, setHasWfhToday] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
@@ -29,7 +32,24 @@ export default function AttendancePage({ params }) {
     }
   }, [isAuthenticated, isAdmin, isSuperAdmin, user, authLoading, router, code]);
 
+  useEffect(() => {
+    if (!emp?.employeeType || emp.employeeType !== 'hybrid') {
+      const today = new Date().toISOString().split('T')[0];
+      getWfhRequests(code).then(requests => {
+        const approved = requests.some(r =>
+          r.status === 'approved' &&
+          new Date(r.date).toISOString().split('T')[0] === today
+        );
+        setHasWfhToday(approved);
+      }).catch(() => setHasWfhToday(false));
+    } else {
+      setHasWfhToday(true);
+    }
+  }, [emp, code]);
+
   if (!emp) return null;
+
+  const showClockWidget = hasWfhToday || emp.employeeType === 'hybrid';
 
   const currentRecord = emp.records[selectedMonthIndex];
   const [month, year] = currentRecord.monthYear.split('_');
@@ -173,6 +193,7 @@ export default function AttendancePage({ params }) {
         <h1 style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text)' }}>{emp.name}</h1>
         <div style={{ fontSize: '13px', color: 'var(--text2)', marginTop: '2px' }}>#{emp.code}</div>
       </div>
+      {showClockWidget && <ClockWidget code={code} employeeType={emp.employeeType} />}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <button onClick={() => setSelectedMonthIndex(Math.max(0, selectedMonthIndex - 1))}

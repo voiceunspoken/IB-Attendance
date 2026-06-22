@@ -17,6 +17,7 @@ import {
 import { getManagedEmployees } from '../../actions/departments';
 import { getPendingChanges, getPendingChangesHistory } from '../../actions/auth';
 import { reviewAdjustment } from '../../actions/attendanceChanges';
+import { getManagerWfhRequests, getAllWfhRequests, reviewWfhRequest, getWfhRequestsByStage } from '../../actions/wfh';
 
 const LEAVE_LABELS = { cl: 'CL', sl: 'SL', el: 'EL', rl: 'RL', sh: 'SH' };
 const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b' };
@@ -50,6 +51,9 @@ export default function LeavesPage() {
   const [allRegularizations, setAllRegularizations] = useState([]);
   const [historyChanges, setHistoryChanges] = useState([]);
   const [collapsed, setCollapsed] = useState({ leaves: false, regs: false, adjustments: false });
+  const [wfhRequests, setWfhRequests] = useState([]);
+  const [managerWfhRequests, setManagerWfhRequests] = useState([]);
+  const [superWfhRequests, setSuperWfhRequests] = useState([]);
   const [editBalanceTarget, setEditBalanceTarget] = useState(null);
   const [editBalanceForm, setEditBalanceForm] = useState({ clTotal: 0, slTotal: 0, elTotal: 0, rlTotal: 0, shTotal: 0 });
   const year = new Date().getFullYear();
@@ -164,17 +168,23 @@ export default function LeavesPage() {
     setLoading(true);
     (async () => {
       try {
-        const [reqs, regs, bal, pol, mgrLeaves] = await Promise.all([
+        const [reqs, regs, bal, pol, mgrLeaves, allWfh, mgrWfh, supWfh] = await Promise.all([
           getAllLeaveRequests(),
           getAllPendingRegularizations(),
           getAllLeaveBalances(year),
           getLeavePolicy(year),
-          user?.code ? getManagerLeaveRequests(user.code) : Promise.resolve([])
+          user?.code ? getManagerLeaveRequests(user.code) : Promise.resolve([]),
+          getAllWfhRequests(),
+          user?.code ? getManagerWfhRequests(user.code) : Promise.resolve([]),
+          getWfhRequestsByStage('pending_super'),
         ]);
         setLeaveRequests(reqs);
         setManagerLeaves(mgrLeaves);
         setRegularizations(regs);
         setBalances(bal);
+        setWfhRequests(allWfh);
+        setManagerWfhRequests(mgrWfh);
+        setSuperWfhRequests(supWfh);
         if (isSuperAdmin) {
           const [supRegs, pcs] = await Promise.all([
             getPendingSuperRegularizations(),
@@ -199,6 +209,9 @@ export default function LeavesPage() {
         setBalances([]);
         setSuperRegularizations([]);
         setPendingChanges([]);
+        setWfhRequests([]);
+        setManagerWfhRequests([]);
+        setSuperWfhRequests([]);
       } finally {
         setLoading(false);
         setManagerLoading(false);
@@ -225,6 +238,13 @@ export default function LeavesPage() {
 
   const handleReviewAdjustment = async (changeId, approve) => {
     await reviewAdjustment(changeId, user.username, approve);
+    setFetchTrigger(t => t + 1);
+  };
+
+  const handleReviewWfh = async (id, approve) => {
+    await reviewWfhRequest(id, user.username, approve, reviewNote);
+    setReviewModal(null);
+    setReviewNote('');
     setFetchTrigger(t => t + 1);
   };
 
@@ -275,12 +295,14 @@ export default function LeavesPage() {
           { key: 'overview', label: `All Requests (${leaveRequests.length})` },
           { key: 'manager_approval', label: `My Approvals${managerLeaves.length > 0 ? ` (${managerLeaves.length})` : ''}` },
           { key: 'regularize', label: `Regularizations${regularizations.length > 0 ? ` (${regularizations.length})` : ''}` },
+          { key: 'wfh', label: `WFH${managerWfhRequests.length > 0 ? ` (${managerWfhRequests.length})` : ''}` },
           { key: 'history', label: 'History' },
           { key: 'balances', label: 'Leave Balances' },
           { key: 'policy', label: 'Policy' },
         ] : role === 'super_admin' ? [
           { key: 'overview', label: `All Requests (${leaveRequests.length})` },
           { key: 'regularize', label: `Regularizations${regularizations.length > 0 ? ` (${regularizations.length})` : ''}` },
+          { key: 'wfh', label: `WFH${superWfhRequests.length > 0 ? ` (${superWfhRequests.length})` : ''}` },
           { key: 'balances', label: 'Leave Balances' },
           { key: 'policy', label: 'Policy' },
         ] : [
@@ -671,6 +693,108 @@ export default function LeavesPage() {
               }
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── WFH TAB ── */}
+      {!loading && tab === 'wfh' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Manager WFH queue */}
+          {role === 'admin' && (
+            <div className="card overflow-hidden p-0">
+              <div className="card-header">
+                Pending Your Approval — WFH ({managerWfhRequests.length})
+              </div>
+              {managerWfhRequests.length === 0
+                ? <div className="p-32 text-center text-muted2 text-sm">No WFH requests awaiting your approval.</div>
+                : managerWfhRequests.map(r => (
+                  <div key={r.id} className="p-16-20 border-bottom flex-between" style={{ gap: '16px' }}>
+                    <div>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px' }}>
+                        <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name || 'Unknown'}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user?.code}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text2)' }}>
+                          {new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                        <StageBadge stage={r.approvalStage} />
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.reason}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: '12px', background: 'var(--green)' }}
+                        onClick={() => handleReviewWfh(r.id, true)}>Approve</button>
+                      <button style={{ padding: '6px 14px', fontSize: '12px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
+                        onClick={() => handleReviewWfh(r.id, false)}>Reject</button>
+                    </div>
+                  </div>
+                ))
+              }
+            </div>
+          )}
+
+          {/* Super Admin WFH queue */}
+          {isSuperAdmin && (
+            <div className="card overflow-hidden p-0">
+              <div className="card-header">
+                Pending Super Admin Approval — WFH ({superWfhRequests.length})
+              </div>
+              {superWfhRequests.length === 0
+                ? <div className="p-32 text-center text-muted2 text-sm">No WFH requests awaiting super admin approval.</div>
+                : superWfhRequests.map(r => (
+                  <div key={r.id} className="p-16-20 border-bottom flex-between" style={{ gap: '16px' }}>
+                    <div>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px' }}>
+                        <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user?.code}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text2)' }}>
+                          {new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                        <StageBadge stage={r.approvalStage} />
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.reason}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: '12px', background: 'var(--green)' }}
+                        onClick={() => handleReviewWfh(r.id, true)}>Final Approve</button>
+                      <button style={{ padding: '6px 14px', fontSize: '12px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
+                        onClick={() => handleReviewWfh(r.id, false)}>Reject</button>
+                    </div>
+                  </div>
+                ))
+              }
+            </div>
+          )}
+
+          {/* All WFH requests */}
+          <div className="card overflow-hidden p-0">
+            <div className="card-header">
+              All WFH Requests ({wfhRequests.length})
+            </div>
+            {wfhRequests.length === 0
+              ? <div className="p-32 text-center text-muted2 text-sm">No WFH requests yet.</div>
+              : wfhRequests.map(r => (
+                <div key={r.id} className="p-16-20 border-bottom" style={{ gap: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+                    <div>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name || 'Unknown'}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user?.code}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text2)' }}>
+                          {new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                        {r.approvalStage && r.status === 'pending' && <StageBadge stage={r.approvalStage} />}
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.reason}</div>
+                      {r.reviewNote && (
+                        <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '2px', fontStyle: 'italic' }}>Note: {r.reviewNote}</div>
+                      )}
+                    </div>
+                    <StatusBadge status={r.status} />
+                  </div>
+                </div>
+              ))
+            }
+          </div>
         </div>
       )}
 

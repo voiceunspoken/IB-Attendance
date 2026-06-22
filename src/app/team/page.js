@@ -23,7 +23,7 @@ const ROLE_PERMISSIONS = [
   { role: 'Super Admin', color: '#c0392b', bg: 'rgba(255,59,48,0.06)',
     perms: ['All admin capabilities', 'Approve / reject admin changes', 'Manage all user accounts', 'Full audit log access'] },
   { role: 'Admin', color: '#0071e3', bg: 'rgba(0,113,227,0.06)',
-    perms: ['Upload attendance data', 'Apply WFM / WFH / WOS overrides', 'Export CSV & manage employees', 'Changes need super admin approval'] },
+    perms: ['Upload attendance data', 'Manage hybrid & WFH attendance', 'Export CSV & manage employees', 'Changes need super admin approval'] },
   { role: 'Employee', color: '#1a7f37', bg: 'rgba(52,199,89,0.06)',
     perms: ['View own attendance only', 'Apply for leave & regularization', 'Read-only calendar', 'No edit access'] },
 ];
@@ -524,7 +524,7 @@ export default function TeamPage() {
                           <td style={{ ...tdStyle, fontWeight: 500, color: p.name ? 'var(--text)' : 'var(--text3)' }}>{p.name || '—'}</td>
                           <td style={tdStyle}><RoleBadge role={p.role || 'employee'} /></td>
                           <td style={tblCell}>
-                            <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '980px', background: p.employeeType === 'wfh' ? 'rgba(175,82,222,0.1)' : p.employeeType === 'wfm' ? 'rgba(52,199,89,0.1)' : 'var(--surface2)', color: p.employeeType === 'wfh' ? 'var(--purple)' : p.employeeType === 'wfm' ? 'var(--green)' : 'var(--text2)' }}>{(p.employeeType || 'regular').toUpperCase()}</span>
+                            <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '980px', background: p.employeeType === 'hybrid' ? 'rgba(175,82,222,0.1)' : 'var(--surface2)', color: p.employeeType === 'hybrid' ? 'var(--purple)' : 'var(--text2)' }}>{(p.employeeType || 'regular').toUpperCase()}</span>
                           </td>
                           <td style={{ ...tdStyle, color: 'var(--text2)', fontSize: '12px' }}>{p.department?.name || '—'}</td>
                           <td style={{ ...tdStyle, color: 'var(--text2)', fontSize: '12px' }}>{p.designation?.name || '—'}</td>
@@ -877,8 +877,7 @@ export default function TeamPage() {
             <label className="input-label">Employee Type</label>
             <select className="input-field" value={empForm.employeeType} onChange={e => setEmpForm(f => ({ ...f, employeeType: e.target.value }))}>
               <option value="regular">Regular</option>
-              <option value="wfh">WFH (Work From Home)</option>
-              <option value="wfm">WFM (Work From Ministry)</option>
+              <option value="hybrid">Hybrid</option>
             </select>
           </div>
           {empMsg && <div style={{ fontSize: '13px', color: empMsg.includes('already') ? 'var(--red)' : 'var(--green)' }}>{empMsg}</div>}
@@ -964,8 +963,7 @@ export default function TeamPage() {
                 <label className="input-label">Employee Type</label>
                 <select className="input-field" value={editRowForm.employeeType} onChange={e => setEditRowForm(f => ({ ...f, employeeType: e.target.value }))}>
                   <option value="regular">Regular</option>
-                  <option value="wfh">WFH (Work From Home)</option>
-                  <option value="wfm">WFM (Work From Ministry)</option>
+                  <option value="hybrid">Hybrid</option>
                 </select>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>

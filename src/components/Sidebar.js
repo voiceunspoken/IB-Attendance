@@ -33,6 +33,7 @@ const NAV_CONFIG = {
     { section: 'Employee', links: [
       { label: 'Attendance', icon: <FiCalendar size={14} />, path: (code) => `/employee/${code}` },
       { label: 'Leave Requests', icon: <FiFileText size={14} />, path: (code) => `/employee/${code}/leaves` },
+      { label: 'WFH', icon: <FiHome size={14} />, path: (code) => `/employee/${code}/wfh` },
       { label: 'Regularization', icon: <FiTool size={14} />, path: (code) => `/employee/${code}/regularize` },
       { label: 'Profile', icon: <FiUser size={14} />, path: (code) => `/employee/${code}/profile` },
     ]},
@@ -42,6 +43,7 @@ const NAV_CONFIG = {
     { section: 'Employee', links: [
       { label: 'Attendance', icon: <FiCalendar size={14} />, path: (code) => `/employee/${code}` },
       { label: 'Leave Requests', icon: <FiFileText size={14} />, path: (code) => `/employee/${code}/leaves` },
+      { label: 'WFH', icon: <FiHome size={14} />, path: (code) => `/employee/${code}/wfh` },
       { label: 'Regularization', icon: <FiTool size={14} />, path: (code) => `/employee/${code}/regularize` },
       { label: 'Notifications', icon: <FiBell size={14} />, path: '/notifications' },
       { label: 'Profile', icon: <FiUser size={14} />, path: (code) => `/employee/${code}/profile` },

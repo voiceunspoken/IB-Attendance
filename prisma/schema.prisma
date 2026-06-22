@@ -20,7 +20,7 @@ model User {
   birthday        DateTime?
   joiningDate     DateTime?
   workAnniversary DateTime?
-  employeeType    String     @default("regular") // "regular" | "wfh" | "wfm"
+  employeeType    String     @default("regular") // "regular" | "hybrid"
 
   departmentId    String?
   department      Department?  @relation(fields: [departmentId], references: [id])
@@ -40,6 +40,7 @@ model User {
   leaveBalances   LeaveBalance[]
   leaveRequests   LeaveRequest[]
   regularizations RegularizationRequest[]
+  wfhRequests     WfhRequest[]
   punchLogs       PunchLog[]
   notifications   Notification[]
 
@@ -229,6 +230,22 @@ model LeaveRequest {
   reviewedAt     DateTime?
   reviewNote     String?
   createdAt      DateTime @default(now())
+}
+
+// WFH (Work From Home) requests — single-day WFH with manager approval
+model WfhRequest {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date              DateTime
+  reason            String
+  status            String    @default("pending") // "pending" | "approved" | "rejected"
+  approvalStage     String    @default("pending_l2")
+  currentApproverId String?
+  reviewedBy        String?
+  reviewedAt        DateTime?
+  reviewNote        String?
+  createdAt         DateTime  @default(now())
 }
 
 // Regularization / Conflict requests — user requests correction for missed punch or wrong marking
