@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
 import { requireAdmin, requireAdminOrSuperAdmin, requireSuperAdmin } from '../lib/auth-guard';
-import { createNotification, getAdminUserIds, sendLeavePendingNotification, sendLeaveStatusNotification } from './notifications';
+import { createNotification, getAdminUserIds, getSuperAdminUserIds, sendLeavePendingNotification, sendLeaveStatusNotification } from './notifications';
 
 export async function getLeavePolicy(year) {
   return prisma.leavePolicy.findUnique({ where: { year } });
@@ -535,8 +535,8 @@ export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = 
   }
 
   if (newStage === 'pending_super') {
-    const adminIds = await getAdminUserIds();
-    await Promise.all(adminIds.map(id => createNotification(id, 'leave_pending_super',
+    const superAdminIds = await getSuperAdminUserIds();
+    await Promise.all(superAdminIds.map(id => createNotification(id, 'leave_pending_super',
       `Leave Pending Your Approval`,
       `${req.user.name}'s ${leaveTypeLabel} request needs your approval.`,
       { requestId: req.id, employeeCode: req.user.code, leaveType: req.leaveType, days: req.days })));
@@ -620,8 +620,8 @@ export async function reviewRegularization(requestId, reviewedBy, approve, note 
     { requestId: req.id, date: req.date, requestedIn: req.requestedIn, requestedOut: req.requestedOut, note });
 
   if (approve) {
-    const adminIds = await getAdminUserIds();
-    await Promise.all(adminIds.map(id => createNotification(id, 'regularization_pending_super',
+    const superAdminIds = await getSuperAdminUserIds();
+    await Promise.all(superAdminIds.map(id => createNotification(id, 'regularization_pending_super',
       `Regularization Pending Final Approval`,
       `A regularization is awaiting super admin final approval.`,
       { requestId: req.id })));

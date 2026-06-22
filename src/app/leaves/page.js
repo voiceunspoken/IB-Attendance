@@ -335,7 +335,7 @@ export default function LeavesPage() {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', background: 'var(--surface3)', borderRadius: '10px', padding: '3px', marginBottom: '24px', width: 'fit-content', flexWrap: 'wrap' }}>
         {(role === 'admin' ? [
-          { key: 'overview', label: `All Requests (${leaveRequests.length})` },
+          { key: 'overview', label: `Overview` },
           { key: 'manager_approval', label: `My Approvals${managerLeaves.length > 0 ? ` (${managerLeaves.length})` : ''}` },
           { key: 'regularize', label: `Regularizations${regularizations.length > 0 ? ` (${regularizations.length})` : ''}` },
           { key: 'wfh', label: `Work Mode${managerWfhRequests.length > 0 ? ` (${managerWfhRequests.length})` : ''}` },
@@ -343,7 +343,7 @@ export default function LeavesPage() {
           { key: 'balances', label: 'Leave Balances' },
           { key: 'policy', label: 'Policy' },
         ] : isSuperAdmin ? [
-          { key: 'overview', label: `All Requests (${leaveRequests.length})` },
+          { key: 'overview', label: `Overview` },
           { key: 'regularize', label: `Regularizations${superRegularizations.length > 0 ? ` (${superRegularizations.length})` : ''}` },
           { key: 'wfh', label: `Work Mode${superWfhRequests.length > 0 ? ` (${superWfhRequests.length})` : ''}` },
           { key: 'history', label: 'History' },
@@ -750,7 +750,7 @@ export default function LeavesPage() {
           )}
 
           {/* Super admin final approval */}
-          {isSuperAdmin && (
+          {isSuperAdmin && superRegularizations.length > 0 && (
             <div className="card overflow-hidden p-0">
               <div className="card-header">
                 Pending Super Admin Approval
@@ -758,9 +758,7 @@ export default function LeavesPage() {
                   ({superRegularizations.length})
                 </span>
               </div>
-              {superRegularizations.length === 0
-                ? <div className="p-32 text-center text-muted2 text-sm">No regularizations awaiting final approval.</div>
-                : superRegularizations.map(r => (
+              {superRegularizations.map(r => (
                   <div key={r.id} className="p-16-20 border-bottom flex-between" style={{ gap: '16px' }}>
                     <div>
                       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px' }}>
@@ -1037,7 +1035,6 @@ export default function LeavesPage() {
           <div className="card overflow-hidden p-0">
             <div className="card-header">
               <span>Leave Requests</span>
-              <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400 }}>{leaveRequests.length}</span>
             </div>
             {leaveRequests.length === 0 ? (
               <div className="p-32 text-center text-muted2 text-sm">No leave requests found.</div>
@@ -1068,14 +1065,12 @@ export default function LeavesPage() {
           </div>
 
           {/* ── Section B: Regularizations ── */}
-          <div className="card overflow-hidden p-0">
-            <div className="card-header">
-              <span>Regularizations</span>
-              <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400 }}>{allRegularizations.length}</span>
-            </div>
-            {allRegularizations.length === 0 ? (
-              <div className="p-32 text-center text-muted2 text-sm">No regularizations found.</div>
-            ) : (
+          {allRegularizations.length > 0 && (
+            <div className="card overflow-hidden p-0">
+              <div className="card-header">
+                <span>Regularizations</span>
+                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400 }}>{allRegularizations.length}</span>
+              </div>
               <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
                 {allRegularizations.map(r => {
                   const regStatus = r.status === 'approved' && r.superStatus === 'approved' ? 'approved'
@@ -1097,18 +1092,16 @@ export default function LeavesPage() {
                   );
                 })}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* ── Section C: Adjustments & Changes ── */}
-          <div className="card overflow-hidden p-0">
-            <div className="card-header">
-              <span>Adjustments & Changes</span>
-              <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400 }}>{historyChanges.length}</span>
-            </div>
-            {historyChanges.length === 0 ? (
-              <div className="p-32 text-center text-muted2 text-sm">No adjustments or changes found.</div>
-            ) : (
+          {historyChanges.length > 0 && (
+            <div className="card overflow-hidden p-0">
+              <div className="card-header">
+                <span>Adjustments & Changes</span>
+                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400 }}>{historyChanges.length}</span>
+              </div>
               <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
                 {historyChanges.map(c => {
                   let payload = {};
@@ -1138,8 +1131,8 @@ export default function LeavesPage() {
                   );
                 })}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 

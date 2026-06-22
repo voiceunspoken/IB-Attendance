@@ -3,7 +3,7 @@
 import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
-import { createNotification, getAdminUserIds, sendWfhPendingNotification } from './notifications';
+import { createNotification, getAdminUserIds, getSuperAdminUserIds, sendWfhPendingNotification } from './notifications';
 
 export async function submitWfhRequest(employeeCode, { date, reason, workType = 'wfh' }) {
   const user = await prisma.user.findUnique({
@@ -250,8 +250,8 @@ export async function reviewWfhRequest(requestId, reviewedBy, approve, note = ''
   }
 
   if (newStage === 'pending_super') {
-    const adminIds = await getAdminUserIds();
-    await Promise.all(adminIds.map(id => createNotification(id, 'wfh_pending_super',
+    const superAdminIds = await getSuperAdminUserIds();
+    await Promise.all(superAdminIds.map(id => createNotification(id, 'wfh_pending_super',
       `${workTypeLabel} Pending Your Approval`,
       `${req.user.name}'s ${workTypeLabel} request needs your approval.`,
       { requestId: req.id, employeeCode: req.user.code, date: req.date.toISOString(), workType: req.workType })));

@@ -258,3 +258,11 @@ export async function getAdminUserIds() {
   });
   return users.map(u => u.id);
 }
+
+export async function getSuperAdminUserIds() {
+  const users = await prisma.user.findMany({
+    where: { role: 'super_admin' },
+    select: { id: true },
+  });
+  return users.map(u => u.id);
+}
