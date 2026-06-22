@@ -88,24 +88,27 @@ export default function LeavesPage({ params }) {
 
   const statusBadge = (status) => {
     const map = {
-      pending: { bg: 'rgba(255,159,10,0.1)', color: '#b36200' },
-      approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37' },
-      rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b' }
+      pending: { bg: 'rgba(255,159,10,0.1)', color: '#b36200', label: 'Pending' },
+      approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Approved' },
+      rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' }
     };
-    const s = map[status] || map.pending;
-    return <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: '980px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.color }}>{status}</span>;
+    const s = map[status] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)', label: status.charAt(0).toUpperCase() + status.slice(1) };
+    return <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: '980px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.color }}>{s.label}</span>;
   };
 
-  const StageBadge = ({ stage }) => {
+  const StageBadge = ({ stage, approverName }) => {
     const map = {
-      pending_l2: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3', label: 'L2 Pending' },
-      pending_l1: { bg: 'rgba(255,159,10,0.1)', color: '#b36200', label: 'L1 Pending' },
-      pending_super: { bg: 'rgba(175,82,222,0.1)', color: '#7b2d8b', label: 'Super Pending' },
+      pending_mgr: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3' },
+      pending_l2: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3' },
+      pending_l1: { bg: 'rgba(255,159,10,0.1)', color: '#b36200' },
+      pending_super: { bg: 'rgba(175,82,222,0.1)', color: '#7b2d8b', label: 'Awaiting Super Admin' },
       approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Approved' },
       rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' },
     };
-    const s = map[stage] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)', label: stage };
-    return <span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, background: s.bg, color: s.color }}>{s.label}</span>;
+    const s = map[stage] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)' };
+    const label = (stage === 'pending_mgr' || stage === 'pending_l2' || stage === 'pending_l1') && approverName
+      ? `With ${approverName}` : (map[stage]?.label || stage?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || stage);
+    return <span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, background: s.bg, color: s.color }}>{label}</span>;
   };
 
   if (!emp) return null;
@@ -246,8 +249,8 @@ export default function LeavesPage({ params }) {
                 const total = leaveBalanceDetail[`${type}Total`] ?? 0;
                 const used = leaveBalanceDetail[`${type}Used`] ?? 0;
                 return (
-                  <div key={type} style={{ borderLeft: `3px solid ${LEAVE_COLORS[type]}`, paddingLeft: '8px' }}>
-                    <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: '11px', textTransform: 'uppercase' }}>{type}</div>
+                    <div key={type} style={{ borderLeft: `3px solid ${LEAVE_COLORS[type]}`, paddingLeft: '8px' }}>
+                    <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: '11px' }}>{LEAVE_LABELS[type]}</div>
                     <div style={{ color: 'var(--text2)' }}>{avail} avail · {used} used · {total} total</div>
                   </div>
                 );
@@ -279,7 +282,7 @@ export default function LeavesPage({ params }) {
                     {r.shiftSlot && <span style={{ fontSize: '11px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
                   </div>
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                    {r.approvalStage && r.status === 'pending' && <StageBadge stage={r.approvalStage} />}
+                    {r.approvalStage && r.status === 'pending' && <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} />}
                     {statusBadge(r.status)}
                   </div>
                 </div>

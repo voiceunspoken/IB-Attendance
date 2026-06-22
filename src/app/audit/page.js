@@ -10,6 +10,28 @@ import { FiClipboard, FiSun, FiUser, FiCalendar, FiFileText, FiSettings, FiAward
 
 const LEAVE_LABELS = { cl: 'CL', sl: 'SL', el: 'EL', rl: 'RL', sh: 'SH' };
 const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b' };
+const ATTENDANCE_TYPE_LABELS = {
+  present: 'Present', absent: 'Absent', half: 'Half Day', holiday: 'Holiday', rl: 'Restricted Leave',
+  wfh: 'WFH', wfm: 'WFM', wfo: 'WFO', wos: 'WOS',
+};
+const ACTION_LABELS = {
+  change_approved: 'Change Approved', change_rejected: 'Change Rejected',
+  user_created: 'User Created', user_updated: 'User Updated', user_deleted: 'User Deleted',
+  user_disabled: 'User Disabled', user_enabled: 'User Enabled', user_promoted: 'User Promoted',
+  employee_added: 'Employee Added', employee_deleted: 'Employee Deleted',
+  month_deleted: 'Month Record Deleted', month_edited: 'Month Record Edited',
+  password_changed: 'Password Changed',
+  name_updated: 'Name Updated', name_change_requested: 'Name Change Requested',
+  name_change_approved: 'Name Change Approved', name_change_rejected: 'Name Change Rejected',
+  leave_request_approved: 'Leave Approved', leave_request_rejected: 'Leave Rejected',
+  leave_policy_updated: 'Leave Policy Updated', leave_deduction_requested: 'Leave Deduction Requested',
+  regularisation_approved: 'Regularization Approved', regularisation_rejected: 'Regularization Rejected',
+  wfh_approved: 'Work Mode Approved', wfh_rejected: 'Work Mode Rejected',
+  attendance_adjustment: 'Attendance Adjustment',
+  department_added: 'Department Added', department_deleted: 'Department Deleted',
+  designation_added: 'Designation Added', designation_deleted: 'Designation Deleted',
+  holiday_added: 'Holiday Added', holiday_deleted: 'Holiday Deleted',
+};
 
 export default function AuditPage() {
   const { role, isAuthenticated, loading: authLoading } = useAuth();
@@ -80,12 +102,12 @@ export default function AuditPage() {
 
   const statusBadge = (status) => {
     const map = {
-      pending: { bg: 'rgba(255,159,10,0.1)', color: '#b36200' },
-      approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37' },
-      rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b' }
+      pending: { bg: 'rgba(255,159,10,0.1)', color: '#b36200', label: 'Pending' },
+      approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Approved' },
+      rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' }
     };
-    const s = map[status] || map.pending;
-    return <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: '980px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.color }}>{status}</span>;
+    const s = map[status] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)', label: status.charAt(0).toUpperCase() + status.slice(1) };
+    return <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: '980px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.color }}>{s.label}</span>;
   };
 
   const fetchAuditLog = useCallback(async () => {
@@ -262,7 +284,7 @@ export default function AuditPage() {
                           {payload.reason && <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '2px' }}>Reason: {payload.reason}</div>}
                           {payload.warning && <div style={{ fontSize: '11px', color: 'var(--orange)', marginTop: '2px', fontWeight: 500 }}>⚠ {payload.warning}</div>}
                           {payload.currentType && payload.newType && (
-                            <div style={{ fontSize: '11px', color: 'var(--text2)' }}>{payload.currentType} → {payload.newType}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--text2)' }}>{ATTENDANCE_TYPE_LABELS[payload.currentType] || payload.currentType} → {ATTENDANCE_TYPE_LABELS[payload.newType] || payload.newType}</div>
                           )}
                           {payload.day && payload.monthYear && (
                             <div style={{ fontSize: '11px', color: 'var(--text2)' }}>Day {payload.day} · {payload.monthYear}</div>
@@ -335,7 +357,7 @@ export default function AuditPage() {
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '2px' }}>
                                 <span style={{ fontSize: '12px', fontWeight: 600 }}>{log.performedBy}</span>
-                                <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{log.action.replace(/_/g, ' ')}</span>
+                                <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{ACTION_LABELS[log.action] || log.action.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
                                 <span style={{ fontSize: '10px', background: meta.bg, color: meta.color, padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{meta.label}</span>
                               </div>
                               <div style={{ fontSize: '12px', color: 'var(--text2)', lineHeight: 1.4 }}>{log.detail}</div>

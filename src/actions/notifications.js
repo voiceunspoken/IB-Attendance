@@ -136,6 +136,36 @@ export async function sendMonthlyReport(employeeCode, employeeName, monthYear, s
   return { success: true };
 }
 
+export async function sendWfhPendingNotification(managerCode, managerName, employeeName, date, reason, workType) {
+  const email = await getEmployeeEmail(managerCode);
+  const resend = await getResend();
+  if (!email || !resend) return { skipped: true };
+
+  const workTypeLabel = { wfh: 'WFH', wos: 'WOS', wfm: 'WFM', wfo: 'WFO' }[workType] || workType.toUpperCase();
+
+  await resend.emails.send({
+    from: FROM,
+    to: email,
+    subject: `Work From Home Request Pending — ${employeeName}`,
+    html: `<div style="font-family:-apple-system,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;">
+      <h2 style="font-size:20px;font-weight:700;color:#1d1d1f;margin-bottom:4px;">${workTypeLabel} Request Pending</h2>
+      <p style="color:#6e6e73;font-size:14px;margin-bottom:24px;">Hi ${managerName},</p>
+      <div style="background:#f0f7ff;border:1px solid #b8d6f5;border-radius:12px;padding:20px;margin-bottom:24px;">
+        <p style="margin:0 0 8px;font-size:15px;color:#1d1d1f;">
+          <strong>${employeeName}</strong> has requested <strong>${workTypeLabel}</strong> on
+          <strong>${new Date(date).toLocaleDateString()}</strong>.
+        </p>
+        ${reason ? `<p style="margin:0;font-size:13px;color:#6e6e73;">Reason: ${reason}</p>` : ''}
+      </div>
+      <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://ibeesattendance.vercel.app'}/leaves"
+         style="display:inline-block;background:#0071e3;color:#fff;padding:10px 20px;border-radius:980px;text-decoration:none;font-size:14px;font-weight:500;">
+        Review Request
+      </a>
+    </div>`
+  });
+  return { success: true };
+}
+
 export async function sendAllMonthlyReports(monthYear) {
   const users = await prisma.user.findMany({ where: { role: 'employee', code: { not: null } } });
   const results = [];
@@ -150,6 +180,34 @@ export async function sendAllMonthlyReports(monthYear) {
     }
   }
   return results;
+}
+
+export async function sendLeavePendingNotification(managerCode, managerName, employeeName, leaveType, fromDate, toDate, days, reason) {
+  const email = await getEmployeeEmail(managerCode);
+  const resend = await getResend();
+  if (!email || !resend) return { skipped: true };
+
+  await resend.emails.send({
+    from: FROM,
+    to: email,
+    subject: `Leave Request Pending — ${employeeName}`,
+    html: `<div style="font-family:-apple-system,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;">
+      <h2 style="font-size:20px;font-weight:700;color:#1d1d1f;margin-bottom:4px;">Leave Request Pending</h2>
+      <p style="color:#6e6e73;font-size:14px;margin-bottom:24px;">Hi ${managerName},</p>
+      <div style="background:#f0f7ff;border:1px solid #b8d6f5;border-radius:12px;padding:20px;margin-bottom:24px;">
+        <p style="margin:0 0 8px;font-size:15px;color:#1d1d1f;">
+          <strong>${employeeName}</strong> has submitted a <strong>${leaveType.toUpperCase()}</strong> leave request for
+          <strong>${days} day(s)</strong> (${new Date(fromDate).toLocaleDateString()} — ${new Date(toDate).toLocaleDateString()}).
+        </p>
+        ${reason ? `<p style="margin:0;font-size:13px;color:#6e6e73;">Reason: ${reason}</p>` : ''}
+      </div>
+      <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://ibeesattendance.vercel.app'}/leaves"
+         style="display:inline-block;background:#0071e3;color:#fff;padding:10px 20px;border-radius:980px;text-decoration:none;font-size:14px;font-weight:500;">
+        Review Request
+      </a>
+    </div>`
+  });
+  return { success: true };
 }
 
 // ── In-app notifications ──

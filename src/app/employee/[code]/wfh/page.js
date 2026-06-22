@@ -15,15 +15,16 @@ const WORK_TYPE_CONFIG = {
 };
 
 const STATUS_COLORS = {
-  pending: { bg: 'rgba(255,159,10,0.1)', color: '#b36200' },
-  approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37' },
-  rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b' },
+  pending: { bg: 'rgba(255,159,10,0.1)', color: '#b36200', label: 'Pending' },
+  approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Approved' },
+  rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' },
 };
 
 const STAGE_LABELS = {
-  pending_l2: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3', label: 'L2 Pending' },
-  pending_l1: { bg: 'rgba(255,159,10,0.1)', color: '#b36200', label: 'L1 Pending' },
-  pending_super: { bg: 'rgba(175,82,222,0.1)', color: '#7b2d8b', label: 'Super Pending' },
+  pending_mgr: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3', label: 'With Manager' },
+  pending_l2: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3', label: 'With Manager' },
+  pending_l1: { bg: 'rgba(255,159,10,0.1)', color: '#b36200', label: 'With Manager' },
+  pending_super: { bg: 'rgba(175,82,222,0.1)', color: '#7b2d8b', label: 'Awaiting Super Admin' },
   approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Approved' },
   rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' },
 };
@@ -83,13 +84,14 @@ export default function WfhPage({ params }) {
   const allowedTypes = isHybrid ? ['wfh', 'wos', 'wfm', 'wfo'] : ['wfh', 'wos'];
 
   const StatusBadge = ({ status }) => {
-    const s = STATUS_COLORS[status] || STATUS_COLORS.pending;
-    return <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: '980px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.color }}>{status}</span>;
+    const s = STATUS_COLORS[status] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)', label: status.charAt(0).toUpperCase() + status.slice(1) };
+    return <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: '980px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.color }}>{s.label}</span>;
   };
 
-  const StageBadge = ({ stage }) => {
-    const s = STAGE_LABELS[stage] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)', label: stage };
-    return <span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, background: s.bg, color: s.color }}>{s.label}</span>;
+  const StageBadge = ({ stage, approverName }) => {
+    const label = stage === 'pending_mgr' && approverName ? `With ${approverName}` : (STAGE_LABELS[stage]?.label || stage?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || stage);
+    const s = STAGE_LABELS[stage] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)' };
+    return <span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, background: s.bg, color: s.color }}>{label}</span>;
   };
 
   const renderWorkTypeIcon = (wt) => {
@@ -170,7 +172,7 @@ export default function WfhPage({ params }) {
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                      {r.approvalStage && r.status === 'pending' && <StageBadge stage={r.approvalStage} />}
+                      {r.approvalStage && r.status === 'pending' && <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} />}
                       <StatusBadge status={r.status} />
                     </div>
                   </div>

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { FiX } from 'react-icons/fi';
 import styles from './Modal.module.css';
 
@@ -35,7 +36,7 @@ export default function Modal({ open, onClose, title, children, width = '440px' 
   }, [open, handleKeyDown]);
 
   if (!open) return null;
-  return (
+  return createPortal(
     <div className={styles.overlay} onClick={onClose} onWheel={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={title || 'Dialog'}>
       <div className={styles.center}>
         <div ref={contentRef} className={styles.content} onClick={e => e.stopPropagation()} style={{ width }}>
@@ -46,6 +47,7 @@ export default function Modal({ open, onClose, title, children, width = '440px' 
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
 import { requireAdmin, requireAdminOrSuperAdmin, requireSuperAdmin } from '../lib/auth-guard';
-import { createNotification, getAdminUserIds, sendLeaveStatusNotification } from './notifications';
+import { createNotification, getAdminUserIds, sendLeavePendingNotification, sendLeaveStatusNotification } from './notifications';
 
 export async function getLeavePolicy(year) {
   return prisma.leavePolicy.findUnique({ where: { year } });
@@ -307,6 +307,14 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
     const approver = managers.find(m => m.managerUserId === currentApproverId);
     await logAction(approver?.manager?.code || 'unknown', 'leave_mgr_pending', 'leave_request', req.id,
       `Leave request from ${user.name} awaiting your approval`);
+    await createNotification(currentApproverId, 'leave_pending',
+      `Leave Request — ${user.name}`,
+      `${user.name} submitted ${leaveType.toUpperCase()} leave for ${computedDays} day(s). Reason: ${reason || 'N/A'}`,
+      { employeeCode, leaveType, fromDate, toDate, days: computedDays, reason }
+    );
+    if (approver?.manager?.code) {
+      await sendLeavePendingNotification(approver.manager.code, approver.manager.name, user.name, leaveType, fromDate, toDate, computedDays, reason);
+    }
   }
 
   revalidatePath(`/employee/${employeeCode}`);
@@ -321,20 +329,29 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
   return { request: req, sandwichMessage };
 }
 
+async function attachApproverName(requests) {
+  const ids = [...new Set(requests.map(r => r.currentApproverId).filter(Boolean))];
+  if (ids.length === 0) return requests.map(r => ({ ...r, currentApprover: null }));
+  const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
+  const map = Object.fromEntries(users.map(u => [u.id, u]));
+  return requests.map(r => ({ ...r, currentApprover: r.currentApproverId ? map[r.currentApproverId] || null : null }));
+}
+
 export async function getLeaveRequests(employeeCode) {
   const user = await prisma.user.findUnique({ where: { code: employeeCode } });
   if (!user) return [];
-  return prisma.leaveRequest.findMany({
+  const requests = await prisma.leaveRequest.findMany({
     where: { userId: user.id },
     include: { user: { select: { code: true, name: true } } },
     orderBy: { createdAt: 'desc' }
   });
+  return attachApproverName(requests);
 }
 
 export async function getManagerLeaveRequests(managerCode) {
   const mgr = await prisma.user.findUnique({ where: { code: managerCode } });
   if (!mgr) return [];
-  return prisma.leaveRequest.findMany({
+  const requests = await prisma.leaveRequest.findMany({
     where: {
       currentApproverId: mgr.id,
       status: 'pending',
@@ -343,25 +360,28 @@ export async function getManagerLeaveRequests(managerCode) {
     include: { user: { select: { code: true, name: true, managers: { include: { manager: { select: { code: true, name: true } } }, orderBy: { priority: 'asc' } } } } },
     orderBy: { createdAt: 'asc' }
   });
+  return attachApproverName(requests);
 }
 
 export async function getLeaveRequestsByStage(stage) {
   const where = stage === 'pending_super'
     ? { approvalStage: 'pending_super', status: 'pending' }
     : { approvalStage: stage, status: 'pending' };
-  return prisma.leaveRequest.findMany({
+  const requests = await prisma.leaveRequest.findMany({
     where,
     include: { user: { select: { code: true, name: true } } },
     orderBy: { createdAt: 'asc' }
   });
+  return attachApproverName(requests);
 }
 
 export async function getAllLeaveRequests() {
-  return prisma.leaveRequest.findMany({
+  const requests = await prisma.leaveRequest.findMany({
     include: { user: { select: { code: true, name: true, managers: { include: { manager: { select: { code: true, name: true } } }, orderBy: { priority: 'asc' } } } } },
     orderBy: { createdAt: 'desc' },
     take: 200
   });
+  return attachApproverName(requests);
 }
 
 export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = '') {

@@ -36,12 +36,12 @@ export default function RegularizePage({ params }) {
 
   const statusBadge = (status) => {
     const map = {
-      pending: { bg: 'rgba(255,159,10,0.1)', color: '#b36200' },
-      approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37' },
-      rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b' }
+      pending: { bg: 'rgba(255,159,10,0.1)', color: '#b36200', label: 'Pending' },
+      approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Approved' },
+      rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' }
     };
-    const s = map[status] || map.pending;
-    return <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: '980px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.color }}>{status}</span>;
+    const s = map[status] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)', label: status.charAt(0).toUpperCase() + status.slice(1) };
+    return <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: '980px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.color }}>{s.label}</span>;
   };
 
   const handleSubmitReg = async (e) => {

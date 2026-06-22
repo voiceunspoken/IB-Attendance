@@ -12,7 +12,8 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 100vh;
+  box-sizing: border-box;
+  height: 100dvh;
   padding: 48px 24px;
 }
 
@@ -24,6 +25,7 @@
   padding: 28px;
   max-width: 92vw;
   max-height: 85vh;
+  min-height: 0;
   overflow-y: auto;
   animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }

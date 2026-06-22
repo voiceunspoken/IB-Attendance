@@ -321,7 +321,7 @@ export default function ProfilePage({ params }) {
                 </select>
               ) : (
                 <span style={{ fontSize: '13px', fontWeight: 600, padding: '4px 12px', borderRadius: '980px', background: employeeType === 'hybrid' ? 'rgba(175,82,222,0.1)' : 'var(--surface2)', color: employeeType === 'hybrid' ? 'var(--purple)' : 'var(--text2)' }}>
-                  {(employeeType || 'regular').toUpperCase()}
+                  {(employeeType === 'regular' ? 'Regular' : employeeType === 'hybrid' ? 'Hybrid' : (employeeType || 'Regular'))}
                 </span>
               )}
             </div>

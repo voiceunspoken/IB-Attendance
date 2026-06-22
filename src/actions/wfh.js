@@ -3,7 +3,7 @@
 import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
-import { createNotification, getAdminUserIds } from './notifications';
+import { createNotification, getAdminUserIds, sendWfhPendingNotification } from './notifications';
 
 export async function submitWfhRequest(employeeCode, { date, reason, workType = 'wfh' }) {
   const user = await prisma.user.findUnique({
@@ -70,6 +70,14 @@ export async function submitWfhRequest(employeeCode, { date, reason, workType = 
     const approver = managers.find(m => m.managerUserId === currentApproverId);
     await logAction(approver?.manager?.code || 'unknown', 'wfh_pending', 'wfh_request', req.id,
       `${workTypeLabel} request from ${user.name} awaiting your approval`);
+    await createNotification(currentApproverId, 'wfh_pending',
+      `${workTypeLabel} Request — ${user.name}`,
+      `${user.name} requested ${workTypeLabel} on ${reqDate.toLocaleDateString('en-IN')}. Reason: ${reason || 'N/A'}`,
+      { employeeCode, date, reason, workType }
+    );
+    if (approver?.manager?.code) {
+      await sendWfhPendingNotification(approver.manager.code, approver.manager.name, user.name, date, reason, workType);
+    }
   }
 
   revalidatePath(`/employee/${employeeCode}`);
@@ -88,20 +96,29 @@ export async function submitWfhRequest(employeeCode, { date, reason, workType = 
   return { request: { id: req.id, status: req.status, approvalStage: req.approvalStage, workType } };
 }
 
+async function attachApproverName(requests) {
+  const ids = [...new Set(requests.map(r => r.currentApproverId).filter(Boolean))];
+  if (ids.length === 0) return requests.map(r => ({ ...r, currentApprover: null }));
+  const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
+  const map = Object.fromEntries(users.map(u => [u.id, u]));
+  return requests.map(r => ({ ...r, currentApprover: r.currentApproverId ? map[r.currentApproverId] || null : null }));
+}
+
 export async function getWfhRequests(employeeCode) {
   const user = await prisma.user.findUnique({ where: { code: employeeCode } });
   if (!user) return [];
-  return prisma.wfhRequest.findMany({
+  const requests = await prisma.wfhRequest.findMany({
     where: { userId: user.id },
     include: { user: { select: { code: true, name: true } } },
     orderBy: { createdAt: 'desc' }
   });
+  return attachApproverName(requests);
 }
 
 export async function getManagerWfhRequests(managerCode) {
   const mgr = await prisma.user.findUnique({ where: { code: managerCode } });
   if (!mgr) return [];
-  return prisma.wfhRequest.findMany({
+  const requests = await prisma.wfhRequest.findMany({
     where: {
       currentApproverId: mgr.id,
       status: 'pending',
@@ -110,25 +127,28 @@ export async function getManagerWfhRequests(managerCode) {
     include: { user: { select: { code: true, name: true, managers: { include: { manager: { select: { code: true, name: true } } }, orderBy: { priority: 'asc' } } } } },
     orderBy: { createdAt: 'asc' }
   });
+  return attachApproverName(requests);
 }
 
 export async function getWfhRequestsByStage(stage) {
   const where = stage === 'pending_super'
     ? { approvalStage: 'pending_super', status: 'pending' }
     : { approvalStage: stage, status: 'pending' };
-  return prisma.wfhRequest.findMany({
+  const requests = await prisma.wfhRequest.findMany({
     where,
     include: { user: { select: { code: true, name: true } } },
     orderBy: { createdAt: 'asc' }
   });
+  return attachApproverName(requests);
 }
 
 export async function getAllWfhRequests() {
-  return prisma.wfhRequest.findMany({
+  const requests = await prisma.wfhRequest.findMany({
     include: { user: { select: { code: true, name: true, managers: { include: { manager: { select: { code: true, name: true } } }, orderBy: { priority: 'asc' } } } } },
     orderBy: { createdAt: 'desc' },
     take: 200
   });
+  return attachApproverName(requests);
 }
 
 export async function reviewWfhRequest(requestId, reviewedBy, approve, note = '') {

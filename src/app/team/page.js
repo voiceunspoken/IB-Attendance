@@ -13,6 +13,18 @@ import ConfirmModal from '../../components/ConfirmModal';
 import { useToast } from '../../components/Toast';
 import { FiPlus, FiTrash2, FiSearch, FiUser, FiX, FiCheck, FiAlertTriangle } from 'react-icons/fi';
 
+const ATTENDANCE_TYPE_LABELS = {
+  present: 'Present', absent: 'Absent', half: 'Half Day', holiday: 'Holiday', rl: 'Restricted Leave',
+  wfh: 'WFH', wfm: 'WFM', wfo: 'WFO', wos: 'WOS',
+};
+const EMPLOYEE_TYPE_LABELS = { regular: 'Regular', hybrid: 'Hybrid' };
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const formatMonthYear = (m) => {
+  if (!m) return '';
+  const [mo, yr] = m.split('_');
+  return `${MONTH_NAMES[parseInt(mo) - 1] || mo} ${yr}`;
+};
+
 const ROLE_STYLES = {
   super_admin: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Super Admin' },
   admin: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3', label: 'Admin' },
@@ -367,7 +379,7 @@ export default function TeamPage() {
     const result = await updateEmployeeDetails(typeModal.employee.code, { employeeType: typeModal.value }, user.username);
     setTypeModalSaving(false);
     if (result.error) return toast.error(result.error);
-    toast.success(`Type changed to ${typeModal.value.toUpperCase()}.`);
+    toast.success(`Type changed to ${(EMPLOYEE_TYPE_LABELS[typeModal.value] || typeModal.value)}.`);
     setTypeModal({ open: false, employee: null, value: 'regular' });
     setFetchTrigger(t => t + 1);
   };
@@ -592,7 +604,7 @@ export default function TeamPage() {
                           <td style={{ ...tdStyle, fontWeight: 500, color: p.name ? 'var(--text)' : 'var(--text3)' }}>{p.name || '—'}</td>
                           <td style={tdStyle}><RoleBadge role={p.role || 'employee'} /></td>
                           <td style={tblCell}>
-                            <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '980px', background: p.employeeType === 'hybrid' ? 'rgba(175,82,222,0.1)' : 'var(--surface2)', color: p.employeeType === 'hybrid' ? 'var(--purple)' : 'var(--text2)' }}>{(p.employeeType || 'regular').toUpperCase()}</span>
+                            <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '980px', background: p.employeeType === 'hybrid' ? 'rgba(175,82,222,0.1)' : 'var(--surface2)', color: p.employeeType === 'hybrid' ? 'var(--purple)' : 'var(--text2)' }}>{EMPLOYEE_TYPE_LABELS[p.employeeType] || p.employeeType || 'Regular'}</span>
                           </td>
                           <td style={{ ...tdStyle, color: 'var(--text2)', fontSize: '12px' }}>{p.department?.name || '—'}</td>
                           <td style={{ ...tdStyle, color: 'var(--text2)', fontSize: '12px' }}>{p.designation?.name || '—'}</td>
@@ -688,21 +700,21 @@ export default function TeamPage() {
                       </div>
                       {(isAdjustment || isDeduction) ? (
                         <div>
-                          {isDeduction ? (
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
-                              <span style={{ fontWeight: 600, fontSize: '13px' }}>{payload.employeeName || payload.employeeCode}</span>
-                              {payload.employeeCode && <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{payload.employeeCode}</span>}
-                              <span style={{ fontSize: '11px', color: 'var(--orange)', fontWeight: 600 }}>Leave Deduction</span>
-                              <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{payload.days}d {['cl','sl','el','rl','sh'].includes(payload.leaveType) ? payload.leaveType.toUpperCase() : payload.leaveType}</span>
-                            </div>
-                          ) : (
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
-                              <span style={{ fontWeight: 600, fontSize: '13px' }}>{payload.employeeName || payload.employeeCode}</span>
-                              {payload.employeeCode && <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{payload.employeeCode}</span>}
-                              <span style={{ fontSize: '11px', color: 'var(--text2)' }}>Day {payload.day} · {payload.monthYear?.replace('_', '/')}</span>
-                              <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{payload.currentType} → {payload.newType}</span>
-                            </div>
-                          )}
+                              {isDeduction ? (
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
+                                  <span style={{ fontWeight: 600, fontSize: '13px' }}>{payload.employeeName || payload.employeeCode}</span>
+                                  {payload.employeeCode && <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{payload.employeeCode}</span>}
+                                  <span style={{ fontSize: '11px', color: 'var(--orange)', fontWeight: 600 }}>Leave Deduction</span>
+                                  <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{payload.days}d {payload.leaveType?.toUpperCase() || payload.leaveType}</span>
+                                </div>
+                              ) : (
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
+                                  <span style={{ fontWeight: 600, fontSize: '13px' }}>{payload.employeeName || payload.employeeCode}</span>
+                                  {payload.employeeCode && <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{payload.employeeCode}</span>}
+                                  <span style={{ fontSize: '11px', color: 'var(--text2)' }}>Day {payload.day} · {formatMonthYear(payload.monthYear)}</span>
+                                  <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{ATTENDANCE_TYPE_LABELS[payload.currentType] || payload.currentType} → {ATTENDANCE_TYPE_LABELS[payload.newType] || payload.newType}</span>
+                                </div>
+                              )}
                           {payload.reason && <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '2px' }}>Reason: {payload.reason}</div>}
                           {payload.warning && <div style={{ fontSize: '11px', color: 'var(--orange)', marginTop: '2px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}><FiAlertTriangle size={12} /> {payload.warning}</div>}
                         </div>

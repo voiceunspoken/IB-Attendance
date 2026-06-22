@@ -7,7 +7,9 @@ import { getManagedEmployees } from '../../../actions/departments';
 import { getManagerLeaveRequests } from '../../../actions/leave';
 import { FiUsers, FiArrowRight, FiClipboard, FiChevronRight } from 'react-icons/fi';
 
+const LEAVE_LABELS = { cl: 'CL', sl: 'SL', el: 'EL', rl: 'RL', sh: 'SH' };
 const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b' };
+const EMPLOYEE_TYPE_LABELS = { regular: 'Regular', hybrid: 'Hybrid' };
 
 export default function MyTeamPage() {
   const { isAuthenticated, user, loading: authLoading } = useAuth();
@@ -106,7 +108,7 @@ export default function MyTeamPage() {
                         background: m.employeeType === 'hybrid' ? 'rgba(175,82,222,0.1)' : 'var(--surface2)',
                         color: m.employeeType === 'hybrid' ? '#af52de' : 'var(--text2)',
                       }}>
-                        {(m.employeeType || 'regular').toUpperCase()}
+                        {EMPLOYEE_TYPE_LABELS[m.employeeType] || m.employeeType || 'Regular'}
                       </span>
                     </td>
                     <td style={tdStyle}>
@@ -156,7 +158,7 @@ export default function MyTeamPage() {
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '2px', flexWrap: 'wrap' }}>
                     <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user?.name}</span>
                     <span style={{ fontSize: '11px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>
-                      {r.leaveType?.toUpperCase()}
+                      {LEAVE_LABELS[r.leaveType] || r.leaveType?.toUpperCase()}
                     </span>
                     <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{r.days}d</span>
                   </div>
