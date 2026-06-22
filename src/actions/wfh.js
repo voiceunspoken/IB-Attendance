@@ -6,28 +6,34 @@ import { logAction } from './audit';
 import { requireAdmin, requireSuperAdmin } from '../lib/auth-guard';
 import { createNotification, getAdminUserIds } from './notifications';
 
-export async function submitWfhRequest(employeeCode, { date, reason }) {
+export async function submitWfhRequest(employeeCode, { date, reason, workType = 'wfh' }) {
   const user = await prisma.user.findUnique({
     where: { code: employeeCode },
     include: { managers: { include: { manager: true }, orderBy: { priority: 'asc' } } }
   });
   if (!user) return { error: 'Employee not found' };
 
-  const wfhDate = new Date(date);
-  wfhDate.setHours(0, 0, 0, 0);
+  const reqDate = new Date(date);
+  reqDate.setHours(0, 0, 0, 0);
 
-  if (wfhDate < new Date(new Date().toDateString())) {
-    return { error: 'Cannot apply for WFH on a past date.' };
+  if (reqDate < new Date(new Date().toDateString())) {
+    return { error: 'Cannot apply on a past date.' };
   }
 
   const existing = await prisma.wfhRequest.findFirst({
     where: {
       userId: user.id,
-      date: wfhDate,
+      date: reqDate,
       status: { not: 'rejected' }
     }
   });
-  if (existing) return { error: 'You already have a WFH request for this date.' };
+  if (existing) return { error: 'You already have a request for this date.' };
+
+  // Validate workType based on employee type
+  const allowedTypes = user.employeeType === 'hybrid' ? ['wfh', 'wos', 'wfm', 'wfo'] : ['wfh', 'wos'];
+  if (!allowedTypes.includes(workType)) {
+    return { error: 'Work mode not allowed for your employee type.' };
+  }
 
   const config = await prisma.superAdminConfig.findFirst();
   const requireSuper = config?.requireSuperApproval ?? true;
@@ -47,37 +53,40 @@ export async function submitWfhRequest(employeeCode, { date, reason }) {
   const req = await prisma.wfhRequest.create({
     data: {
       userId: user.id,
-      date: wfhDate,
+      date: reqDate,
       reason,
+      workType,
       approvalStage,
       currentApproverId,
       status: approvalStage === 'approved' ? 'approved' : 'pending'
     }
   });
 
+  const workTypeLabel = { wfh: 'WFH', wos: 'WOS', wfm: 'WFM', wfo: 'WFO' }[workType] || workType.toUpperCase();
+
   await logAction(employeeCode, 'wfh_submitted', 'wfh_request', req.id,
-    `Submitted WFH request for ${wfhDate.toLocaleDateString('en-IN')}`);
+    `Submitted ${workTypeLabel} request for ${reqDate.toLocaleDateString('en-IN')}`);
 
   if (currentApproverId) {
     const approver = managers.find(m => m.managerUserId === currentApproverId);
     await logAction(approver?.manager?.code || 'unknown', 'wfh_pending', 'wfh_request', req.id,
-      `WFH request from ${user.name} awaiting your approval`);
+      `${workTypeLabel} request from ${user.name} awaiting your approval`);
   }
 
   revalidatePath(`/employee/${employeeCode}`);
 
   const adminIds = await getAdminUserIds();
   await Promise.all(adminIds.map(id => createNotification(id, 'wfh_submitted',
-    `New WFH Request`,
-    `${user.name} requested WFH on ${wfhDate.toLocaleDateString('en-IN')}.`,
-    { employeeCode, date, reason }
+    `New ${workTypeLabel} Request`,
+    `${user.name} requested ${workTypeLabel} on ${reqDate.toLocaleDateString('en-IN')}.`,
+    { employeeCode, date, reason, workType }
   )));
 
   if (approvalStage === 'approved') {
-    await applyWfhToDailyLog(user.id, wfhDate);
+    await applyWorkModeToDailyLog(user.id, reqDate, workType);
   }
 
-  return { request: { id: req.id, status: req.status, approvalStage: req.approvalStage } };
+  return { request: { id: req.id, status: req.status, approvalStage: req.approvalStage, workType } };
 }
 
 export async function getWfhRequests(employeeCode) {
@@ -153,7 +162,7 @@ export async function reviewWfhRequest(requestId, reviewedBy, approve, note = ''
       newStage = 'pending_mgr';
       newApproverId = nextMgr.managerUserId;
       await logAction(nextMgr.manager.code, 'wfh_pending', 'wfh_request', req.id,
-        `WFH request from ${req.user.name} awaiting your approval (approved by manager)`);
+        `${req.workType.toUpperCase()} request from ${req.user.name} awaiting your approval (approved by manager)`);
     } else if (requireSuper) {
       newStage = 'pending_super';
       newApproverId = null;
@@ -178,42 +187,44 @@ export async function reviewWfhRequest(requestId, reviewedBy, approve, note = ''
   });
 
   if (newStatus === 'approved') {
-    await applyWfhToDailyLog(req.userId, req.date);
+    await applyWorkModeToDailyLog(req.userId, req.date, req.workType);
   }
 
+  const workTypeLabel = (req.workType || 'wfh').toUpperCase();
+
   await logAction(reviewedBy, newStatus === 'approved' ? 'wfh_approved' : 'wfh_rejected', 'wfh_request', req.id,
-    `${newStatus === 'approved' ? 'Approved' : 'Rejected'} WFH request (stage: ${newStage})`);
+    `${newStatus === 'approved' ? 'Approved' : 'Rejected'} ${workTypeLabel} request (stage: ${newStage})`);
 
   if (newStatus === 'approved' && newStage === 'approved') {
     await createNotification(req.userId, 'wfh_approved',
-      `WFH Approved`,
-      `Your WFH request for ${req.date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} has been approved.`,
-      { requestId: req.id, date: req.date.toISOString() });
+      `${workTypeLabel} Approved`,
+      `Your ${workTypeLabel} request for ${req.date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} has been approved.`,
+      { requestId: req.id, date: req.date.toISOString(), workType: req.workType });
   } else if (newStatus === 'rejected') {
     await createNotification(req.userId, 'wfh_rejected',
-      `WFH Rejected`,
-      `Your WFH request for ${req.date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} has been rejected.${note ? ' Note: ' + note : ''}`,
-      { requestId: req.id, date: req.date.toISOString(), note });
+      `${workTypeLabel} Rejected`,
+      `Your ${workTypeLabel} request for ${req.date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} has been rejected.${note ? ' Note: ' + note : ''}`,
+      { requestId: req.id, date: req.date.toISOString(), note, workType: req.workType });
   }
 
   if (newStage === 'pending_super') {
     const adminIds = await getAdminUserIds();
     await Promise.all(adminIds.map(id => createNotification(id, 'wfh_pending_super',
-      `WFH Pending Your Approval`,
-      `${req.user.name}'s WFH request needs your approval.`,
-      { requestId: req.id, employeeCode: req.user.code, date: req.date.toISOString() })));
+      `${workTypeLabel} Pending Your Approval`,
+      `${req.user.name}'s ${workTypeLabel} request needs your approval.`,
+      { requestId: req.id, employeeCode: req.user.code, date: req.date.toISOString(), workType: req.workType })));
   } else if (newApproverId) {
     await createNotification(newApproverId, 'wfh_pending',
-      `WFH Pending Your Approval`,
-      `${req.user.name}'s WFH request needs your approval.`,
-      { requestId: req.id, employeeCode: req.user.code, date: req.date.toISOString() });
+      `${workTypeLabel} Pending Your Approval`,
+      `${req.user.name}'s ${workTypeLabel} request needs your approval.`,
+      { requestId: req.id, employeeCode: req.user.code, date: req.date.toISOString(), workType: req.workType });
   }
 
   revalidatePath('/');
   return { request: updated };
 }
 
-async function applyWfhToDailyLog(userId, date) {
+async function applyWorkModeToDailyLog(userId, date, workType) {
   const monthYear = `${date.getMonth() + 1}_${date.getFullYear()}`;
   const day = date.getDate();
 
@@ -225,8 +236,8 @@ async function applyWfhToDailyLog(userId, date) {
 
   await prisma.dailyLog.upsert({
     where: { userId_monthYear_day: { userId, monthYear, day } },
-    update: { type: 'wfh', raw: 'WFH' },
-    create: { userId, monthYear, day, type: 'wfh', raw: 'WFH' },
+    update: { type: workType, raw: workType.toUpperCase(), workLocation: workType },
+    create: { userId, monthYear, day, type: workType, raw: workType.toUpperCase(), workLocation: workType },
   });
 
   await updateMonthRecordCounts(userId, monthYear);
@@ -239,7 +250,7 @@ async function updateMonthRecordCounts(userId, monthYear) {
     maxDay = Math.max(maxDay, log.day);
     if (log.type === 'absent') absent++;
     else if (log.type === 'half') halfDay++;
-    else if (log.type === 'wfh') wfh++;
+    else if (['wfh', 'wos', 'wfm', 'wfo'].includes(log.type)) wfh++;
     else if (log.type === 'present') present++;
   }
   await prisma.monthRecord.upsert({

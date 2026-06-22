@@ -3,7 +3,7 @@
 import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 
-export async function clockIn(employeeCode) {
+export async function clockIn(employeeCode, workLocation) {
   const user = await prisma.user.findUnique({ where: { code: employeeCode } });
   if (!user) return { error: 'Employee not found.' };
   if (user.disabled) return { error: 'Account is disabled.' };
@@ -24,13 +24,14 @@ export async function clockIn(employeeCode) {
       date: new Date(),
       punchIn: new Date(),
       source: 'web',
+      workLocation: workLocation || null,
       ip: null,
       userAgent: null,
     }
   });
 
   revalidatePath('/');
-  return { success: true, punchLog: { id: punchLog.id, punchIn: punchLog.punchIn.toISOString() } };
+  return { success: true, punchLog: { id: punchLog.id, punchIn: punchLog.punchIn.toISOString(), workLocation: punchLog.workLocation } };
 }
 
 export async function clockOut(employeeCode) {
@@ -59,22 +60,18 @@ export async function clockOut(employeeCode) {
   const monthYear = `${now.getMonth() + 1}_${now.getFullYear()}`;
   const day = now.getDate();
 
-  const hasApprovedWfh = await prisma.wfhRequest.findFirst({
-    where: { userId: user.id, date: { gte: todayStart, lte: todayEnd }, status: 'approved' }
-  });
-
-  const dayType = hasApprovedWfh ? 'wfh' : 'present';
+  const dayType = punchLog.workLocation || 'present';
 
   await prisma.dailyLog.upsert({
     where: { userId_monthYear_day: { userId: user.id, monthYear, day } },
-    update: { type: dayType, inT: inMinutes, outT: outMinutes, raw: 'WEB' },
-    create: { userId: user.id, monthYear, day, type: dayType, inT: inMinutes, outT: outMinutes, raw: 'WEB' },
+    update: { type: dayType, inT: inMinutes, outT: outMinutes, raw: 'WEB', workLocation: punchLog.workLocation || null },
+    create: { userId: user.id, monthYear, day, type: dayType, inT: inMinutes, outT: outMinutes, raw: 'WEB', workLocation: punchLog.workLocation || null },
   });
 
   await updateMonthRecordCounts(user.id, monthYear);
 
   revalidatePath('/');
-  return { success: true, punchLog: { id: updated.id, punchIn: updated.punchIn.toISOString(), punchOut: updated.punchOut.toISOString() } };
+  return { success: true, punchLog: { id: updated.id, punchIn: updated.punchIn.toISOString(), punchOut: updated.punchOut.toISOString(), workLocation: updated.workLocation } };
 }
 
 export async function getTodayPunch(employeeCode) {
@@ -98,22 +95,24 @@ export async function getTodayPunch(employeeCode) {
     punchIn: punchLog.punchIn?.toISOString() || null,
     punchOut: punchLog.punchOut?.toISOString() || null,
     source: punchLog.source,
+    workLocation: punchLog.workLocation || null,
     date: punchLog.date.toISOString(),
   };
 }
 
 async function updateMonthRecordCounts(userId, monthYear) {
   const logs = await prisma.dailyLog.findMany({ where: { userId, monthYear } });
-  let present = 0, absent = 0, halfDay = 0, maxDay = 0;
+  let present = 0, absent = 0, halfDay = 0, wfh = 0, maxDay = 0;
   for (const log of logs) {
     maxDay = Math.max(maxDay, log.day);
     if (log.type === 'absent') absent++;
     else if (log.type === 'half') halfDay++;
+    else if (log.type === 'wfh' || log.type === 'wos' || log.type === 'wfm' || log.type === 'wfo') wfh++;
     else if (log.type === 'present') present++;
   }
   await prisma.monthRecord.upsert({
     where: { userId_monthYear: { userId, monthYear } },
-    update: { present, absent, halfDay, numDays: maxDay },
-    create: { userId, monthYear, present, absent, halfDay, numDays: maxDay },
+    update: { present: present + wfh, absent, halfDay, numDays: maxDay },
+    create: { userId, monthYear, present: present + wfh, absent, halfDay, numDays: maxDay },
   });
 }

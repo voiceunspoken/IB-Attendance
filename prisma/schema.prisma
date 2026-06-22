@@ -97,6 +97,7 @@ model PunchLog {
   punchIn    DateTime?
   punchOut   DateTime?
   source     String    // "web" | "biometric"
+  workLocation String? // "wfh" | "wos" | "wfm" | "wfo"
   ip         String?
   userAgent  String?
   createdAt  DateTime  @default(now())
@@ -159,6 +160,7 @@ model DailyLog {
   isSS       Boolean  @default(false)
   isSL       Boolean  @default(false)
   hdReason   String?  // null | "late" | "ss" — why this day was marked half-day
+  workLocation String? // "wfh" | "wos" | "wfm" | "wfo"
 
   @@unique([userId, monthYear, day])
 }
@@ -239,6 +241,7 @@ model WfhRequest {
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   date              DateTime
   reason            String
+  workType          String    @default("wfh") // "wfh" | "wos" | "wfm" | "wfo"
   status            String    @default("pending") // "pending" | "approved" | "rejected"
   approvalStage     String    @default("pending_l2")
   currentApproverId String?

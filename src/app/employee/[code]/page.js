@@ -33,7 +33,9 @@ export default function AttendancePage({ params }) {
   }, [isAuthenticated, isAdmin, isSuperAdmin, user, authLoading, router, code]);
 
   useEffect(() => {
-    if (!emp?.employeeType || emp.employeeType !== 'hybrid') {
+    if (!emp?.employeeType || emp.employeeType === 'hybrid') {
+      setHasWfhToday(true);
+    } else {
       const today = new Date().toISOString().split('T')[0];
       getWfhRequests(code).then(requests => {
         const approved = requests.some(r =>
@@ -42,8 +44,6 @@ export default function AttendancePage({ params }) {
         );
         setHasWfhToday(approved);
       }).catch(() => setHasWfhToday(false));
-    } else {
-      setHasWfhToday(true);
     }
   }, [emp, code]);
 
@@ -62,7 +62,8 @@ export default function AttendancePage({ params }) {
     rl: currentRecord.rl,
     days: emp.dailyLogs.filter(log => log.monthYear === currentRecord.monthYear).map(dl => ({
       d: dl.day, type: dl.type, raw: dl.raw, inT: dl.inT, outT: dl.outT,
-      isLate: dl.isLate, isSS: dl.isSS, isSL: dl.isSL, hdReason: dl.hdReason
+      isLate: dl.isLate, isSS: dl.isSS, isSL: dl.isSL, hdReason: dl.hdReason,
+      workLocation: dl.workLocation
     }))
   };
 

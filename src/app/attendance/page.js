@@ -114,7 +114,7 @@ export default function AttendancePage() {
       const matchDept = !selectedDept || r.department === selectedDept;
       const matchSubDept = !selectedSubDept || r.subDepartment === selectedSubDept;
 
-      let wfm = 0, wfmhd = 0, wfh = 0, wos = 0, woshd = 0;
+      let wfm = 0, wfmhd = 0, wfh = 0, wos = 0, woshd = 0, wfo = 0, wfohd = 0;
       Object.keys(overrides).forEach(k => {
         if (k.startsWith(r.code + '_')) {
           if (overrides[k] === 'wfm') wfm++;
@@ -122,6 +122,8 @@ export default function AttendancePage() {
           else if (overrides[k] === 'wfh') wfh++;
           else if (overrides[k] === 'wos') wos++;
           else if (overrides[k] === 'wos-hd') woshd++;
+          else if (overrides[k] === 'wfo') wfo++;
+          else if (overrides[k] === 'wfo-hd') wfohd++;
         }
       });
       let matchFilter = true;
@@ -131,6 +133,7 @@ export default function AttendancePage() {
       if (currentFilter === 'wfm') matchFilter = wfm > 0 || wfmhd > 0;
       if (currentFilter === 'wfh') matchFilter = wfh > 0;
       if (currentFilter === 'wos') matchFilter = wos > 0 || woshd > 0;
+      if (currentFilter === 'wfo') matchFilter = wfo > 0 || wfohd > 0;
       if (currentFilter === 'punchmissing') matchFilter = r.punchMissing >= 3;
       return matchSearch && matchDept && matchSubDept && matchFilter;
     });
@@ -212,10 +215,10 @@ export default function AttendancePage() {
   };
 
   const exportCSV = () => {
-    const headers = ['Emp Code','Name','Department','Present','Absent','Half Days','Late','HD(Late)','Short Shifts','HD(SS)','Short Leaves','RL','Holiday','WFM','WFM Half','WFH','WOS','WOS Half','Punch Missing'];
+    const headers = ['Emp Code','Name','Department','Present','Absent','Half Days','Late','HD(Late)','Short Shifts','HD(SS)','Short Leaves','RL','Holiday','WFM','WFM Half','WFH','WOS','WOS Half','WFO','WFO Half','Punch Missing'];
     const rows = [headers.join(',')];
     filteredResults.forEach(r => {
-      let wfm = 0, wfmhd = 0, wfh = 0, wos = 0, woshd = 0;
+      let wfm = 0, wfmhd = 0, wfh = 0, wos = 0, woshd = 0, wfo = 0, wfohd = 0;
       Object.keys(overrides).forEach(k => {
         if (k.startsWith(r.code + '_')) {
           if (overrides[k] === 'wfm') wfm++;
@@ -223,9 +226,11 @@ export default function AttendancePage() {
           else if (overrides[k] === 'wfh') wfh++;
           else if (overrides[k] === 'wos') wos++;
           else if (overrides[k] === 'wos-hd') woshd++;
+          else if (overrides[k] === 'wfo') wfo++;
+          else if (overrides[k] === 'wfo-hd') wfohd++;
         }
       });
-      rows.push([r.code, `"${r.name}"`, r.department || '', r.present, r.absent, r.halfDay, r.late, r.lateHD, r.shortShift, r.ssHD, r.shortLeave, r.rl, r.holi, wfm, wfmhd, wfh, wos, woshd, r.punchMissing].join(','));
+      rows.push([r.code, `"${r.name}"`, r.department || '', r.present, r.absent, r.halfDay, r.late, r.lateHD, r.shortShift, r.ssHD, r.shortLeave, r.rl, r.holi, wfm, wfmhd, wfh, wos, woshd, wfo, wfohd, r.punchMissing].join(','));
     });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([rows.join('\n')], { type: 'text/csv' }));
@@ -246,6 +251,7 @@ export default function AttendancePage() {
     { key: 'wfm', label: 'WFM', count: allResults.filter(r => { let w=0; Object.keys(overrides).forEach(k => { if(k.startsWith(r.code+'_') && (overrides[k]==='wfm'||overrides[k]==='wfm-hd')) w++; }); return w>0; }).length },
     { key: 'wfh', label: 'WFH', count: allResults.filter(r => { let w=0; Object.keys(overrides).forEach(k => { if(k.startsWith(r.code+'_') && overrides[k]==='wfh') w++; }); return w>0; }).length },
     { key: 'wos', label: 'WOS', count: allResults.filter(r => { let w=0; Object.keys(overrides).forEach(k => { if(k.startsWith(r.code+'_') && (overrides[k]==='wos'||overrides[k]==='wos-hd')) w++; }); return w>0; }).length },
+    { key: 'wfo', label: 'WFO', count: allResults.filter(r => { let w=0; Object.keys(overrides).forEach(k => { if(k.startsWith(r.code+'_') && (overrides[k]==='wfo'||overrides[k]==='wfo-hd')) w++; }); return w>0; }).length },
     { key: 'punchmissing', label: 'Missed Punches', count: allResults.filter(r => r.punchMissing >= 3).length },
   ];
 

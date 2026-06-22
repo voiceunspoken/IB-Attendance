@@ -68,11 +68,11 @@ export async function uploadMonthData(monthYear, parsedResults, numDays, perform
       });
       if (hasWebPunch) continue;
 
-      const wfhDate = new Date(parseInt(monthYear.split('_')[1]), parseInt(monthYear.split('_')[0]) - 1, d.d);
-      const hasWfh = await prisma.wfhRequest.findFirst({
-        where: { userId: user.id, date: wfhDate, status: 'approved' }
+      const workModeDate = new Date(parseInt(monthYear.split('_')[1]), parseInt(monthYear.split('_')[0]) - 1, d.d);
+      const hasApprovedWorkMode = await prisma.wfhRequest.findFirst({
+        where: { userId: user.id, date: workModeDate, status: 'approved' }
       });
-      if (hasWfh) continue;
+      if (hasApprovedWorkMode) continue;
 
       await prisma.dailyLog.upsert({
         where: { userId_monthYear_day: { userId: user.id, monthYear, day: d.d } },
@@ -134,7 +134,7 @@ async function recalculateMonthRecord(userId, monthYear, numDays = 31) {
     else if (log.type === 'rl') { rl++; }
     else if (log.type === 'holiday') { holi++; }
     else if (log.type === 'half') { halfDay++; }
-    else if (log.type === 'wfh') { wfh++; }
+    else if (log.type === 'wfh' || log.type === 'wos' || log.type === 'wfm' || log.type === 'wfo') { wfh++; }
     else if (log.type === 'present') {
       if (log.isHD) { halfDay++; } else { present++; }
       if (log.isLate) late++;
@@ -187,7 +187,8 @@ export async function fetchDashboardData(monthYear) {
       isSS: dl.isSS,
       isSL: dl.isSL,
       isHD: dl.type === 'half',
-      hdReason: dl.hdReason
+      hdReason: dl.hdReason,
+      workLocation: dl.workLocation
     }));
     const punchMissingDays = days.filter(d => d.type === 'present' && d.inT === null).map(d => ({
       day: d.d,

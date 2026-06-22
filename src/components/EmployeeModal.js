@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { FiX, FiClock, FiGift, FiCheck } from 'react-icons/fi';
+import { FiX, FiClock, FiGift, FiCheck, FiMapPin } from 'react-icons/fi';
 import { useToast } from './Toast';
 import Modal from './Modal';
 
@@ -20,6 +20,7 @@ const ADJUST_TYPES = [
   { value: 'wfh', label: 'WFH (Work From Home)' },
   { value: 'wfm', label: 'WFM (Work From Ministry)' },
   { value: 'wos', label: 'WOS (On Site)' },
+  { value: 'wfo', label: 'WFO (Work From Office)' },
 ];
 
 export default function EmployeeModal({ employee, currentMonth, onClose, readOnly = false, onAdjust, rlEligibleDays = [], mode = 'modal', isAdmin = false, onPunchUpdate }) {
@@ -123,7 +124,7 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
       else if (['cl', 'sl', 'el', 'ul', 'sh'].includes(info.type)) {
         bg = 'rgba(0,113,227,0.08)'; border = '2px solid rgba(0,113,227,0.25)'; label = info.type.toUpperCase();
       }
-      else if (['wfh', 'wfm', 'wos'].includes(info.type)) {
+      else if (['wfh', 'wfm', 'wos', 'wfo'].includes(info.type)) {
         bg = 'rgba(175,82,222,0.1)'; border = '2px solid rgba(175,82,222,0.3)'; label = info.type.toUpperCase();
       }
       if (info.isSL) { label = 'SL'; bg = 'rgba(0,113,227,0.08)'; border = '2px solid rgba(0,113,227,0.25)'; }
@@ -187,11 +188,11 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
     const dateStr = pd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
     const statusLabel = ({ present: 'Present', absent: 'Absent', half: 'Half Day', rl: 'RL', holiday: 'Holiday', wo: 'WO',
-      cl: 'CL', sl: 'SL', el: 'EL', ul: 'UL', sh: 'SH', wfh: 'WFH', wfm: 'WFM', wos: 'WOS' }[di.type] || di.type);
+      cl: 'CL', sl: 'SL', el: 'EL', ul: 'UL', sh: 'SH', wfh: 'WFH', wfm: 'WFM', wos: 'WOS', wfo: 'WFO' }[di.type] || di.type);
 
     const statusColor = ({ present: '#34c759', absent: '#ff3b30', half: '#ff6b35', rl: '#af52de', holiday: '#ff9f0a', wo: 'var(--text3)',
       cl: '#0071e3', sl: '#0071e3', el: '#0071e3', ul: '#0071e3', sh: '#0071e3',
-      wfh: '#af52de', wfm: '#34c759', wos: '#30b0c7' }[di.type] || 'var(--text2)');
+      wfh: '#af52de', wfm: '#34c759', wos: '#30b0c7', wfo: '#0071e3' }[di.type] || 'var(--text2)');
 
     const workingHrs = di.inT != null && di.outT != null
       ? `${Math.floor((di.outT - di.inT) / 60)}h ${(di.outT - di.inT) % 60}m`
@@ -217,6 +218,20 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
           <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
           {di.isLate && di.type === 'present' ? 'Late — ' : ''}{statusLabel}
         </div>
+
+        {/* Work location badge */}
+        {di.workLocation && di.workLocation !== di.type && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: '6px',
+            padding: '4px 12px', borderRadius: '980px',
+            background: '#30b0c7' + '14', color: '#30b0c7',
+            fontSize: 'var(--fs-xs)', fontWeight: 600, letterSpacing: '-0.01em',
+            marginBottom: '12px'
+          }}>
+            <FiMapPin size={11} />
+            {{ wfh: 'WFH', wos: 'WOS', wfm: 'WFM', wfo: 'WFO' }[di.workLocation] || di.workLocation}
+          </div>
+        )}
 
         {/* Punch timeline */}
         {di.inT != null && (

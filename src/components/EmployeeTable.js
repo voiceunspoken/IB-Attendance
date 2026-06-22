@@ -50,7 +50,7 @@ export default function EmployeeTable({ results, onOpenDetail, currentPage, setC
   };
 
   const empOverrideCounts = (code) => {
-    let wfm = 0, wfmhd = 0, wfh = 0, wos = 0, woshd = 0;
+    let wfm = 0, wfmhd = 0, wfh = 0, wos = 0, woshd = 0, wfo = 0, wfohd = 0;
     Object.keys(overrides).forEach(k => {
       if (k.startsWith(code + '_')) {
         const v = overrides[k];
@@ -59,9 +59,11 @@ export default function EmployeeTable({ results, onOpenDetail, currentPage, setC
         else if (v === 'wfh') wfh++;
         else if (v === 'wos') wos++;
         else if (v === 'wos-hd') woshd++;
+        else if (v === 'wfo') wfo++;
+        else if (v === 'wfo-hd') wfohd++;
       }
     });
-    return { wfm, wfmhd, wfh, wos, woshd };
+    return { wfm, wfmhd, wfh, wos, woshd, wfo, wfohd };
   };
 
   const StatusBadge = ({ r, ov }) => {
@@ -77,6 +79,7 @@ export default function EmployeeTable({ results, onOpenDetail, currentPage, setC
       </span>
     );
     if (ov.wfm > 0 || ov.wfmhd > 0) return s('rgba(52,199,89,0.12)', '#1a7f37', 'WFM', '🟢');
+    if (ov.wfo > 0 || ov.wfohd > 0) return s('rgba(0,113,227,0.12)', '#0071e3', 'WFO', '🔵');
     if (ov.wfh > 0) return s('rgba(175,82,222,0.12)', '#7b2d8b', 'WFH', '🟣');
     if (ov.wos > 0 || ov.woshd > 0) return s('rgba(48,176,199,0.12)', '#1a6e7a', 'WOS', '🔵');
     if (r.punchMissing >= 3) return s('rgba(255,107,53,0.12)', '#c04a1a', 'No Punch', '⚠');
@@ -110,6 +113,8 @@ export default function EmployeeTable({ results, onOpenDetail, currentPage, setC
               {!showMissingDays && <th style={th}>WFH</th>}
               {!showMissingDays && <th style={th}>WOS</th>}
               {!showMissingDays && <th style={th}>WOS½</th>}
+              {!showMissingDays && <th style={th}>WFO</th>}
+              {!showMissingDays && <th style={th}>WFO½</th>}
               {showMissingDays && <th style={th}>Missing Days</th>}
               <th style={th}>⚠</th>
               <th style={th}>Status</th>
@@ -145,6 +150,8 @@ export default function EmployeeTable({ results, onOpenDetail, currentPage, setC
                   {!showMissingDays && <td style={{ ...td, color: ov.wfh > 0 ? 'var(--purple)' : 'var(--text2)' }}>{ov.wfh || '—'}</td>}
                   {!showMissingDays && <td style={{ ...td, color: ov.wos > 0 ? 'var(--teal)' : 'var(--text2)' }}>{ov.wos || '—'}</td>}
                   {!showMissingDays && <td style={{ ...td, color: ov.woshd > 0 ? 'var(--teal)' : 'var(--text2)' }}>{ov.woshd || '—'}</td>}
+                  {!showMissingDays && <td style={{ ...td, color: ov.wfo > 0 ? 'var(--blue)' : 'var(--text2)' }}>{ov.wfo || '—'}</td>}
+                  {!showMissingDays && <td style={{ ...td, color: ov.wfohd > 0 ? 'var(--blue)' : 'var(--text2)' }}>{ov.wfohd || '—'}</td>}
                   {showMissingDays && <td style={td}><MissingDayPills days={r.punchMissingDays} /></td>}
                   <td style={{ ...td, color: r.punchMissing > 0 ? 'var(--orange)' : 'var(--text2)', fontWeight: r.punchMissing > 0 ? 600 : 400, position: 'relative' }}
                       onMouseEnter={e => { const t = e.currentTarget.querySelector('.pm-tooltip'); if (t) t.style.opacity = '1'; }}

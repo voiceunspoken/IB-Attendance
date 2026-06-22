@@ -307,6 +307,12 @@ export default function LeavesPage() {
     return <span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, background: s.bg, color: s.color }}>{s.label}</span>;
   };
 
+  const WorkTypeBadge = ({ workType }) => {
+    const map = { wfh: { bg: 'rgba(175,82,222,0.1)', color: '#af52de', label: 'WFH' }, wos: { bg: 'rgba(48,176,199,0.1)', color: '#30b0c7', label: 'WOS' }, wfm: { bg: 'rgba(52,199,89,0.1)', color: '#34c759', label: 'WFM' }, wfo: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3', label: 'WFO' } };
+    const s = map[workType] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)', label: workType?.toUpperCase() || 'WFH' };
+    return <span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, background: s.bg, color: s.color }}>{s.label}</span>;
+  };
+
   return (
     <div className="page-wrapper animate-fade-in">
       <div style={{ marginBottom: '20px' }}>
@@ -539,7 +545,7 @@ export default function LeavesPage() {
                               <span style={{ color: 'var(--text3)' }}> · {new Date(c.createdAt).toLocaleString()}</span>
                             </div>
                             {payload.reason && <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '2px' }}>Reason: {payload.reason}</div>}
-                            {payload.warning && <div style={{ fontSize: '11px', color: 'var(--orange)', marginTop: '2px', fontWeight: 500 }}>⚠ {payload.warning}</div>}
+                            {payload.warning && <div style={{ fontSize: '11px', color: 'var(--orange)', marginTop: '2px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}><FiAlertTriangle size={12} /> {payload.warning}</div>}
                           </div>
                           <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                             <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '11px', background: 'var(--green)' }}
@@ -740,16 +746,17 @@ export default function LeavesPage() {
           {role === 'admin' && (
             <div className="card overflow-hidden p-0">
               <div className="card-header">
-                Pending Your Approval — WFH ({managerWfhRequests.length})
+                Pending Your Approval — Work Mode ({managerWfhRequests.length})
               </div>
               {managerWfhRequests.length === 0
-                ? <div className="p-32 text-center text-muted2 text-sm">No WFH requests awaiting your approval.</div>
+                ? <div className="p-32 text-center text-muted2 text-sm">No requests awaiting your approval.</div>
                 : managerWfhRequests.map(r => (
                   <div key={r.id} className="p-16-20 border-bottom flex-between" style={{ gap: '16px' }}>
                     <div>
                       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px' }}>
                         <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name || 'Unknown'}</span>
                         <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user?.code}</span>
+                        <WorkTypeBadge workType={r.workType} />
                         <span style={{ fontSize: '12px', color: 'var(--text2)' }}>
                           {new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </span>
@@ -773,16 +780,17 @@ export default function LeavesPage() {
           {isSuperAdmin && (
             <div className="card overflow-hidden p-0">
               <div className="card-header">
-                Pending Super Admin Approval — WFH ({superWfhRequests.length})
+                Pending Super Admin Approval — Work Mode ({superWfhRequests.length})
               </div>
               {superWfhRequests.length === 0
-                ? <div className="p-32 text-center text-muted2 text-sm">No WFH requests awaiting super admin approval.</div>
+                ? <div className="p-32 text-center text-muted2 text-sm">No requests awaiting super admin approval.</div>
                 : superWfhRequests.map(r => (
                   <div key={r.id} className="p-16-20 border-bottom flex-between" style={{ gap: '16px' }}>
                     <div>
                       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px' }}>
                         <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name}</span>
                         <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user?.code}</span>
+                        <WorkTypeBadge workType={r.workType} />
                         <span style={{ fontSize: '12px', color: 'var(--text2)' }}>
                           {new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </span>
@@ -805,10 +813,10 @@ export default function LeavesPage() {
           {/* All WFH requests */}
           <div className="card overflow-hidden p-0">
             <div className="card-header">
-              All WFH Requests ({wfhRequests.length})
+              All Work Mode Requests ({wfhRequests.length})
             </div>
             {wfhRequests.length === 0
-              ? <div className="p-32 text-center text-muted2 text-sm">No WFH requests yet.</div>
+              ? <div className="p-32 text-center text-muted2 text-sm">No requests yet.</div>
               : wfhRequests.map(r => (
                 <div key={r.id} className="p-16-20 border-bottom" style={{ gap: '16px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
@@ -816,6 +824,7 @@ export default function LeavesPage() {
                       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
                         <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name || 'Unknown'}</span>
                         <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user?.code}</span>
+                        <WorkTypeBadge workType={r.workType} />
                         <span style={{ fontSize: '12px', color: 'var(--text2)' }}>
                           {new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </span>
