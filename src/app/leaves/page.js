@@ -12,10 +12,10 @@ import {
   getPendingSuperRegularizations, reviewRegularizationSuper,
   getAllLeaveBalances, upsertLeavePolicy, getLeavePolicy,
   getLeaveBalancesForExport, getManagerLeaveRequests,
-  adminUpdateLeaveBalance
+  adminUpdateLeaveBalance, getAllRegularizations
 } from '../../actions/leave';
 import { getManagedEmployees } from '../../actions/departments';
-import { getPendingChanges } from '../../actions/auth';
+import { getPendingChanges, getPendingChangesHistory } from '../../actions/auth';
 import { reviewAdjustment } from '../../actions/attendanceChanges';
 
 const LEAVE_LABELS = { cl: 'CL', sl: 'SL', el: 'EL', rl: 'RL', sh: 'SH' };
@@ -47,6 +47,8 @@ export default function LeavesPage() {
   const [reviewNote, setReviewNote] = useState('');
   const [exporting, setExporting] = useState(false);
   const [pendingChanges, setPendingChanges] = useState([]);
+  const [allRegularizations, setAllRegularizations] = useState([]);
+  const [historyChanges, setHistoryChanges] = useState([]);
   const [collapsed, setCollapsed] = useState({ leaves: false, regs: false, adjustments: false });
   const [editBalanceTarget, setEditBalanceTarget] = useState(null);
   const [editBalanceForm, setEditBalanceForm] = useState({ clTotal: 0, slTotal: 0, elTotal: 0, rlTotal: 0, shTotal: 0 });
@@ -181,6 +183,14 @@ export default function LeavesPage() {
           setSuperRegularizations(supRegs);
           setPendingChanges(pcs.filter(c => c.action === 'attendance_adjustment'));
         }
+        if (role === 'admin') {
+          const [allRegs, allChanges] = await Promise.all([
+            getAllRegularizations(),
+            getPendingChangesHistory()
+          ]);
+          setAllRegularizations(allRegs);
+          setHistoryChanges(allChanges.filter(c => c.action === 'attendance_adjustment' || c.action === 'update_employee_name'));
+        }
         if (pol) setPolicy({ cl: pol.cl, sl: pol.sl, el: pol.el, rl: pol.rl, sh: pol.sh ?? 6 });
       } catch {
         setLeaveRequests([]);
@@ -194,7 +204,7 @@ export default function LeavesPage() {
         setManagerLoading(false);
       }
     })();
-  }, [isAdmin, isSuperAdmin, year, tab, fetchTrigger, user?.code]);
+  }, [isAdmin, isSuperAdmin, year, tab, fetchTrigger, user?.code, role]);
 
   const handleReviewLeave = async (id, approve) => {
     await reviewLeaveRequest(id, user.username, approve, reviewNote);
@@ -242,6 +252,16 @@ export default function LeavesPage() {
     return <span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, background: s.bg, color: s.color }}>{s.label}</span>;
   };
 
+  const StatusBadge = ({ status }) => {
+    const map = {
+      pending: { bg: 'rgba(255,159,10,0.1)', color: '#b36200', label: 'Pending' },
+      approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Approved' },
+      rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' },
+    };
+    const s = map[status] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)', label: status };
+    return <span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, background: s.bg, color: s.color }}>{s.label}</span>;
+  };
+
   return (
     <div className="page-wrapper animate-fade-in">
       <div style={{ marginBottom: '20px' }}>
@@ -257,6 +277,7 @@ export default function LeavesPage() {
           { key: 'overview', label: `All Requests (${leaveRequests.length})` },
           { key: 'manager_approval', label: `My Approvals${managerLeaves.length > 0 ? ` (${managerLeaves.length})` : ''}` },
           { key: 'regularize', label: `Regularizations${regularizations.length > 0 ? ` (${regularizations.length})` : ''}` },
+          ...(role === 'admin' ? [{ key: 'history', label: 'History' }] : []),
           { key: 'balances', label: 'Leave Balances' },
           { key: 'policy', label: 'Policy' },
         ]).map(t => (
@@ -761,6 +782,117 @@ export default function LeavesPage() {
             </div>
             <button type="submit" className="btn btn-primary" style={{ marginTop: '8px' }}>Save Policy</button>
           </form>
+        </div>
+      )}
+
+      {/* ── HISTORY (admin only — all requests with statuses) ── */}
+      {!loading && tab === 'history' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* ── Section A: Leave Requests ── */}
+          <div className="card overflow-hidden p-0">
+            <div className="card-header">
+              <span>Leave Requests</span>
+              <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400 }}>{leaveRequests.length}</span>
+            </div>
+            {leaveRequests.length === 0 ? (
+              <div className="p-32 text-center text-muted2 text-sm">No leave requests found.</div>
+            ) : (
+              <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                {leaveRequests.map(r => (
+                  <div key={r.id} className="p-14-20 border-bottom">
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user?.name || 'Unknown'}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user?.code}</span>
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType], padding: '2px 8px', borderRadius: '980px', background: `${LEAVE_COLORS[r.leaveType]}15` }}>
+                        {LEAVE_LABELS[r.leaveType]}
+                      </span>
+                      <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
+                      <StageBadge stage={r.approvalStage} />
+                      <StatusBadge status={r.status} />
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                      {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                      {' · '}{r.reason}
+                      {r.reviewNote && <span style={{ color: 'var(--text3)', fontStyle: 'italic' }}> · Note: {r.reviewNote}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── Section B: Regularizations ── */}
+          <div className="card overflow-hidden p-0">
+            <div className="card-header">
+              <span>Regularizations</span>
+              <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400 }}>{allRegularizations.length}</span>
+            </div>
+            {allRegularizations.length === 0 ? (
+              <div className="p-32 text-center text-muted2 text-sm">No regularizations found.</div>
+            ) : (
+              <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                {allRegularizations.map(r => {
+                  const regStatus = r.status === 'approved' && r.superStatus === 'approved' ? 'approved'
+                    : r.status === 'rejected' || r.superStatus === 'rejected' ? 'rejected' : 'pending';
+                  return (
+                    <div key={r.id} className="p-14-20 border-bottom">
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user?.name || 'Unknown'}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user?.code}</span>
+                        <StatusBadge status={regStatus} />
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                        {new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {' · '}In: {r.requestedIn} · Out: {r.requestedOut}
+                        {' · '}{r.reason}
+                        {r.reviewNote && <span style={{ color: 'var(--text3)', fontStyle: 'italic' }}> · Note: {r.reviewNote}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ── Section C: Adjustments & Changes ── */}
+          <div className="card overflow-hidden p-0">
+            <div className="card-header">
+              <span>Adjustments & Changes</span>
+              <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400 }}>{historyChanges.length}</span>
+            </div>
+            {historyChanges.length === 0 ? (
+              <div className="p-32 text-center text-muted2 text-sm">No adjustments or changes found.</div>
+            ) : (
+              <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                {historyChanges.map(c => {
+                  let payload = {};
+                  try { payload = JSON.parse(c.payload); } catch { /* */ }
+                  const changeType = c.action === 'attendance_adjustment' ? 'Attendance Adjustment' : 'Name Change';
+                  const detail = c.action === 'attendance_adjustment'
+                    ? `${payload.employeeName || payload.employeeCode} · Day ${payload.day} · ${payload.currentType || ''} → ${payload.newType || ''}`
+                    : `${payload.currentName || ''} → ${payload.newName || ''}`;
+                  return (
+                    <div key={c.id} className="p-14-20 border-bottom">
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 600, fontSize: '13px' }}>{payload.employeeName || payload.code || 'Unknown'}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{payload.employeeCode && `#${payload.employeeCode}`}</span>
+                        <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--blue)', padding: '2px 8px', borderRadius: '980px', background: 'rgba(0,113,227,0.1)' }}>
+                          {changeType}
+                        </span>
+                        <StatusBadge status={c.status} />
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                        {detail}
+                        {payload.reason && <span> · {payload.reason}</span>}
+                        {c.createdAt && <span style={{ color: 'var(--text3)' }}> · {new Date(c.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
