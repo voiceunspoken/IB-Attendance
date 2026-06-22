@@ -183,6 +183,11 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
   const from = new Date(fromDate);
   const to = new Date(toDate);
 
+  from.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (from < today) return { error: 'Leave cannot be applied for a past date.' };
+
   if (leaveType === 'rl') {
     const monthStart = new Date(from.getFullYear(), from.getMonth(), 1);
     const monthEnd = new Date(from.getFullYear(), from.getMonth() + 1, 0);

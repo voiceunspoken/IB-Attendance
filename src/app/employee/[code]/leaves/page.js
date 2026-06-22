@@ -6,6 +6,7 @@ import { useAuth } from '../../../../components/AuthProvider';
 import { getLeaveRequests, submitLeaveRequest } from '../../../../actions/leave';
 import { FiSun, FiAlertTriangle } from 'react-icons/fi';
 import { useEmployeeData } from '../context';
+import DatePickerInput from '../../../../components/DatePicker';
 
 const LEAVE_LABELS = { cl: 'Casual Leave', sl: 'Sick Leave', el: 'Earned Leave', rl: 'Restricted Leave', sh: 'Short Leave', ul: 'Unpaid Leave' };
 const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b', ul: '#8e8e93' };
@@ -21,7 +22,9 @@ export default function LeavesPage({ params }) {
   const router = useRouter();
 
   const [leaveRequests, setLeaveRequests] = useState([]);
-  const [leaveForm, setLeaveForm] = useState({ leaveType: 'cl', fromDate: '', toDate: '', days: 1, reason: '', shiftSlot: '10-12' });
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const [leaveForm, setLeaveForm] = useState({ leaveType: 'cl', fromDate: null, toDate: null, days: 1, reason: '', shiftSlot: '10-12' });
   const [leaveError, setLeaveError] = useState('');
   const [leaveSuccess, setLeaveSuccess] = useState('');
   const [submittingLeave, setSubmittingLeave] = useState(false);
@@ -63,11 +66,14 @@ export default function LeavesPage({ params }) {
     e.preventDefault();
     setLeaveError(''); setLeaveSuccess('');
     if (!leaveForm.fromDate) return setLeaveError('Please select a start date.');
+    if (leaveForm.fromDate < today) return setLeaveError('Leave cannot be applied for a past date.');
     if (!leaveForm.reason.trim()) return setLeaveError('Please provide a reason.');
+    const fmt = (d) => d instanceof Date && !isNaN(d) ? d.toISOString().split('T')[0] : '';
     setSubmittingLeave(true);
     const result = await submitLeaveRequest(code, {
       ...leaveForm,
-      toDate: leaveForm.toDate || leaveForm.fromDate,
+      fromDate: fmt(leaveForm.fromDate),
+      toDate: leaveForm.toDate ? fmt(leaveForm.toDate) : fmt(leaveForm.fromDate),
       days: parseFloat(leaveForm.days) || 1,
       prescriptionFile: leaveForm.leaveType === 'sl' ? prescriptionFile : null,
       shiftSlot: leaveForm.leaveType === 'sh' ? leaveForm.shiftSlot : null
@@ -75,7 +81,7 @@ export default function LeavesPage({ params }) {
     setSubmittingLeave(false);
     if (result.error) return setLeaveError(result.error);
     setLeaveSuccess('Leave request submitted successfully.');
-    setLeaveForm({ leaveType: 'cl', fromDate: '', toDate: '', days: 1, reason: '', shiftSlot: '10-12' });
+    setLeaveForm({ leaveType: 'cl', fromDate: null, toDate: null, days: 1, reason: '', shiftSlot: '10-12' });
     setPrescriptionFile(null);
     triggerRefetch();
   };
@@ -192,11 +198,23 @@ export default function LeavesPage({ params }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             <div>
               <label className="input-label">From Date</label>
-              <input className="input-field" type="date" value={leaveForm.fromDate} onChange={e => setLeaveForm(f => ({ ...f, fromDate: e.target.value, toDate: f.toDate || e.target.value }))} />
+              <DatePickerInput
+                selected={leaveForm.fromDate}
+                onChange={d => setLeaveForm(f => ({ ...f, fromDate: d, toDate: f.toDate || d }))}
+                minDate={today}
+                placeholder="Select start date"
+                className="input-field"
+              />
             </div>
             <div>
               <label className="input-label">To Date</label>
-              <input className="input-field" type="date" value={leaveForm.toDate} onChange={e => setLeaveForm(f => ({ ...f, toDate: e.target.value }))} />
+              <DatePickerInput
+                selected={leaveForm.toDate}
+                onChange={d => setLeaveForm(f => ({ ...f, toDate: d }))}
+                minDate={leaveForm.fromDate || today}
+                placeholder="Select end date"
+                className="input-field"
+              />
             </div>
           </div>
           <div>
