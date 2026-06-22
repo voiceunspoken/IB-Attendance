@@ -130,7 +130,7 @@ export default function AuditPage() {
     ...(isSuperAdmin ? [{ key: 'audit_log', label: 'Audit Log' }] : []),
   ];
 
-  if (authLoading || !isAuthenticated || !isAdmin) return null;
+  if (authLoading || !isAuthenticated || (!isAdmin && !isSuperAdmin)) return null;
 
   return (
     <div className="page-wrapper animate-fade-in">

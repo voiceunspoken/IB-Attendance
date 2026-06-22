@@ -256,8 +256,8 @@ export default function LeavesPage() {
   };
 
   if (authLoading || !isAuthenticated) return null;
-  if (!isAdmin && managerLoading) return null;
-  if (!isAdmin && !managerLoading && !user?.code) return null;
+  if (!isAdmin && !isSuperAdmin && managerLoading) return null;
+  if (!isAdmin && !isSuperAdmin && !managerLoading && !user?.code) return null;
 
   const StageBadge = ({ stage }) => {
     const map = {

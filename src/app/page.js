@@ -87,7 +87,7 @@ export default function DashboardHome() {
   }, [isAuthenticated, isSuperAdmin]);
 
   useEffect(() => {
-    if (!authLoading && isAuthenticated && !isAdmin && user?.code) {
+    if (!authLoading && isAuthenticated && !isAdmin && !isSuperAdmin && user?.code) {
       router.push(`/employee/${user.code}`);
     }
   }, [isAuthenticated, isAdmin, user, authLoading, router]);
@@ -119,7 +119,7 @@ export default function DashboardHome() {
   };
 
   if (authLoading || !isAuthenticated) return null;
-  if (!authLoading && isAuthenticated && !isAdmin) {
+  if (!authLoading && isAuthenticated && !isAdmin && !isSuperAdmin) {
     if (user?.code) router.push(`/employee/${user.code}`);
     return null;
   }

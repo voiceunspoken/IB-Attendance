@@ -87,6 +87,14 @@ export default function TeamPage() {
   const [promoteResult, setPromoteResult] = useState('');
   const [promoting, setPromoting] = useState(false);
 
+  // ── Type change modal ──
+  const [typeModal, setTypeModal] = useState({ open: false, employee: null, value: 'regular' });
+  const [typeModalSaving, setTypeModalSaving] = useState(false);
+
+  // ── Manager modal ──
+  const [mgrModal, setMgrModal] = useState({ open: false, employee: null, managers: [], search: '', results: [], allUsers: [] });
+  const [mgrModalSaving, setMgrModalSaving] = useState(false);
+
   // ── Employee profiles state ──
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -97,8 +105,7 @@ export default function TeamPage() {
 
   // ── Combined edit state ──
   const [editRow, setEditRow] = useState(null);
-  const [editRowForm, setEditRowForm] = useState({ name: '', password: '', role: '', birthday: '', joiningDate: '', workAnniversary: '', employeeType: 'regular', departmentId: '', subDepartmentId: '', designationId: '' });
-  const [editRowManagers, setEditRowManagers] = useState([]);
+  const [editRowForm, setEditRowForm] = useState({ name: '', password: '', role: '', birthday: '', joiningDate: '', workAnniversary: '', departmentId: '', subDepartmentId: '', designationId: '' });
   const [editRowMsg, setEditRowMsg] = useState('');
 
   // ── Department/Sub-department state ──
@@ -147,7 +154,7 @@ export default function TeamPage() {
   }, [isAuthenticated, isAdmin, isSuperAdmin, authLoading, router]);
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdmin && !isSuperAdmin) return;
     (async () => {
       try {
         const [u, emps, depts, desigs, ms, pending] = await Promise.all([
@@ -232,9 +239,13 @@ export default function TeamPage() {
     const target = users.find(x => x.id === promoteUserId);
     const result = await promoteToAdmin(promoteUserId, promoteRole, user.username);
     setPromoting(false);
-    if (result.error) return setPromoteResult(result.error);
-    setPromoteResult(`"${target?.name || target?.username}" promoted to ${promoteRole === 'super_admin' ? 'Super Admin' : 'Admin'}.`);
+    if (result.error) {
+      setPromoteResult(result.error);
+      return;
+    }
+    toast.success(`"${target?.name || target?.username}" promoted to ${promoteRole === 'super_admin' ? 'Super Admin' : 'Admin'}.`);
     setPromoteUserId('');
+    setShowPromoteModal(false);
     setFetchTrigger(t => t + 1);
   };
 
@@ -283,18 +294,11 @@ export default function TeamPage() {
       birthday: p.birthday ? new Date(p.birthday).toISOString().split('T')[0] : '',
       joiningDate: p.joiningDate ? new Date(p.joiningDate).toISOString().split('T')[0] : '',
       workAnniversary: p.workAnniversary ? new Date(p.workAnniversary).toISOString().split('T')[0] : '',
-      employeeType: p.employeeType || 'regular',
       departmentId: p.department?.id || '',
       subDepartmentId: p.subDepartment?.id || '',
       designationId: p.designation?.id || '',
     });
     setEditRowMsg('');
-    if (p.code) {
-      try { const mgrs = await getEmployeeManagers(p.code); setEditRowManagers(mgrs.map(m => m.code)); }
-      catch { setEditRowManagers([]); }
-    } else {
-      setEditRowManagers([]);
-    }
   };
 
   const handleSaveEditRow = async (e) => {
@@ -306,7 +310,6 @@ export default function TeamPage() {
     if (editRowForm.birthday !== (editRow.birthday ? new Date(editRow.birthday).toISOString().split('T')[0] : '')) profileFields.birthday = editRowForm.birthday || null;
     if (editRowForm.joiningDate !== (editRow.joiningDate ? new Date(editRow.joiningDate).toISOString().split('T')[0] : '')) profileFields.joiningDate = editRowForm.joiningDate || null;
     if (editRowForm.workAnniversary !== (editRow.workAnniversary ? new Date(editRow.workAnniversary).toISOString().split('T')[0] : '')) profileFields.workAnniversary = editRowForm.workAnniversary || null;
-    if (editRowForm.employeeType !== (editRow.employeeType || 'regular')) profileFields.employeeType = editRowForm.employeeType;
     if (editRowForm.departmentId !== (editRow.department?.id || '')) profileFields.departmentId = editRowForm.departmentId || null;
     if (editRowForm.subDepartmentId !== (editRow.subDepartment?.id || '')) profileFields.subDepartmentId = editRowForm.subDepartmentId || null;
     if (editRowForm.designationId !== (editRow.designation?.id || '')) profileFields.designationId = editRowForm.designationId || null;
@@ -340,11 +343,6 @@ export default function TeamPage() {
       }
     }
 
-    // Save managers
-    if (editRow.code) {
-      await setEmployeeManagers(editRow.code, editRowManagers, user.username);
-    }
-
     if (!editRowMsg) setEditRowMsg('Saved successfully.');
     setEditRow(null);
     setFetchTrigger(t => t + 1);
@@ -355,6 +353,75 @@ export default function TeamPage() {
       show: true, message: `Delete ${name}'s data for ${monthYear}? This cannot be undone.`,
       onConfirm: async () => { await deleteMonthRecord(code, monthYear, user.username); toast.success('Month record deleted.'); },
     });
+  };
+
+  // ── Type modal handlers ──
+
+  const handleSaveType = async (e) => {
+    e.preventDefault();
+    if (!typeModal.employee?.code) return;
+    if (!user?.username) return toast.error('Session error: not logged in.');
+    if (!isAdmin && !isSuperAdmin) return toast.error('Access denied.');
+    setTypeModalSaving(true);
+    const result = await updateEmployeeDetails(typeModal.employee.code, { employeeType: typeModal.value }, user.username);
+    setTypeModalSaving(false);
+    if (result.error) return toast.error(result.error);
+    toast.success(`Type changed to ${typeModal.value.toUpperCase()}.`);
+    setTypeModal({ open: false, employee: null, value: 'regular' });
+    setFetchTrigger(t => t + 1);
+  };
+
+  // ── Manager modal handlers ──
+
+  const openMgrModal = async (p) => {
+    if (!p.code) return;
+    try {
+      const users = await getUsers();
+      const mgrs = await getEmployeeManagers(p.code);
+      setMgrModal({ open: true, employee: p, managers: mgrs, search: '', results: [], allUsers: users.filter(u => u.code && u.code !== p.code) });
+    } catch {
+      toast.error('Failed to load managers.');
+    }
+  };
+
+  const handleMgrSearch = (q) => {
+    setMgrModal(prev => ({ ...prev, search: q }));
+    if (!q.trim()) {
+      setMgrModal(prev => ({ ...prev, results: [] }));
+      return;
+    }
+    const lower = q.toLowerCase();
+    const currentCodes = mgrModal.managers.map(m => m.code);
+    const results = mgrModal.allUsers.filter(u =>
+      (u.name?.toLowerCase().includes(lower) || u.code.toLowerCase().includes(lower)) &&
+      !currentCodes.includes(u.code)
+    ).slice(0, 10);
+    setMgrModal(prev => ({ ...prev, results }));
+  };
+
+  const handleMgrAdd = (mgrCode) => {
+    const mgr = mgrModal.allUsers.find(u => u.code === mgrCode);
+    if (!mgr) return;
+    const newManager = { code: mgr.code, name: mgr.name, priority: mgrModal.managers.length + 1 };
+    setMgrModal(prev => ({ ...prev, managers: [...prev.managers, newManager], search: '', results: [] }));
+  };
+
+  const handleMgrRemove = (mgrCode) => {
+    setMgrModal(prev => ({ ...prev, managers: prev.managers.filter(m => m.code !== mgrCode) }));
+  };
+
+  const handleSaveManagers = async () => {
+    if (!mgrModal.employee?.code) return;
+    if (!user?.username) return toast.error('Session error: not logged in.');
+    if (!isAdmin && !isSuperAdmin) return toast.error('Access denied.');
+    setMgrModalSaving(true);
+    const codes = mgrModal.managers.map(m => m.code);
+    const result = await setEmployeeManagers(mgrModal.employee.code, codes, user.username);
+    setMgrModalSaving(false);
+    if (result.error) return toast.error(result.error);
+    toast.success('Managers updated.');
+    setMgrModal({ open: false, employee: null, managers: [], search: '', results: [], allUsers: [] });
+    setFetchTrigger(t => t + 1);
   };
 
   // ── Handlers: Departments ──
@@ -437,7 +504,7 @@ export default function TeamPage() {
     ? [{ value: 'employee', label: 'Employee' }, { value: 'admin', label: 'Admin' }, { value: 'super_admin', label: 'Super Admin' }]
     : [{ value: 'employee', label: 'Employee' }, { value: 'admin', label: 'Admin' }];
 
-  if (authLoading || !isAuthenticated || !isAdmin) return null;
+  if (authLoading || !isAuthenticated || (!isAdmin && !isSuperAdmin)) return null;
 
   const tabs = [
     { key: 'employees', label: 'Employees' },
@@ -530,8 +597,10 @@ export default function TeamPage() {
                           <td style={{ ...tdStyle, color: 'var(--text2)', fontSize: '12px' }}>{p.designation?.name || '—'}</td>
                           <td style={tdStyle}>{p.disabled ? <DisabledBadge /> : <span style={{ color: 'var(--green)', fontSize: 'var(--fs-xs)', fontWeight: 500 }}>Active</span>}</td>
                           <td style={tdStyle}>
-                            <div style={{ display: 'flex', gap: '6px' }}>
+                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                               <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '11px' }} onClick={() => openEditRow(p)}>Edit</button>
+                              <button className="btn btn-outline btn-xs" style={{ fontSize: '11px' }} onClick={() => { setTypeModal({ open: true, employee: p, value: p.employeeType || 'regular' }); }}>Type</button>
+                              <button className="btn btn-outline btn-xs" style={{ fontSize: '11px' }} onClick={() => openMgrModal(p)}>Mgrs</button>
                               <button className="btn btn-outline btn-xs" onClick={() => handleToggleDisableRow(p)}>{p.disabled ? 'Enable' : 'Disable'}</button>
                               <button className="btn btn-outline btn-xs" style={{ color: 'var(--red)', borderColor: 'rgba(255,59,48,0.25)' }} onClick={() => handleDeleteRow(p)}>Delete</button>
                             </div>
@@ -907,11 +976,6 @@ export default function TeamPage() {
               {isSuperAdmin && <option value="super_admin">Super Admin</option>}
             </select>
           </div>
-          {promoteResult && (
-            <div style={{ padding: '10px 14px', borderRadius: '8px', fontSize: 'var(--fs-sm)', background: promoteResult.includes('error') ? 'rgba(255,59,48,0.06)' : 'rgba(52,199,89,0.06)', color: promoteResult.includes('error') ? 'var(--red)' : 'var(--green)' }}>
-              {promoteResult}
-            </div>
-          )}
           <div style={{ display: 'flex', gap: '8px', paddingTop: '4px' }}>
             <button type="submit" className="btn btn-primary" disabled={promoting || !promoteUserId} style={{ opacity: (promoting || !promoteUserId) ? 0.7 : 1 }}>
               {promoting ? 'Promoting…' : 'Promote'}
@@ -919,6 +983,84 @@ export default function TeamPage() {
             <button type="button" className="btn btn-secondary" onClick={() => setShowPromoteModal(false)}>Cancel</button>
           </div>
         </form>
+      </Modal>
+
+      {/* Change Type Modal */}
+      <Modal open={typeModal.open} onClose={() => setTypeModal({ open: false, employee: null, value: 'regular' })} title={`Change Type — ${typeModal.employee?.name || ''}`} width="360px">
+        <form onSubmit={handleSaveType} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div>
+            <label className="input-label">Employee Type</label>
+            <select className="input-field" value={typeModal.value}
+              onChange={e => setTypeModal(prev => ({ ...prev, value: e.target.value }))}>
+              <option value="regular">Regular</option>
+              <option value="hybrid">Hybrid</option>
+            </select>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            <button type="button" className="btn btn-secondary" onClick={() => setTypeModal({ open: false, employee: null, value: 'regular' })}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={typeModalSaving}>
+              {typeModalSaving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Manage Managers Modal */}
+      <Modal open={mgrModal.open} onClose={() => setMgrModal({ open: false, employee: null, managers: [], search: '', results: [], allUsers: [] })} title={`Managers — ${mgrModal.employee?.name || ''}`} width="480px">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <label className="input-label" style={{ margin: 0 }}>Current Managers</label>
+              <button type="button" className="btn btn-outline" style={{ padding: '4px 10px', fontSize: '11px' }}
+                onClick={() => document.getElementById('mgr-search-input')?.focus()}>
+                <FiPlus size={12} style={{ marginRight: '4px' }} /> Add
+              </button>
+            </div>
+            {mgrModal.managers.length === 0 ? (
+              <div style={{ fontSize: '13px', color: 'var(--text3)', padding: '8px 0' }}>No managers assigned.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '240px', overflowY: 'auto' }}>
+                {mgrModal.managers.map(m => (
+                  <div key={m.code} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--surface2)', borderRadius: '8px' }}>
+                    <div>
+                      <span style={{ fontSize: '13px', fontWeight: 500 }}>{m.name}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text3)', fontFamily: 'monospace', marginLeft: '6px' }}>#{m.code}</span>
+                    </div>
+                    <button type="button" onClick={() => handleMgrRemove(m.code)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', padding: '2px' }}>
+                      <FiX size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="input-label">Add Manager</label>
+            <input id="mgr-search-input" className="input-field" placeholder="Type name or code…"
+              value={mgrModal.search} onChange={e => handleMgrSearch(e.target.value)} />
+            {mgrModal.results.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '6px', maxHeight: '180px', overflowY: 'auto' }}>
+                {mgrModal.results.map(u => (
+                  <button key={u.code} type="button" onClick={() => handleMgrAdd(u.code)}
+                    style={{ textAlign: 'left', padding: '8px 12px', borderRadius: '8px', border: 'none', background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{u.name}</span>
+                    <span style={{ fontSize: '11px', color: 'var(--text3)', fontFamily: 'monospace' }}>#{u.code}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {mgrModal.search.trim() && mgrModal.results.length === 0 && (
+              <div style={{ fontSize: '12px', color: 'var(--text3)', marginTop: '6px' }}>No employees found.</div>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
+            <button type="button" className="btn btn-secondary" onClick={() => setMgrModal({ open: false, employee: null, managers: [], search: '', results: [], allUsers: [] })}>Cancel</button>
+            <button type="button" className="btn btn-primary" disabled={mgrModalSaving} onClick={handleSaveManagers}>
+              {mgrModalSaving ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {/* Combined Edit Modal */}
@@ -959,13 +1101,6 @@ export default function TeamPage() {
           </div>
           {editRow?.code && (
             <>
-              <div>
-                <label className="input-label">Employee Type</label>
-                <select className="input-field" value={editRowForm.employeeType} onChange={e => setEditRowForm(f => ({ ...f, employeeType: e.target.value }))}>
-                  <option value="regular">Regular</option>
-                  <option value="hybrid">Hybrid</option>
-                </select>
-              </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
                   <label className="input-label">Department</label>
@@ -990,11 +1125,6 @@ export default function TeamPage() {
                   <option value="">— None —</option>
                   {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
-              </div>
-              <div>
-                <label className="input-label">Managers (employee codes, comma-separated)</label>
-                <input className="input-field" placeholder="e.g. 1001, 1002" value={editRowManagers.join(', ')} onChange={e => setEditRowManagers(e.target.value.split(',').map(s => s.trim()).filter(Boolean))} />
-                <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '4px' }}>Enter manager employee codes separated by commas.</div>
               </div>
             </>
           )}

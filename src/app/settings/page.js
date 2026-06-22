@@ -195,7 +195,7 @@ export default function SettingsPage() {
     return new Date(yr, parseInt(mo) - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
   };
 
-  if (authLoading || !isAuthenticated || !isAdmin) return null;
+  if (authLoading || !isAuthenticated || (!isAdmin && !isSuperAdmin)) return null;
 
   const tabs = [
     { key: 'holidays', label: 'Holidays' },
