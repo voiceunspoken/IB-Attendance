@@ -223,6 +223,12 @@ export default function ProfilePage({ params }) {
               <span style={{ color: 'var(--text2)' }}>Code</span>
               <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>#{emp.code}</span>
             </div>
+            {emp.email && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                <span style={{ color: 'var(--text2)' }}>Email</span>
+                <span style={{ fontWeight: 500 }}>{emp.email}</span>
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>

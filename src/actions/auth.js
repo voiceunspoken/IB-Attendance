@@ -17,7 +17,7 @@ export async function loginUser(username, password) {
       : user.password === password;
 
     if (!valid) return { error: 'Invalid username or password.' };
-    return { user: { id: user.id, username: user.username, role: user.role, code: user.code ?? null } };
+    return { user: { id: user.id, username: user.username, role: user.role, code: user.code ?? null, email: user.email ?? null } };
   } catch (e) {
     console.error('[loginUser error]', e.message);
     return { error: 'Server error: ' + e.message };
@@ -40,7 +40,7 @@ export async function createUser(username, password, role, code, createdBy = 'sy
 
 export async function getUsers() {
   return prisma.user.findMany({
-    select: { id: true, username: true, role: true, disabled: true, code: true, name: true, createdAt: true },
+    select: { id: true, username: true, role: true, disabled: true, code: true, name: true, email: true, createdAt: true },
     orderBy: { createdAt: 'asc' }
   });
 }

@@ -99,12 +99,12 @@ export default function TeamPage() {
   const [departments, setDepartments] = useState([]);
   const [designations, setDesignations] = useState([]);
   const [months, setMonths] = useState([]);
-  const [empForm, setEmpForm] = useState({ code: '', name: '', employeeType: 'regular', departmentId: '', designationId: '' });
+  const [empForm, setEmpForm] = useState({ code: '', name: '', email: '', employeeType: 'regular', departmentId: '', designationId: '' });
   const [empMsg, setEmpMsg] = useState('');
 
   // ── Combined edit state ──
   const [editRow, setEditRow] = useState(null);
-  const [editRowForm, setEditRowForm] = useState({ name: '', password: '', role: '', birthday: '', joiningDate: '', workAnniversary: '', departmentId: '', subDepartmentId: '', designationId: '' });
+  const [editRowForm, setEditRowForm] = useState({ name: '', email: '', password: '', role: '', birthday: '', joiningDate: '', workAnniversary: '', departmentId: '', subDepartmentId: '', designationId: '' });
   const [editRowMsg, setEditRowMsg] = useState('');
 
   // ── Department/Sub-department state ──
@@ -253,6 +253,7 @@ export default function TeamPage() {
     e.preventDefault();
     if (!empForm.code.trim() || !empForm.name.trim()) return setEmpMsg('Code and name are required.');
     const result = await addEmployee(empForm.code.trim(), empForm.name.trim(), user.username, {
+      email: empForm.email || undefined,
       employeeType: empForm.employeeType,
       departmentId: empForm.departmentId || undefined,
       designationId: empForm.designationId || undefined,
@@ -287,6 +288,7 @@ export default function TeamPage() {
     setEditRow(p);
     setEditRowForm({
       name: p.name || '',
+      email: p.email || '',
       password: '',
       role: p.role || 'employee',
       birthday: p.birthday ? new Date(p.birthday).toISOString().split('T')[0] : '',
@@ -311,6 +313,7 @@ export default function TeamPage() {
     if (editRowForm.departmentId !== (editRow.department?.id || '')) profileFields.departmentId = editRowForm.departmentId || null;
     if (editRowForm.subDepartmentId !== (editRow.subDepartment?.id || '')) profileFields.subDepartmentId = editRowForm.subDepartmentId || null;
     if (editRowForm.designationId !== (editRow.designation?.id || '')) profileFields.designationId = editRowForm.designationId || null;
+    if (editRowForm.email !== (editRow.email || '')) profileFields.email = editRowForm.email || null;
 
     // Handle name change
     if (editRowForm.name !== editRow.name) {
@@ -553,7 +556,7 @@ export default function TeamPage() {
                   <span style={{ background: 'var(--surface3)', borderRadius: '980px', padding: '1px 9px', fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--text2)' }}>{employees.length}</span>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <button className="btn btn-secondary btn-sm" onClick={() => { setEmpForm({ code: '', name: '', employeeType: 'regular', departmentId: '', designationId: '' }); setEmpMsg(''); setShowCreateModal(true); }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => { setEmpForm({ code: '', name: '', email: '', employeeType: 'regular', departmentId: '', designationId: '' }); setEmpMsg(''); setShowCreateModal(true); }}>
                     + Create Employee
                   </button>
                   <button className="btn btn-secondary btn-sm" onClick={() => { setPromoteUserId(''); setPromoteRole('admin'); setShowPromoteModal(true); }}>
@@ -967,6 +970,10 @@ export default function TeamPage() {
             </div>
           </div>
           <div>
+            <label className="input-label">Email</label>
+            <input className="input-field" type="email" placeholder="employee@example.com" value={empForm.email} onChange={e => setEmpForm(f => ({ ...f, email: e.target.value }))} />
+          </div>
+          <div>
             <label className="input-label">Employee Type</label>
             <select className="input-field" value={empForm.employeeType} onChange={e => setEmpForm(f => ({ ...f, employeeType: e.target.value }))}>
               <option value="regular">Regular</option>
@@ -1094,6 +1101,10 @@ export default function TeamPage() {
           <div>
             <label className="input-label">Full Name</label>
             <input className="input-field" value={editRowForm.name} onChange={e => setEditRowForm(f => ({ ...f, name: e.target.value }))} />
+          </div>
+          <div>
+            <label className="input-label">Email</label>
+            <input className="input-field" type="email" placeholder="employee@example.com" value={editRowForm.email} onChange={e => setEditRowForm(f => ({ ...f, email: e.target.value }))} />
           </div>
           {editRow?.code && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>

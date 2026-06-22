@@ -15,7 +15,7 @@ export async function getEmployeeDetails(code) {
   return prisma.user.findUnique({
     where: { code },
     select: {
-      id: true, code: true, name: true, birthday: true, joiningDate: true, workAnniversary: true,
+      id: true, code: true, name: true, email: true, birthday: true, joiningDate: true, workAnniversary: true,
       employeeType: true,
       departmentId: true, department: { select: { id: true, name: true } },
       subDepartmentId: true, subDepartment: { select: { id: true, name: true } },
@@ -25,7 +25,7 @@ export async function getEmployeeDetails(code) {
 }
 
 export async function updateEmployeeDetails(code, fields, performedBy) {
-  const sensitiveFields = ['employeeType', 'departmentId', 'subDepartmentId', 'designationId'];
+  const sensitiveFields = ['employeeType', 'departmentId', 'subDepartmentId', 'designationId', 'email'];
   const hasSensitiveChanges = sensitiveFields.some(f => fields[f] !== undefined);
   if (hasSensitiveChanges) {
     const auth = await requireAdminOrSuperAdmin(performedBy);
@@ -41,6 +41,7 @@ export async function updateEmployeeDetails(code, fields, performedBy) {
   if (fields.departmentId !== undefined) data.departmentId = fields.departmentId || null;
   if (fields.subDepartmentId !== undefined) data.subDepartmentId = fields.subDepartmentId || null;
   if (fields.designationId !== undefined) data.designationId = fields.designationId || null;
+  if (fields.email !== undefined) data.email = fields.email || null;
 
   await prisma.user.update({ where: { code }, data });
   revalidatePath('/');

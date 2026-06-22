@@ -259,6 +259,7 @@ export async function addEmployee(code, name, performedBy = 'admin', extra = {})
   const user = await prisma.user.create({
     data: {
       code, name, username, password: hashed, role: 'employee',
+      email: extra.email || null,
       employeeType: extra.employeeType || 'regular',
       joiningDate: extra.joiningDate ? new Date(extra.joiningDate) : null,
       departmentId: extra.departmentId || null,
@@ -307,7 +308,7 @@ export async function getAllEmployees() {
   return prisma.user.findMany({
     where: { code: { not: null } },
     select: {
-      id: true, code: true, name: true, birthday: true, joiningDate: true, workAnniversary: true,
+      id: true, code: true, name: true, email: true, birthday: true, joiningDate: true, workAnniversary: true,
       employeeType: true, disabled: true,
       department: { select: { id: true, name: true } },
       subDepartment: { select: { id: true, name: true } },
