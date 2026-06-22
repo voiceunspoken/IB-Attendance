@@ -3,14 +3,16 @@
 import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
-import { requireAdmin, requireSuperAdmin } from '../lib/auth-guard';
+import { requireAdmin, requireAdminOrSuperAdmin, requireSuperAdmin } from '../lib/auth-guard';
 import { createNotification, getAdminUserIds, sendLeaveStatusNotification } from './notifications';
 
 export async function getLeavePolicy(year) {
   return prisma.leavePolicy.findUnique({ where: { year } });
 }
 
-export async function upsertLeavePolicy(year, { cl, sl, el, rl }) {
+export async function upsertLeavePolicy(year, { cl, sl, el, rl }, performedBy = null) {
+  const auth = await requireAdminOrSuperAdmin(performedBy);
+  if (auth) return auth;
   return prisma.leavePolicy.upsert({
     where: { year },
     update: { cl, sl, el, rl },
@@ -156,7 +158,9 @@ export async function getLeaveBalancesForExport(year, fromMonth = 1, toMonth = 1
   return results;
 }
 
-export async function adminUpdateLeaveBalance(employeeCode, year, fields) {
+export async function adminUpdateLeaveBalance(employeeCode, year, fields, performedBy = null) {
+  const auth = await requireAdminOrSuperAdmin(performedBy);
+  if (auth) return auth;
   const user = await prisma.user.findUnique({ where: { code: employeeCode } });
   if (!user) return { error: 'Employee not found' };
 
@@ -579,21 +583,6 @@ export async function reviewRegularization(requestId, reviewedBy, approve, note 
   });
   if (!req) return { error: 'Request not found' };
 
-  // Super admin approves directly — immediately apply
-  if (req.user.role === 'super_admin' || (await prisma.user.findUnique({ where: { username: reviewedBy } }))?.role === 'super_admin') {
-    if (approve) await applyRegularization(req);
-    const newStatus = approve ? 'approved' : 'rejected';
-    await prisma.regularizationRequest.update({
-      where: { id: requestId },
-      data: { status: newStatus, superStatus: approve ? 'approved' : 'rejected', reviewedBy, reviewedAt: new Date(), reviewNote: note || null }
-    });
-    await createNotification(req.userId, approve ? 'regularization_approved' : 'regularization_rejected',
-      approve ? 'Regularization Approved' : 'Regularization Rejected',
-      `Your regularization for ${new Date(req.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} has been ${newStatus}.${note ? ' Note: ' + note : ''}`,
-      { requestId: req.id, date: req.date, requestedIn: req.requestedIn, requestedOut: req.requestedOut, note });
-    return { request: { ...req, status: newStatus, superStatus: newStatus } };
-  }
-
   await prisma.regularizationRequest.update({
     where: { id: requestId },
     data: {
@@ -703,7 +692,7 @@ export async function getAllRegularizations() {
 }
 
 export async function requestLeaveDeduction(employeeCode, leaveType, days, reason, requestedBy) {
-  const auth = await requireAdmin(requestedBy);
+  const auth = await requireAdminOrSuperAdmin(requestedBy);
   if (auth) return auth;
 
   const user = await prisma.user.findUnique({ where: { code: employeeCode } });

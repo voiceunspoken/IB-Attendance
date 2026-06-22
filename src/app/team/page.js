@@ -11,7 +11,7 @@ import { getDepartments, addDepartment, deleteDepartment, addSubDepartment, dele
 import Modal from '../../components/Modal';
 import ConfirmModal from '../../components/ConfirmModal';
 import { useToast } from '../../components/Toast';
-import { FiPlus, FiTrash2, FiSearch, FiUser, FiX, FiCheck } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiSearch, FiUser, FiX, FiCheck, FiAlertTriangle } from 'react-icons/fi';
 
 const ROLE_STYLES = {
   super_admin: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Super Admin' },
@@ -427,7 +427,7 @@ export default function TeamPage() {
   const handleAddDepartment = async (e) => {
     e.preventDefault();
     if (!deptForm.name.trim()) return;
-    const result = await addDepartment(deptForm.name.trim());
+    const result = await addDepartment(deptForm.name.trim(), user?.username);
     if (result.error) return setDeptMsg(result.error);
     setDeptForm({ name: '' }); setDeptMsg('');
     setDepartments(await getDepartments());
@@ -436,7 +436,7 @@ export default function TeamPage() {
   const handleDeleteDepartment = (id, name) => {
     setConfirmState({
       show: true, message: `Delete "${name}" and all its sub-departments? Employees will be unlinked.`,
-      onConfirm: async () => { await deleteDepartment(id); setDepartments(await getDepartments()); },
+      onConfirm: async () => { await deleteDepartment(id, user?.username); setDepartments(await getDepartments()); },
     });
   };
 
@@ -445,7 +445,7 @@ export default function TeamPage() {
   const handleAddSubDepartment = async (e) => {
     e.preventDefault();
     if (!subDeptForm.name.trim() || !subDeptForm.departmentId) return;
-    const result = await addSubDepartment(subDeptForm.name.trim(), subDeptForm.departmentId);
+    const result = await addSubDepartment(subDeptForm.name.trim(), subDeptForm.departmentId, user?.username);
     if (result.error) return setSubDeptMsg(result.error);
     setSubDeptForm({ name: '', departmentId: '' }); setSubDeptMsg('');
     setDepartments(await getDepartments());
@@ -454,7 +454,7 @@ export default function TeamPage() {
   const handleDeleteSubDepartment = (id) => {
     setConfirmState({
       show: true, message: 'Delete this sub-department? Employees linked to it will be unlinked.',
-      onConfirm: async () => { await deleteSubDepartment(id); setDepartments(await getDepartments()); },
+      onConfirm: async () => { await deleteSubDepartment(id, user?.username); setDepartments(await getDepartments()); },
     });
   };
 
@@ -480,7 +480,7 @@ export default function TeamPage() {
   const handleAddDesignation = async (e) => {
     e.preventDefault();
     if (!desigForm.name.trim()) return;
-    const result = await addDesignation(desigForm.name.trim());
+    const result = await addDesignation(desigForm.name.trim(), user?.username);
     if (result.error) return setDesigMsg(result.error);
     setDesigForm({ name: '' }); setDesigMsg('');
     setDesignations(await getDesignations());
@@ -489,7 +489,7 @@ export default function TeamPage() {
   const handleDeleteDesignation = (id, name) => {
     setConfirmState({
       show: true, message: `Delete "${name}"? Employees with this designation will be unlinked.`,
-      onConfirm: async () => { await deleteDesignation(id); setDesignations(await getDesignations()); },
+      onConfirm: async () => { await deleteDesignation(id, user?.username); setDesignations(await getDesignations()); },
     });
   };
 
@@ -669,8 +669,12 @@ export default function TeamPage() {
                   update_user: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3', label: 'Update User' },
                   delete_user: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Delete User' },
                   update_employee_name: { bg: 'rgba(255,159,10,0.1)', color: '#b36200', label: 'Name Change' },
+                  attendance_adjustment: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3', label: 'Attendance Adjustment' },
+                  leave_deduction: { bg: 'rgba(255,159,10,0.1)', color: '#b36200', label: 'Leave Deduction' },
                 };
                 const ac = actionColors[c.action] || { bg: 'var(--surface2)', color: 'var(--text2)', label: c.action };
+                const isAdjustment = c.action === 'attendance_adjustment';
+                const isDeduction = c.action === 'leave_deduction';
                 return (
                   <div key={c.id} className="card" style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -679,14 +683,36 @@ export default function TeamPage() {
                         <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text2)' }}>by <strong>{c.requestedBy}</strong></span>
                         <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text3)' }}>· {new Date(c.createdAt).toLocaleString()}</span>
                       </div>
-                      <div style={{ background: 'var(--surface2)', borderRadius: '8px', padding: '8px 12px', fontSize: 'var(--fs-xs)', fontFamily: 'monospace', color: 'var(--text2)', overflowX: 'auto' }}>
-                        {Object.entries(payload).map(([k, v]) => (
-                          <div key={k} style={{ display: 'flex', gap: '8px', marginBottom: '2px' }}>
-                            <span style={{ color: 'var(--text3)', flexShrink: 0 }}>{k}:</span>
-                            <span style={{ color: 'var(--text)', wordBreak: 'break-all' }}>{String(v)}</span>
-                          </div>
-                        ))}
-                      </div>
+                      {(isAdjustment || isDeduction) ? (
+                        <div>
+                          {isDeduction ? (
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 600, fontSize: '13px' }}>{payload.employeeName || payload.employeeCode}</span>
+                              {payload.employeeCode && <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{payload.employeeCode}</span>}
+                              <span style={{ fontSize: '11px', color: 'var(--orange)', fontWeight: 600 }}>Leave Deduction</span>
+                              <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{payload.days}d {['cl','sl','el','rl','sh'].includes(payload.leaveType) ? payload.leaveType.toUpperCase() : payload.leaveType}</span>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 600, fontSize: '13px' }}>{payload.employeeName || payload.employeeCode}</span>
+                              {payload.employeeCode && <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{payload.employeeCode}</span>}
+                              <span style={{ fontSize: '11px', color: 'var(--text2)' }}>Day {payload.day} · {payload.monthYear?.replace('_', '/')}</span>
+                              <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{payload.currentType} → {payload.newType}</span>
+                            </div>
+                          )}
+                          {payload.reason && <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '2px' }}>Reason: {payload.reason}</div>}
+                          {payload.warning && <div style={{ fontSize: '11px', color: 'var(--orange)', marginTop: '2px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}><FiAlertTriangle size={12} /> {payload.warning}</div>}
+                        </div>
+                      ) : (
+                        <div style={{ background: 'var(--surface2)', borderRadius: '8px', padding: '8px 12px', fontSize: 'var(--fs-xs)', fontFamily: 'monospace', color: 'var(--text2)', overflowX: 'auto' }}>
+                          {Object.entries(payload).map(([k, v]) => (
+                            <div key={k} style={{ display: 'flex', gap: '8px', marginBottom: '2px' }}>
+                              <span style={{ color: 'var(--text3)', flexShrink: 0 }}>{k}:</span>
+                              <span style={{ color: 'var(--text)', wordBreak: 'break-all' }}>{String(v)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                       <button className="btn btn-primary" style={{ padding: '6px 16px', fontSize: 'var(--fs-sm)', background: 'var(--green)' }} onClick={() => handleReview(c.id, true)}>Approve</button>

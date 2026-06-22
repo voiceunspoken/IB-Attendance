@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from '../lib/prisma';
-import { requireAdmin, requireSuperAdmin } from '../lib/auth-guard';
+import { requireAdminOrSuperAdmin, requireSuperAdmin } from '../lib/auth-guard';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
 import { createNotification } from './notifications';
@@ -28,7 +28,7 @@ export async function updateEmployeeDetails(code, fields, performedBy) {
   const sensitiveFields = ['employeeType', 'departmentId', 'subDepartmentId', 'designationId'];
   const hasSensitiveChanges = sensitiveFields.some(f => fields[f] !== undefined);
   if (hasSensitiveChanges) {
-    const auth = await requireAdmin(performedBy);
+    const auth = await requireAdminOrSuperAdmin(performedBy);
     if (auth) return auth;
   }
 
@@ -48,7 +48,7 @@ export async function updateEmployeeDetails(code, fields, performedBy) {
 }
 
 export async function requestNameChange(code, newName, currentName, requestedBy) {
-  const auth = await requireAdmin(requestedBy);
+  const auth = await requireAdminOrSuperAdmin(requestedBy);
   if (auth) return auth;
 
   const requester = await prisma.user.findUnique({ where: { username: requestedBy } });

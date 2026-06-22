@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
 import { sendHighAbsenceAlert } from './notifications';
 import bcrypt from 'bcryptjs';
-import { requireAdmin } from '../lib/auth-guard';
+import { requireAdminOrSuperAdmin } from '../lib/auth-guard';
 
 const ABSENCE_ALERT_THRESHOLD = 3;
 
@@ -37,7 +37,7 @@ export async function getMonths() {
 }
 
 export async function uploadMonthData(monthYear, parsedResults, numDays, performedBy = null) {
-  const auth = await requireAdmin(performedBy);
+  const auth = await requireAdminOrSuperAdmin(performedBy);
   if (auth) return auth;
   const createdUsernames = [];
 
@@ -248,7 +248,7 @@ export async function getEmployeeHistory(code) {
 }
 
 export async function addEmployee(code, name, performedBy = 'admin', extra = {}) {
-  const auth = await requireAdmin(performedBy);
+  const auth = await requireAdminOrSuperAdmin(performedBy);
   if (auth) return auth;
   const existing = await prisma.user.findUnique({ where: { code } });
   if (existing) return { error: `Employee code "${code}" already exists.` };
@@ -272,7 +272,7 @@ export async function addEmployee(code, name, performedBy = 'admin', extra = {})
 }
 
 export async function deleteEmployee(code, performedBy = 'admin') {
-  const auth = await requireAdmin(performedBy);
+  const auth = await requireAdminOrSuperAdmin(performedBy);
   if (auth) return auth;
   const user = await prisma.user.findUnique({ where: { code } });
   if (!user) return { error: 'Employee not found.' };
@@ -292,7 +292,7 @@ export async function deleteEmployee(code, performedBy = 'admin') {
 }
 
 export async function deleteMonthRecord(employeeCode, monthYear, performedBy = 'admin') {
-  const auth = await requireAdmin(performedBy);
+  const auth = await requireAdminOrSuperAdmin(performedBy);
   if (auth) return auth;
   const user = await prisma.user.findUnique({ where: { code: employeeCode } });
   if (!user) return { error: 'Employee not found.' };
@@ -319,7 +319,7 @@ export async function getAllEmployees() {
 }
 
 export async function updateMonthRecord(employeeCode, monthYear, fields, performedBy = 'admin') {
-  const auth = await requireAdmin(performedBy);
+  const auth = await requireAdminOrSuperAdmin(performedBy);
   if (auth) return auth;
   const user = await prisma.user.findUnique({ where: { code: employeeCode } });
   if (!user) return { error: 'Employee not found.' };

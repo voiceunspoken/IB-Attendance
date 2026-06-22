@@ -2,7 +2,7 @@
 
 import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { requireAdmin } from '../lib/auth-guard';
+import { requireAdminOrSuperAdmin } from '../lib/auth-guard';
 
 // ─── DEPARTMENT ──────────────────────────────────────────────
 
@@ -16,7 +16,9 @@ export async function getDepartments() {
   });
 }
 
-export async function addDepartment(name) {
+export async function addDepartment(name, performedBy = null) {
+  const auth = await requireAdminOrSuperAdmin(performedBy);
+  if (auth) return auth;
   const existing = await prisma.department.findUnique({ where: { name } });
   if (existing) return { error: 'Department already exists.' };
   const dept = await prisma.department.create({ data: { name } });
@@ -24,7 +26,9 @@ export async function addDepartment(name) {
   return { department: dept };
 }
 
-export async function deleteDepartment(id) {
+export async function deleteDepartment(id, performedBy = null) {
+  const auth = await requireAdminOrSuperAdmin(performedBy);
+  if (auth) return auth;
   await prisma.user.updateMany({ where: { departmentId: id }, data: { departmentId: null } });
   await prisma.subDepartment.deleteMany({ where: { departmentId: id } });
   await prisma.department.delete({ where: { id } });
@@ -34,7 +38,9 @@ export async function deleteDepartment(id) {
 
 // ─── SUB DEPARTMENT ──────────────────────────────────────────
 
-export async function addSubDepartment(name, departmentId) {
+export async function addSubDepartment(name, departmentId, performedBy = null) {
+  const auth = await requireAdminOrSuperAdmin(performedBy);
+  if (auth) return auth;
   const dept = await prisma.department.findUnique({ where: { id: departmentId } });
   if (!dept) return { error: 'Department not found.' };
   const sub = await prisma.subDepartment.create({ data: { name, departmentId } });
@@ -42,7 +48,9 @@ export async function addSubDepartment(name, departmentId) {
   return { subDepartment: sub };
 }
 
-export async function deleteSubDepartment(id) {
+export async function deleteSubDepartment(id, performedBy = null) {
+  const auth = await requireAdminOrSuperAdmin(performedBy);
+  if (auth) return auth;
   await prisma.user.updateMany({ where: { subDepartmentId: id }, data: { subDepartmentId: null } });
   await prisma.subDepartment.delete({ where: { id } });
   revalidatePath('/');
@@ -55,7 +63,9 @@ export async function getDesignations() {
   return prisma.designation.findMany({ orderBy: { name: 'asc' } });
 }
 
-export async function addDesignation(name) {
+export async function addDesignation(name, performedBy = null) {
+  const auth = await requireAdminOrSuperAdmin(performedBy);
+  if (auth) return auth;
   const existing = await prisma.designation.findUnique({ where: { name } });
   if (existing) return { error: 'Designation already exists.' };
   const desig = await prisma.designation.create({ data: { name } });
@@ -63,7 +73,9 @@ export async function addDesignation(name) {
   return { designation: desig };
 }
 
-export async function deleteDesignation(id) {
+export async function deleteDesignation(id, performedBy = null) {
+  const auth = await requireAdminOrSuperAdmin(performedBy);
+  if (auth) return auth;
   await prisma.user.updateMany({ where: { designationId: id }, data: { designationId: null } });
   await prisma.designation.delete({ where: { id } });
   revalidatePath('/');
@@ -73,7 +85,7 @@ export async function deleteDesignation(id) {
 // ─── MANAGER ASSIGNMENT ──────────────────────────────────────
 
 export async function setEmployeeManagers(employeeCode, managerCodes, performedBy = null) {
-  const auth = await requireAdmin(performedBy);
+  const auth = await requireAdminOrSuperAdmin(performedBy);
   if (auth) return auth;
   const user = await prisma.user.findUnique({ where: { code: employeeCode } });
   if (!user) return { error: 'Employee not found' };
@@ -135,7 +147,7 @@ export async function getManagedEmployees(managerCode) {
 // ─── DEPARTMENT MANAGER ──────────────────────────────────────
 
 export async function setDepartmentManager(departmentId, managerId, performedBy = null) {
-  const auth = await requireAdmin(performedBy);
+  const auth = await requireAdminOrSuperAdmin(performedBy);
   if (auth) return auth;
   const dept = await prisma.department.findUnique({ where: { id: departmentId } });
   if (!dept) return { error: 'Department not found.' };
@@ -148,7 +160,7 @@ export async function setDepartmentManager(departmentId, managerId, performedBy 
 }
 
 export async function setSubDepartmentManager(subDepartmentId, managerId, performedBy = null) {
-  const auth = await requireAdmin(performedBy);
+  const auth = await requireAdminOrSuperAdmin(performedBy);
   if (auth) return auth;
   const sub = await prisma.subDepartment.findUnique({ where: { id: subDepartmentId } });
   if (!sub) return { error: 'Sub-department not found.' };

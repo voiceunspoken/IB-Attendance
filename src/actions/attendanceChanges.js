@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
 import { createNotification, getAdminUserIds } from './notifications';
+import { requireSuperAdmin } from '../lib/auth-guard';
 
 const LEAVE_TYPES = ['cl', 'sl', 'el', 'rl', 'ul', 'sh'];
 
@@ -80,6 +81,8 @@ function recalcTotals(logs) {
 }
 
 export async function reviewAdjustment(changeId, reviewedBy, approve) {
+  const auth = await requireSuperAdmin(reviewedBy);
+  if (auth) return auth;
   const change = await prisma.pendingChange.findUnique({ where: { id: changeId } });
   if (!change) return { error: 'Change not found' };
 

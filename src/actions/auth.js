@@ -3,7 +3,7 @@
 import { prisma } from '../lib/prisma';
 import bcrypt from 'bcryptjs';
 import { logAction } from './audit';
-import { requireAdmin } from '../lib/auth-guard';
+import { requireAdminOrSuperAdmin, requireSuperAdmin } from '../lib/auth-guard';
 
 export async function loginUser(username, password) {
   try {
@@ -25,7 +25,7 @@ export async function loginUser(username, password) {
 }
 
 export async function createUser(username, password, role, code, createdBy = 'system') {
-  const auth = await requireAdmin(createdBy);
+  const auth = await requireAdminOrSuperAdmin(createdBy);
   if (auth) return auth;
   const existing = await prisma.user.findUnique({ where: { username } });
   if (existing) return { error: 'Username already exists.' };
@@ -46,7 +46,7 @@ export async function getUsers() {
 }
 
 export async function deleteUser(userId, deletedBy = 'admin') {
-  const auth = await requireAdmin(deletedBy);
+  const auth = await requireAdminOrSuperAdmin(deletedBy);
   if (auth) return auth;
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return { error: 'User not found.' };
@@ -65,7 +65,7 @@ export async function deleteUser(userId, deletedBy = 'admin') {
 }
 
 export async function toggleDisableUser(userId, performedBy = 'admin') {
-  const auth = await requireAdmin(performedBy);
+  const auth = await requireAdminOrSuperAdmin(performedBy);
   if (auth) return auth;
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return { error: 'User not found.' };
@@ -79,7 +79,7 @@ export async function toggleDisableUser(userId, performedBy = 'admin') {
 }
 
 export async function updateUser(userId, fields, updatedBy = 'admin') {
-  const auth = await requireAdmin(updatedBy);
+  const auth = await requireAdminOrSuperAdmin(updatedBy);
   if (auth) return auth;
   const data = {};
   if (fields.password) data.password = await bcrypt.hash(fields.password, 10);
@@ -108,7 +108,7 @@ export async function changePassword(userId, currentPassword, newPassword) {
 }
 
 export async function promoteToAdmin(userId, role, performedBy = 'admin') {
-  const auth = await requireAdmin(performedBy);
+  const auth = await requireAdminOrSuperAdmin(performedBy);
   if (auth) return auth;
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return { error: 'User not found.' };
@@ -146,6 +146,8 @@ export async function getPendingChanges() {
 }
 
 export async function reviewPendingChange(changeId, reviewedBy, approve) {
+  const auth = await requireSuperAdmin(reviewedBy);
+  if (auth) return auth;
   const change = await prisma.pendingChange.update({
     where: { id: changeId },
     data: { status: approve ? 'approved' : 'rejected', reviewedBy, reviewedAt: new Date() }

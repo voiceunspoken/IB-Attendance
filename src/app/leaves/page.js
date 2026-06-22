@@ -125,7 +125,7 @@ export default function LeavesPage() {
   const handleEditBalance = async (e) => {
     e.preventDefault();
     if (!editBalanceTarget) return;
-    await adminUpdateLeaveBalance(editBalanceTarget.code, year, editBalanceForm);
+    await adminUpdateLeaveBalance(editBalanceTarget.code, year, editBalanceForm, user?.username);
     toast.success('Leave balance updated for ' + editBalanceTarget.name);
     setEditBalanceTarget(null);
     setFetchTrigger(t => t + 1);
@@ -171,9 +171,8 @@ export default function LeavesPage() {
     setLoading(true);
     (async () => {
       try {
-        const [reqs, regs, bal, pol, mgrLeaves, allWfh, mgrWfh, supWfh] = await Promise.all([
+        const [reqs, bal, pol, mgrLeaves, allWfh, mgrWfh, supWfh] = await Promise.all([
           getAllLeaveRequests(),
-          getAllPendingRegularizations(),
           getAllLeaveBalances(year),
           getLeavePolicy(year),
           user?.code ? getManagerLeaveRequests(user.code) : Promise.resolve([]),
@@ -183,7 +182,7 @@ export default function LeavesPage() {
         ]);
         setLeaveRequests(reqs);
         setManagerLeaves(mgrLeaves);
-        setRegularizations(regs);
+        setRegularizations([]);
         setBalances(bal);
         setWfhRequests(allWfh);
         setManagerWfhRequests(mgrWfh);
@@ -197,10 +196,12 @@ export default function LeavesPage() {
           setPendingChanges(pcs.filter(c => c.action === 'attendance_adjustment' || c.action === 'leave_deduction'));
         }
         if (role === 'admin') {
-          const [allRegs, allChanges] = await Promise.all([
+          const [regs, allRegs, allChanges] = await Promise.all([
+            getAllPendingRegularizations(),
             getAllRegularizations(),
             getPendingChangesHistory()
           ]);
+          setRegularizations(regs);
           setAllRegularizations(allRegs);
           setHistoryChanges(allChanges.filter(c => c.action === 'attendance_adjustment' || c.action === 'update_employee_name' || c.action === 'leave_deduction'));
         }
@@ -272,7 +273,7 @@ export default function LeavesPage() {
 
   const handleSavePolicy = async (e) => {
     e.preventDefault();
-    await upsertLeavePolicy(year, policy);
+    await upsertLeavePolicy(year, policy, user?.username);
     toast.success('Policy saved for ' + year);
     setFetchTrigger(t => t + 1);
   };
@@ -359,8 +360,13 @@ export default function LeavesPage() {
               <div className="card-header" style={{ cursor: 'pointer', userSelect: 'none' }}
                 onClick={() => setCollapsed(c => ({ ...c, leaves: !c.leaves }))}>
                 <span>Pending Leave Approvals</span>
-                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400 }}>
-                  {collapsed.leaves ? 'Show' : 'Hide'} ({managerLeaves.length})
+                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ background: 'var(--surface3)', padding: '1px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, color: 'var(--text3)' }}>
+                    {managerLeaves.length}
+                  </span>
+                  <span style={{ color: 'var(--text3)', fontSize: '10px', fontWeight: 500 }}>
+                    {collapsed.leaves ? 'Show' : 'Hide'}
+                  </span>
                 </span>
               </div>
               {!collapsed.leaves && (
@@ -407,7 +413,10 @@ export default function LeavesPage() {
           {isSuperAdmin && leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length > 0 && (
             <div className="card overflow-hidden p-0">
               <div className="card-header">
-                Super Admin Queue — {leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length}
+                Super Admin Queue
+                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400, marginLeft: '8px' }}>
+                  ({leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length})
+                </span>
               </div>
               {leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').map(r => (
                 <div key={r.id} className="p-14-20 border-bottom" style={{ cursor: 'pointer', transition: 'background 0.1s' }}
@@ -443,8 +452,13 @@ export default function LeavesPage() {
               <div className="card-header" style={{ cursor: 'pointer', userSelect: 'none' }}
                 onClick={() => setCollapsed(c => ({ ...c, regs: !c.regs }))}>
                 <span>Pending Regularizations</span>
-                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400 }}>
-                  {collapsed.regs ? 'Show' : 'Hide'} ({regularizations.length})
+                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ background: 'var(--surface3)', padding: '1px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, color: 'var(--text3)' }}>
+                    {regularizations.length}
+                  </span>
+                  <span style={{ color: 'var(--text3)', fontSize: '10px', fontWeight: 500 }}>
+                    {collapsed.regs ? 'Show' : 'Hide'}
+                  </span>
                 </span>
               </div>
               {!collapsed.regs && (
@@ -479,7 +493,10 @@ export default function LeavesPage() {
           {isSuperAdmin && superRegularizations.length > 0 && (
             <div className="card overflow-hidden p-0">
               <div className="card-header">
-                Super Admin — Regularizations ({superRegularizations.length})
+                Super Admin — Regularizations
+                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400, marginLeft: '8px' }}>
+                  ({superRegularizations.length})
+                </span>
               </div>
               {superRegularizations.map(r => (
                 <div key={r.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
@@ -509,8 +526,13 @@ export default function LeavesPage() {
               <div className="card-header" style={{ cursor: 'pointer', userSelect: 'none' }}
                 onClick={() => setCollapsed(c => ({ ...c, adjustments: !c.adjustments }))}>
                 <span>Pending Approvals</span>
-                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400 }}>
-                  {collapsed.adjustments ? 'Show' : 'Hide'} ({pendingChanges.length})
+                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ background: 'var(--surface3)', padding: '1px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, color: 'var(--text3)' }}>
+                    {pendingChanges.length}
+                  </span>
+                  <span style={{ color: 'var(--text3)', fontSize: '10px', fontWeight: 500 }}>
+                    {collapsed.adjustments ? 'Show' : 'Hide'}
+                  </span>
                 </span>
               </div>
               {!collapsed.adjustments && (
@@ -567,10 +589,13 @@ export default function LeavesPage() {
           {!isSuperAdmin && (
           <div className="card overflow-hidden p-0">
             <div className="card-header">
-              Pending Your Approval ({managerLeaves.length})
-            </div>
-            {managerLeaves.length === 0
-              ? <div className="p-32 text-center text-muted2 text-sm">No leave requests awaiting your approval.</div>
+              Pending Your Approval
+                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400, marginLeft: '8px' }}>
+                  ({managerLeaves.length})
+                </span>
+              </div>
+              {managerLeaves.length === 0
+                ? <div className="p-32 text-center text-muted2 text-sm">No leave requests awaiting your approval.</div>
               : managerLeaves.map(r => (
                 <div key={r.id} className="p-16-20 border-bottom" style={{ cursor: 'pointer', transition: 'background 0.1s' }}
                   onClick={() => { setReviewModal(r); setReviewNote(''); }}
@@ -611,7 +636,10 @@ export default function LeavesPage() {
           {isSuperAdmin && (
             <div className="card overflow-hidden p-0">
               <div className="card-header">
-                Pending Super Admin Approval ({leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length})
+                Pending Super Admin Approval
+                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400, marginLeft: '8px' }}>
+                  ({leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length})
+                </span>
               </div>
               {leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length === 0
                 ? <div className="p-32 text-center text-muted2 text-sm">No leave requests awaiting super admin approval.</div>
@@ -677,10 +705,13 @@ export default function LeavesPage() {
           {role === 'admin' && (
           <div className="card overflow-hidden p-0">
             <div className="card-header">
-              Pending Admin Review ({regularizations.length})
-            </div>
-            {regularizations.length === 0
-              ? <div className="p-32 text-center text-muted2 text-sm">No pending regularizations.</div>
+              Pending Admin Review
+                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400, marginLeft: '8px' }}>
+                  ({regularizations.length})
+                </span>
+              </div>
+              {regularizations.length === 0
+                ? <div className="p-32 text-center text-muted2 text-sm">No pending regularizations.</div>
               : regularizations.map(r => (
                 <div key={r.id} className="p-16-20 border-bottom flex-between" style={{ gap: '16px' }}>
                   <div>
@@ -708,7 +739,10 @@ export default function LeavesPage() {
           {isSuperAdmin && (
             <div className="card overflow-hidden p-0">
               <div className="card-header">
-                Pending Super Admin Approval ({superRegularizations.length})
+                Pending Super Admin Approval
+                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400, marginLeft: '8px' }}>
+                  ({superRegularizations.length})
+                </span>
               </div>
               {superRegularizations.length === 0
                 ? <div className="p-32 text-center text-muted2 text-sm">No regularizations awaiting final approval.</div>
@@ -744,7 +778,10 @@ export default function LeavesPage() {
           {role === 'admin' && (
             <div className="card overflow-hidden p-0">
               <div className="card-header">
-                Pending Your Approval — Work Mode ({managerWfhRequests.length})
+                Pending Your Approval — Work Mode
+                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400, marginLeft: '8px' }}>
+                  ({managerWfhRequests.length})
+                </span>
               </div>
               {managerWfhRequests.length === 0
                 ? <div className="p-32 text-center text-muted2 text-sm">No requests awaiting your approval.</div>
@@ -778,7 +815,10 @@ export default function LeavesPage() {
           {isSuperAdmin && (
             <div className="card overflow-hidden p-0">
               <div className="card-header">
-                Pending Super Admin Approval — Work Mode ({superWfhRequests.length})
+                Pending Super Admin Approval — Work Mode
+                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400, marginLeft: '8px' }}>
+                  ({superWfhRequests.length})
+                </span>
               </div>
               {superWfhRequests.length === 0
                 ? <div className="p-32 text-center text-muted2 text-sm">No requests awaiting super admin approval.</div>
@@ -811,10 +851,13 @@ export default function LeavesPage() {
           {/* All WFH requests */}
           <div className="card overflow-hidden p-0">
             <div className="card-header">
-              All Work Mode Requests ({wfhRequests.length})
-            </div>
-            {wfhRequests.length === 0
-              ? <div className="p-32 text-center text-muted2 text-sm">No requests yet.</div>
+              All Work Mode Requests
+                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400, marginLeft: '8px' }}>
+                  ({wfhRequests.length})
+                </span>
+              </div>
+              {wfhRequests.length === 0
+                ? <div className="p-32 text-center text-muted2 text-sm">No requests yet.</div>
               : wfhRequests.map(r => (
                 <div key={r.id} className="p-16-20 border-bottom" style={{ gap: '16px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
