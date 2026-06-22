@@ -1035,6 +1035,9 @@ export default function LeavesPage() {
           <div className="card overflow-hidden p-0">
             <div className="card-header">
               <span>Leave Requests</span>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text2)', background: 'var(--surface3)', padding: '1px 8px', borderRadius: '980px', marginLeft: '8px', lineHeight: 1.5 }}>
+                {leaveRequests.length}
+              </span>
             </div>
             {leaveRequests.length === 0 ? (
               <div className="p-32 text-center text-muted2 text-sm">No leave requests found.</div>

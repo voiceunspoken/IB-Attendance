@@ -77,7 +77,7 @@ export default function DashboardHome() {
             getPendingPolicies(),
             getPendingSuperRegularizations()
           ]);
-          setPendingCounts({ policies: pp.length, regularizations: sr.length });
+          setPendingCounts(prev => ({ ...prev, policies: pp.length, regularizations: sr.length }));
         } catch { /* ignore */ }
       }
 
