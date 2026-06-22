@@ -88,7 +88,16 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
 
     for (let d = 1; d <= daysInMonth; d++) {
       const info = dayMap[d];
-      if (!info) { cells.push(<div key={`empty-mid-${d}`} role="presentation" />); continue; }
+      if (!info) {
+        cells.push(
+          <div key={`empty-mid-${d}`}
+            style={{ aspectRatio: '1', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 500, background: 'var(--surface2)', border: '1.5px dashed var(--border)', color: 'var(--text3)' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600 }}>{d}</span>
+            <span style={{ fontSize: '8px', fontWeight: 500, opacity: 0.6 }}>NA</span>
+          </div>
+        );
+        continue;
+      }
 
       let bg = 'var(--surface2)', border = '1px solid var(--border)', opacity = 1, cursor = 'pointer', outline = 'none';
       let label = '';

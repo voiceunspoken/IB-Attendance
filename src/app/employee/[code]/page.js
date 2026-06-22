@@ -9,7 +9,7 @@ import EmployeeModal from '../../../components/EmployeeModal';
 import ClockWidget from '../../../components/ClockWidget';
 import { useToast } from '../../../components/Toast';
 import { useEmployeeData } from './context';
-import { FiDownload } from 'react-icons/fi';
+import { FiDownload, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 
 export default function AttendancePage({ params }) {
   const unwrappedParams = use(params);
@@ -196,15 +196,15 @@ export default function AttendancePage({ params }) {
       {showClockWidget && <ClockWidget code={code} employeeType={emp.employeeType} />}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <button onClick={() => setSelectedMonthIndex(Math.max(0, selectedMonthIndex - 1))}
-            style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text2)', fontSize: '12px', lineHeight: 1 }}
-            disabled={selectedMonthIndex === 0}>◀</button>
+          <button onClick={() => setSelectedMonthIndex(Math.min(emp.records.length - 1, selectedMonthIndex + 1))}
+            style={{ display: 'grid', placeItems: 'center', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', width: '28px', height: '28px', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text2)', lineHeight: 1 }}
+            disabled={selectedMonthIndex === emp.records.length - 1}><FiChevronLeft size={16} /></button>
           <span style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '-0.03em' }}>
             {formatMonth(currentRecord.monthYear)}
           </span>
-          <button onClick={() => setSelectedMonthIndex(Math.min(emp.records.length - 1, selectedMonthIndex + 1))}
-            style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text2)', fontSize: '12px', lineHeight: 1 }}
-            disabled={selectedMonthIndex === emp.records.length - 1}>▶</button>
+          <button onClick={() => setSelectedMonthIndex(Math.max(0, selectedMonthIndex - 1))}
+            style={{ display: 'grid', placeItems: 'center', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', width: '28px', height: '28px', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text2)', lineHeight: 1 }}
+            disabled={selectedMonthIndex === 0}><FiChevronRight size={16} /></button>
         </div>
         <div style={{ flex: 1, display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-evenly', fontSize: '11px', color: 'var(--text2)' }}>
           {[
