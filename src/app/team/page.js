@@ -75,9 +75,9 @@ export default function TeamPage() {
   // ── Users / Accounts state ──
   const [users, setUsers] = useState([]);
   const [pendingChanges, setPendingChanges] = useState([]);
-  const [promotableEmployees, setPromotableEmployees] = useState([]);
+  const [, setPromotableEmployees] = useState([]);
   const [userSearch, setUserSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState('all');
+  const [roleFilter] = useState('all');
   const [userPage, setUserPage] = useState(1);
   const pageSize = 20;
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -453,11 +453,6 @@ export default function TeamPage() {
     letterSpacing: '0.05em', color: 'var(--text2)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap',
   };
   const tdStyle = { padding: '11px 16px', fontSize: 'var(--fs-sm)', color: 'var(--text)', borderBottom: '1px solid var(--border)' };
-  const tblHead = {
-    background: 'var(--surface2)', padding: '10px 14px', textAlign: 'left',
-    fontWeight: 600, fontSize: '11px', textTransform: 'uppercase',
-    letterSpacing: '0.04em', color: 'var(--text2)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap',
-  };
   const tblCell = { padding: '11px 14px', fontSize: '13px', borderBottom: '1px solid var(--border)' };
 
   return (
@@ -493,12 +488,10 @@ export default function TeamPage() {
                   <span style={{ background: 'var(--surface3)', borderRadius: '980px', padding: '1px 9px', fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--text2)' }}>{employees.length}</span>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <button onClick={() => { setEmpForm({ code: '', name: '', employeeType: 'regular', departmentId: '', designationId: '' }); setEmpMsg(''); setShowCreateModal(true); }}
-                    style={{ padding: '6px 12px', borderRadius: '980px', border: '1px solid rgba(52,199,89,0.2)', background: 'rgba(52,199,89,0.06)', color: 'var(--green)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, fontSize: 'var(--fs-xs)', whiteSpace: 'nowrap' }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => { setEmpForm({ code: '', name: '', employeeType: 'regular', departmentId: '', designationId: '' }); setEmpMsg(''); setShowCreateModal(true); }}>
                     + Create Employee
                   </button>
-                  <button onClick={() => { setPromoteUserId(''); setPromoteRole('admin'); setPromoteResult(''); setShowPromoteModal(true); }}
-                    style={{ padding: '6px 12px', borderRadius: '980px', border: '1px solid rgba(0,113,227,0.2)', background: 'rgba(0,113,227,0.06)', color: 'var(--blue)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, fontSize: 'var(--fs-xs)', whiteSpace: 'nowrap' }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => { setPromoteUserId(''); setPromoteRole('admin'); setPromoteResult(''); setShowPromoteModal(true); }}>
                     + Promote
                   </button>
                   <SearchBar value={userSearch} onChange={v => { setUserSearch(v); setUserPage(1); }} placeholder="Search employees…" count={filteredUsers.length} />
@@ -539,8 +532,8 @@ export default function TeamPage() {
                           <td style={tdStyle}>
                             <div style={{ display: 'flex', gap: '6px' }}>
                               <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '11px' }} onClick={() => openEditRow(p)}>Edit</button>
-                              <button onClick={() => handleToggleDisableRow(p)} style={{ padding: '4px 10px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,159,10,0.2)', background: 'rgba(255,159,10,0.06)', color: '#b36200', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, transition: 'all 0.15s' }}>{p.disabled ? 'Enable' : 'Disable'}</button>
-                              <button onClick={() => handleDeleteRow(p)} style={{ padding: '4px 10px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.2)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, transition: 'all 0.15s' }}>Delete</button>
+                              <button className="btn btn-outline btn-xs" onClick={() => handleToggleDisableRow(p)}>{p.disabled ? 'Enable' : 'Disable'}</button>
+                              <button className="btn btn-outline btn-xs" style={{ color: 'var(--red)', borderColor: 'rgba(255,59,48,0.25)' }} onClick={() => handleDeleteRow(p)}>Delete</button>
                             </div>
                           </td>
                         </tr>

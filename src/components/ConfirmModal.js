@@ -3,11 +3,11 @@ import { useState } from 'react';
 import { FiAlertTriangle } from 'react-icons/fi';
 import Modal from './Modal';
 
-export default function ConfirmModal({ message, onConfirm, onCancel, confirmLabel = 'Delete', confirmLoadingLabel = 'Deleting…', variant = 'danger' }) {
+export default function ConfirmModal({ message, onConfirm, onCancel, confirmLabel = 'Delete', confirmLoadingLabel = 'Deleting…', variant = 'danger', title = 'Confirm' }) {
   const [loading, setLoading] = useState(false);
 
   return (
-    <Modal open={true} onClose={onCancel} title="" width="400px">
+    <Modal open={true} onClose={onCancel} title={title} width="400px">
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
         <div style={{
           width: '36px', height: '36px', borderRadius: '10px',

@@ -17,9 +17,9 @@ export default function DashboardHome() {
   const router = useRouter();
 
   const [employees, setEmployees] = useState([]);
-  const [departments, setDepartments] = useState([]);
+  const [, setDepartments] = useState([]);
   const [months, setMonths] = useState([]);
-  const [monthData, setMonthData] = useState(undefined);
+  const [, setMonthData] = useState(undefined);
   const [holidays, setHolidays] = useState([]);
   const [pendingCounts, setPendingCounts] = useState({ policies: 0, regularizations: 0, leaves: 0 });
   const [loading, setLoading] = useState(true);

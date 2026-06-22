@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { FiX, FiClock, FiGift, FiCheck } from 'react-icons/fi';
 import { useToast } from './Toast';
+import Modal from './Modal';
 
 const ADJUST_TYPES = [
   { value: 'present', label: 'Present' },
@@ -24,7 +25,6 @@ const ADJUST_TYPES = [
 export default function EmployeeModal({ employee, currentMonth, onClose, readOnly = false, onAdjust, rlEligibleDays = [], mode = 'modal', isAdmin = false, onPunchUpdate }) {
   const [popupDay, setPopupDay] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
-  const [popupPos, setPopupPos] = useState({ x: 0, y: 0 });
   const [adjustType, setAdjustType] = useState('present');
   const [adjustReason, setAdjustReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -35,14 +35,6 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
 
   const toast = useToast();
   const fmtTime = (m) => m != null ? `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` : '';
-
-  useEffect(() => {
-    if (popupDay) {
-      const prev = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = prev; };
-    }
-  }, [popupDay]);
 
   if (!employee) return null;
 
@@ -59,11 +51,6 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
     e.stopPropagation();
     const info = employee.days.find(x => x.d === day);
     if (!info || info.type === 'wo' || info.type === 'holiday') return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    let x = rect.right + 10, y = rect.top - 4;
-    if (x + 300 > window.innerWidth) x = Math.max(10, rect.left - 300 - 10);
-    if (y + 360 > window.innerHeight) y = Math.max(10, window.innerHeight - 360 - 10);
-    setPopupPos({ x, y });
     setSelectedDay(day);
     setPopupDay(day);
     setAdjustType('present');
@@ -179,11 +166,15 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
   };
 
   // ── Popup content — computed once, shared by both render modes ──
+  const popupDayTitle = popupDay ? (() => {
+    const pd = new Date(currentMonth.year, currentMonth.month - 1, popupDay);
+    return `Day ${popupDay} · ${pd.toLocaleDateString('en-US', { weekday: 'long' })}`;
+  })() : '';
+
   const popupContent = popupDay && (() => {
     const di = employee.days.find(x => x.d === popupDay);
     if (!di) return null;
     const pd = new Date(currentMonth.year, currentMonth.month - 1, popupDay);
-    const dayName = pd.toLocaleDateString('en-US', { weekday: 'long' });
     const dateStr = pd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
     const statusLabel = ({ present: 'Present', absent: 'Absent', half: 'Half Day', rl: 'RL', holiday: 'Holiday', wo: 'WO',
@@ -200,24 +191,10 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
     const sectionDiv = <div style={{ margin: '12px 0', height: '1px', background: 'var(--border)' }} />;
 
     return (
-      <div style={{ minWidth: '320px', maxWidth: '380px' }}>
-        {/* Popup header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-          <div>
-            <div style={{ fontSize: 'var(--fs-md)', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)', lineHeight: 1.2 }}>
-              Day {popupDay}
-              <span style={{ fontWeight: 400, color: 'var(--text2)', marginLeft: '6px' }}>· {dayName}</span>
-            </div>
-            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--text3)', marginTop: '2px', letterSpacing: '-0.01em' }}>{dateStr}</div>
-          </div>
-          <button onClick={() => { setSelectedDay(null); setPopupDay(null); }}
-            style={{
-              width: '26px', height: '26px', borderRadius: '50%', border: 'none',
-              background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer',
-              display: 'grid', placeItems: 'center', fontFamily: 'inherit', flexShrink: 0
-            }}>
-            <FiX size={13} />
-          </button>
+      <>
+        {/* Date subtitle */}
+        <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--text3)', marginTop: '-8px', marginBottom: '14px', letterSpacing: '-0.01em' }}>
+          {dateStr}
         </div>
 
         {/* Status badge */}
@@ -281,7 +258,7 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
               const result = await onAdjust(employee.code, popupDay, di.type, adjustType, adjustReason);
               setSubmitting(false);
               if (result?.warning) toast.warning(result.warning);
-              adjustReason && toast.success('Adjustment submitted for approval.');
+              if (adjustReason) toast.success('Adjustment submitted for approval.');
               setAdjustReason('');
               setAdjustType('present');
               setSelectedDay(null);
@@ -339,21 +316,9 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
             </button>
           </>
         )}
-      </div>
+      </>
     );
   })();
-
-  const popupCard = popupContent && (
-    <div style={{
-      background: 'var(--surface)', border: '1px solid var(--border)',
-      borderRadius: '16px', padding: '16px',
-      boxShadow: 'var(--shadow-lg)',
-      maxHeight: '85vh', overflowY: 'auto',
-      animation: 'fadeIn 0.15s ease'
-    }}>
-      {popupContent}
-    </div>
-  );
 
   // ── Shared modal body (header + stats + calendar) ──
   const modalBody = (
@@ -428,31 +393,9 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
           {renderCalendar(false)}
         </div>
 
-        {/* Day detail modal — centered overlay */}
-        {popupContent && (
-          <div onClick={() => { setSelectedDay(null); setPopupDay(null); }}
-            onWheel={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()}
-            onKeyDown={e => { if (e.key === 'Escape') { setSelectedDay(null); setPopupDay(null); } }}
-            role="dialog" aria-modal="true" aria-label="Day details" tabIndex={-1}
-            style={{
-            position: 'fixed', inset: 0, zIndex: 99998,
-            background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
-            display: 'grid', placeItems: 'center', padding: '24px',
-            overflow: 'auto', animation: 'fadeIn 0.15s ease'
-          }}>
-            <div onClick={e => e.stopPropagation()}
-              style={{
-                background: 'var(--surface)', borderRadius: '16px',
-                border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)',
-                padding: '16px', maxWidth: '380px', width: '100%',
-                maxHeight: '85vh', overflowY: 'auto',
-                animation: 'slideUp 0.2s ease',
-              }}
-            >
-              {popupContent}
-            </div>
-          </div>
-        )}
+        <Modal open={!!popupDay} onClose={() => { setSelectedDay(null); setPopupDay(null); }} title={popupDayTitle} width="400px">
+          {popupContent}
+        </Modal>
       </div>
     );
   }
@@ -461,9 +404,8 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
   return (
     <div
       style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
-        zIndex: 200, display: 'grid', placeItems: 'center',
-        backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)'
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+        zIndex: 200, display: 'grid', placeItems: 'center'
       }}
       onClick={onClose}
     >
@@ -479,11 +421,9 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
       >
         {modalBody}
       </div>
-      {popupCard && (
-        <div style={{ position: 'fixed', left: popupPos.x, top: popupPos.y, zIndex: 300 }}>
-          {popupCard}
-        </div>
-      )}
+      <Modal open={!!popupDay} onClose={() => { setSelectedDay(null); setPopupDay(null); }} title={popupDayTitle} width="400px">
+        {popupContent}
+      </Modal>
     </div>
   );
 }

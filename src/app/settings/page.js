@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
+import { useToast } from '../../components/Toast';
 import { getHolidays, deleteHoliday, seedIBHolidays } from '../../actions/holidays';
 import {
   addHolidayPending, getPendingHolidays, approveHoliday, rejectHoliday,
-  deletePendingHoliday, uploadHolidayXlsx
+  uploadHolidayXlsx
 } from '../../actions/holidayAdmin';
 import { getActiveShiftPolicy, saveShiftPolicy, getShiftPolicyHistory, getPendingPolicies, reviewPolicy } from '../../actions/shiftPolicy';
 
@@ -21,6 +22,7 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 
 export default function SettingsPage() {
   const { role, isAuthenticated, user, loading: authLoading } = useAuth();
+  const toast = useToast();
   const isAdmin = role === 'admin' || role === 'super_admin';
   const isSuperAdmin = role === 'super_admin';
   const router = useRouter();
@@ -302,7 +304,7 @@ export default function SettingsPage() {
                         <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.25, color: 'var(--text3)' }}><FiSun size={36} /></div>
                         <div className="text-md text-semibold mb-2 text-muted">No holidays added yet</div>
                         <div className="text-sm text-muted2 mb-16">Add your first holiday to get started.</div>
-                        <button onClick={() => setHSubTab('add')} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 500, border: 'none', cursor: 'pointer', fontFamily: 'inherit', background: 'var(--blue)', color: '#fff' }}><FiPlus size={14} /> Add Your First Holiday</button>
+<button className="btn btn-primary btn-sm" onClick={() => setHSubTab('add')}><FiPlus size={14} /> Add Your First Holiday</button>
                       </div>
                     : holidays.filter(h => hSubTab === 'gazette' ? (!h.isRestricted || h.type === 'national') : (h.isRestricted || h.type === 'optional')).map(h => (
                       <div key={h.id} className="flex-between border-bottom" style={{ padding: '12px 20px' }}>
@@ -311,7 +313,7 @@ export default function SettingsPage() {
                           <span className="text-xs text-muted" style={{ marginLeft: '8px' }}>{MONTHS[h.month - 1]} {h.day}</span>
                           {h.status === 'pending' && <span className="badge" style={{ background: 'rgba(255,159,10,0.1)', color: '#b36200', marginLeft: '6px' }}>Pending</span>}
                         </div>
-                        <button onClick={() => handleDeleteHoliday(h.id)} className="btn border-none" style={{ fontSize: '12px', padding: '4px 10px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>
+                        <button onClick={() => handleDeleteHoliday(h.id)} className="btn btn-outline btn-xs" style={{ color: 'var(--red)', borderColor: 'rgba(255,59,48,0.25)' }}>Remove</button>
                       </div>
                     ))
                   }
@@ -438,11 +440,11 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <div className="flex gap-6">
-                  <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: '12px', background: 'var(--green)' }}
+                  <button className="btn btn-primary btn-sm"
                     onClick={async () => { await reviewPolicy(p.id, user.username, true); const pp = await getPendingPolicies(); setPendingPolicies(pp); }}>
                     Approve
                   </button>
-                  <button className="btn border-none" style={{ padding: '6px 14px', fontSize: '12px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
+                  <button className="btn btn-outline btn-sm" style={{ color: 'var(--red)', borderColor: 'rgba(255,59,48,0.25)' }}
                     onClick={async () => { await reviewPolicy(p.id, user.username, false); const pp = await getPendingPolicies(); setPendingPolicies(pp); }}>
                     Reject
                   </button>

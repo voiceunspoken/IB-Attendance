@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
 import { useToast } from '../../components/Toast';
-import { FiClipboard, FiAlertTriangle, FiFileText, FiCalendar, FiClock } from 'react-icons/fi';
+import { FiAlertTriangle, FiCalendar, FiClock } from 'react-icons/fi';
 import Modal from '../../components/Modal';
 import {
   getAllLeaveRequests, reviewLeaveRequest,
@@ -229,16 +229,6 @@ export default function LeavesPage() {
   if (!isAdmin && managerLoading) return null;
   if (!isAdmin && !managerLoading && !user?.code) return null;
 
-  const statusBadge = (status) => {
-    const map = {
-      pending: { bg: 'rgba(255,159,10,0.1)', color: '#b36200' },
-      approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37' },
-      rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b' }
-    };
-    const s = map[status] || map.pending;
-    return <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: '980px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.color }}>{status}</span>;
-  };
-
   const StageBadge = ({ stage }) => {
     const map = {
       pending_mgr: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3', label: 'Pending' },
@@ -444,7 +434,7 @@ export default function LeavesPage() {
                   ? <div className="p-32 text-center text-muted2 text-sm">No pending adjustments.</div>
                   : pendingChanges.map(c => {
                       let payload = {};
-                      try { payload = JSON.parse(c.payload); } catch {}
+                      try { payload = JSON.parse(c.payload); } catch { /* */ }
                       return (
                         <div key={c.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
                           <div>
@@ -775,8 +765,8 @@ export default function LeavesPage() {
       )}
 
       {/* ── REVIEW MODAL ── */}
-      {reviewModal && (
-        <Modal open={true} onClose={() => { setReviewModal(null); setReviewNote(''); }} title="Review Leave Request" width="480px">
+      <Modal open={!!reviewModal} onClose={() => { setReviewModal(null); setReviewNote(''); }} title="Review Leave Request" width="480px">
+        {reviewModal && (<>
           <div style={{ marginBottom: '20px' }}>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '16px', fontWeight: 700 }}>{reviewModal.user?.name || 'Unknown'}</span>
@@ -836,44 +826,47 @@ export default function LeavesPage() {
                     ? managers.findIndex(m => m.managerUserId === reviewModal.currentApproverId)
                     : -1;
                   const stage = reviewModal.approvalStage;
-                  const mgrLabels = ['L2 Manager', 'L1 Manager'];
                   const isMgr = i => i === 0 ? 'L2 Manager' : i === 1 ? 'L1 Manager' : `Manager ${i + 1}`;
-                  return managers.map((m, i) => {
-                    let status, color, icon;
-                    if (stage === 'approved') {
-                      status = 'Approved'; color = 'var(--green)'; icon = '✓';
-                    } else if (stage === 'rejected') {
-                      if (i < currentIdx) { status = 'Approved'; color = 'var(--green)'; icon = '✓'; }
-                      else { status = '—'; color = 'var(--text3)'; icon = '○'; }
-                    } else if (i < currentIdx) {
-                      status = 'Approved'; color = 'var(--green)'; icon = '✓';
-                    } else if (i === currentIdx) {
-                      status = 'Pending your approval'; color = 'var(--blue)'; icon = '→';
-                    } else {
-                      status = 'Pending'; color = 'var(--text3)'; icon = '○';
-                    }
-                    return (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 0', fontSize: '12px', borderBottom: i < managers.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                        <span style={{ color, fontWeight: 600, width: '16px' }}>{icon}</span>
-                        <span style={{ fontWeight: 500, color: status === 'Pending your approval' || status === 'Approved' ? 'var(--text)' : 'var(--text3)', minWidth: '90px' }}>{isMgr(i)}</span>
-                        <span style={{ color: 'var(--text2)', flex: 1 }}>{m.manager.name}</span>
-                        <span style={{ color, fontSize: '11px', fontWeight: 500, whiteSpace: 'nowrap' }}>{status}</span>
-                      </div>
-                    );
-                  });
+                  return (
+                    <>
+                      {managers.map((m, i) => {
+                        let status, color, icon;
+                        if (stage === 'approved') {
+                          status = 'Approved'; color = 'var(--green)'; icon = '✓';
+                        } else if (stage === 'rejected') {
+                          if (i < currentIdx) { status = 'Approved'; color = 'var(--green)'; icon = '✓'; }
+                          else { status = '—'; color = 'var(--text3)'; icon = '○'; }
+                        } else if (i < currentIdx) {
+                          status = 'Approved'; color = 'var(--green)'; icon = '✓';
+                        } else if (i === currentIdx) {
+                          status = 'Pending your approval'; color = 'var(--blue)'; icon = '→';
+                        } else {
+                          status = 'Pending'; color = 'var(--text3)'; icon = '○';
+                        }
+                        return (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 0', fontSize: '12px', borderBottom: i < managers.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                            <span style={{ color, fontWeight: 600, width: '16px' }}>{icon}</span>
+                            <span style={{ fontWeight: 500, color: status === 'Pending your approval' || status === 'Approved' ? 'var(--text)' : 'var(--text3)', minWidth: '90px' }}>{isMgr(i)}</span>
+                            <span style={{ color: 'var(--text2)', flex: 1 }}>{m.manager.name}</span>
+                            <span style={{ color, fontSize: '11px', fontWeight: 500, whiteSpace: 'nowrap' }}>{status}</span>
+                          </div>
+                        );
+                      })}
+                      {(stage === 'pending_super' || stage === 'approved' || stage === 'pending_mgr' || stage === 'pending_l2' || stage === 'pending_l1') && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 0', fontSize: '12px' }}>
+                          <span style={{ color: stage === 'pending_super' ? 'var(--blue)' : stage === 'approved' ? 'var(--green)' : 'var(--text3)', fontWeight: 600, width: '16px' }}>
+                            {stage === 'approved' ? '✓' : stage === 'pending_super' ? '→' : '○'}
+                          </span>
+                          <span style={{ fontWeight: 500, minWidth: '90px', color: stage === 'pending_super' || stage === 'approved' ? 'var(--text)' : 'var(--text3)' }}>Super Admin</span>
+                          <span style={{ color: 'var(--text2)', flex: 1 }}>{stage === 'approved' ? '—' : 'You'}</span>
+                          <span style={{ color: stage === 'pending_super' ? 'var(--blue)' : stage === 'approved' ? 'var(--green)' : 'var(--text3)', fontSize: '11px', fontWeight: 500 }}>
+                            {stage === 'pending_super' ? 'Pending your approval' : stage === 'approved' ? 'Approved' : 'Pending'}
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  );
                 })()}
-                {(stage === 'pending_super' || stage === 'approved' || stage === 'pending_mgr' || stage === 'pending_l2' || stage === 'pending_l1') && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 0', fontSize: '12px' }}>
-                    <span style={{ color: stage === 'pending_super' ? 'var(--blue)' : stage === 'approved' ? 'var(--green)' : 'var(--text3)', fontWeight: 600, width: '16px' }}>
-                      {stage === 'approved' ? '✓' : stage === 'pending_super' ? '→' : '○'}
-                    </span>
-                    <span style={{ fontWeight: 500, minWidth: '90px', color: stage === 'pending_super' || stage === 'approved' ? 'var(--text)' : 'var(--text3)' }}>Super Admin</span>
-                    <span style={{ color: 'var(--text2)', flex: 1 }}>{stage === 'approved' ? '—' : 'You'}</span>
-                    <span style={{ color: stage === 'pending_super' ? 'var(--blue)' : stage === 'approved' ? 'var(--green)' : 'var(--text3)', fontSize: '11px', fontWeight: 500 }}>
-                      {stage === 'pending_super' ? 'Pending your approval' : stage === 'approved' ? 'Approved' : 'Pending'}
-                    </span>
-                  </div>
-                )}
               </div>
             )}
 
@@ -894,12 +887,12 @@ export default function LeavesPage() {
               Reject
             </button>
           </div>
+        </>)}
         </Modal>
-      )}
 
       {/* ── EDIT BALANCE MODAL ── */}
-      {editBalanceTarget && (
-        <Modal open={true} onClose={() => setEditBalanceTarget(null)} title={`Edit Leave Balance — ${editBalanceTarget.name}`} width="440px">
+      <Modal open={!!editBalanceTarget} onClose={() => setEditBalanceTarget(null)} title={editBalanceTarget ? `Edit Leave Balance — ${editBalanceTarget.name}` : ''} width="440px">
+        {editBalanceTarget && (
           <form onSubmit={handleEditBalance}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
               {['clTotal', 'slTotal', 'elTotal', 'rlTotal', 'shTotal'].map(k => {
@@ -925,8 +918,8 @@ export default function LeavesPage() {
               </button>
             </div>
           </form>
+        )}
         </Modal>
-      )}
     </div>
   );
 }

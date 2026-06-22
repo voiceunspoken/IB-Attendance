@@ -12,7 +12,7 @@ const LEAVE_LABELS = { cl: 'CL', sl: 'SL', el: 'EL', rl: 'RL', sh: 'SH' };
 const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b' };
 
 export default function AuditPage() {
-  const { role, isAuthenticated, user, loading: authLoading } = useAuth();
+  const { role, isAuthenticated, loading: authLoading } = useAuth();
   const isAdmin = role === 'admin' || role === 'super_admin';
   const isSuperAdmin = role === 'super_admin';
   const router = useRouter();
@@ -241,7 +241,7 @@ export default function AuditPage() {
                   <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
                     {pendingChanges.map(c => {
                       let payload = {};
-                      try { payload = JSON.parse(c.payload); } catch {}
+                      try { payload = JSON.parse(c.payload); } catch { /* */ }
                       const actionLabels = {
                         update_employee_name: 'Name Change',
                         attendance_adjustment: 'Attendance Adjustment',

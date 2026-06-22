@@ -133,8 +133,7 @@ export default function Sidebar({ open, onClose, isMobile }) {
         <div
           onClick={onClose}
           style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
-            backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
             zIndex: 300,
           }}
         />
