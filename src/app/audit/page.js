@@ -13,7 +13,7 @@ const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de
 
 export default function AuditPage() {
   const { role, isAuthenticated, loading: authLoading } = useAuth();
-  const isAdmin = role === 'admin' || role === 'super_admin';
+  const isAdmin = role === 'admin';
   const isSuperAdmin = role === 'super_admin';
   const router = useRouter();
 
@@ -98,11 +98,11 @@ export default function AuditPage() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
-    if (!authLoading && isAuthenticated && !isAdmin) router.push('/');
-  }, [isAuthenticated, isAdmin, authLoading, router]);
+    if (!authLoading && isAuthenticated && !isAdmin && !isSuperAdmin) router.push('/');
+  }, [isAuthenticated, isAdmin, isSuperAdmin, authLoading, router]);
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdmin && !isSuperAdmin) return;
     (async () => {
       setLhLoading(true);
       try {

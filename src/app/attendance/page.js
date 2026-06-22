@@ -16,7 +16,8 @@ import { useToast } from '../../components/Toast';
 
 export default function AttendancePage() {
   const { role, isAuthenticated, user, loading: authLoading } = useAuth();
-  const isAdmin = role === 'admin' || role === 'super_admin';
+  const isAdmin = role === 'admin';
+  const isSuperAdmin = role === 'super_admin';
   const router = useRouter();
   const toast = useToast();
 
@@ -40,8 +41,8 @@ export default function AttendancePage() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
-    if (!authLoading && isAuthenticated && !isAdmin) router.push('/');
-  }, [isAuthenticated, isAdmin, authLoading, router]);
+    if (!authLoading && isAuthenticated && !isAdmin && !isSuperAdmin) router.push('/');
+  }, [isAuthenticated, isAdmin, isSuperAdmin, authLoading, router]);
 
   const loadData = useCallback(async (monthYear) => {
     setLoading(true);

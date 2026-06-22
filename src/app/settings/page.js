@@ -23,7 +23,7 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 export default function SettingsPage() {
   const { role, isAuthenticated, user, loading: authLoading } = useAuth();
   const toast = useToast();
-  const isAdmin = role === 'admin' || role === 'super_admin';
+  const isAdmin = role === 'admin';
   const isSuperAdmin = role === 'super_admin';
   const router = useRouter();
   const [tab, setTab] = useState('holidays');
@@ -63,11 +63,11 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
-    if (!authLoading && isAuthenticated && !isAdmin) router.push('/');
-  }, [isAuthenticated, isAdmin, authLoading, router]);
+    if (!authLoading && isAuthenticated && !isAdmin && !isSuperAdmin) router.push('/');
+  }, [isAuthenticated, isAdmin, isSuperAdmin, authLoading, router]);
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdmin && !isSuperAdmin) return;
     (async () => {
       try {
         const [h, sp, hist, ms] = await Promise.all([

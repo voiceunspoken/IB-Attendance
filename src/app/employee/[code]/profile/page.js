@@ -15,7 +15,8 @@ export default function ProfilePage({ params }) {
   const code = unwrappedParams.code;
 
   const { role, isAuthenticated, user, loading: authLoading } = useAuth();
-  const isAdmin = role === 'admin' || role === 'super_admin';
+  const isAdmin = role === 'admin';
+  const isSuperAdmin = role === 'super_admin';
   const { emp, avatarUrl, triggerRefetch } = useEmployeeData();
   const router = useRouter();
   const toast = useToast();
@@ -35,10 +36,10 @@ export default function ProfilePage({ params }) {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
-    if (!authLoading && isAuthenticated && !isAdmin && user?.code && user.code !== code) {
+    if (!authLoading && isAuthenticated && !isAdmin && !isSuperAdmin && user?.code && user.code !== code) {
       router.push(`/employee/${user.code}`);
     }
-  }, [isAuthenticated, isAdmin, user, authLoading, router, code]);
+  }, [isAuthenticated, isAdmin, isSuperAdmin, user, authLoading, router, code]);
 
   const handleSaveBirthday = async () => {
     setSavingBirthday(true);

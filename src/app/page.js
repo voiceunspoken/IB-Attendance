@@ -12,7 +12,7 @@ import { FiUsers, FiCalendar, FiAlertTriangle, FiArrowRight, FiGift } from 'reac
 
 export default function DashboardHome() {
   const { role, isAuthenticated, user, loading: authLoading } = useAuth();
-  const isAdmin = role === 'admin' || role === 'super_admin';
+  const isAdmin = role === 'admin';
   const isSuperAdmin = role === 'super_admin';
   const router = useRouter();
 

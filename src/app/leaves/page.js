@@ -23,12 +23,12 @@ const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de
 
 export default function LeavesPage() {
   const { role, isAuthenticated, user, loading: authLoading } = useAuth();
-  const isAdmin = role === 'admin' || role === 'super_admin';
+  const isAdmin = role === 'admin';
   const isSuperAdmin = role === 'super_admin';
   const router = useRouter();
   const toast = useToast();
 
-  const [tab, setTab] = useState(isAdmin ? 'overview' : 'manager_approval');
+  const [tab, setTab] = useState(role === 'admin' || role === 'super_admin' ? 'overview' : 'manager_approval');
 
   const [fetchTrigger, setFetchTrigger] = useState(0);
   const [leaveRequests, setLeaveRequests] = useState([]);
@@ -142,7 +142,7 @@ export default function LeavesPage() {
 
   useEffect(() => {
     if (authLoading || !isAuthenticated) return;
-    if (isAdmin) return;
+    if (role === 'admin' || role === 'super_admin') return;
     (async () => {
       try {
         const [mgrEmps, leaves] = await Promise.all([
@@ -157,10 +157,10 @@ export default function LeavesPage() {
         router.push('/');
       }
     })();
-  }, [isAuthenticated, isAdmin, authLoading, user?.code, router, fetchTrigger]);
+  }, [isAuthenticated, role, authLoading, user?.code, router, fetchTrigger]);
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (role !== 'admin' && role !== 'super_admin') return;
     setLoading(true);
     (async () => {
       try {
@@ -204,7 +204,7 @@ export default function LeavesPage() {
         setManagerLoading(false);
       }
     })();
-  }, [isAdmin, isSuperAdmin, year, tab, fetchTrigger, user?.code, role]);
+  }, [role, isSuperAdmin, year, tab, fetchTrigger, user?.code]);
 
   const handleReviewLeave = async (id, approve) => {
     await reviewLeaveRequest(id, user.username, approve, reviewNote);
@@ -271,15 +271,20 @@ export default function LeavesPage() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', background: 'var(--surface3)', borderRadius: '10px', padding: '3px', marginBottom: '24px', width: 'fit-content', flexWrap: 'wrap' }}>
-        {(!isAdmin ? [
-          { key: 'manager_approval', label: `My Approvals${managerLeaves.length > 0 ? ` (${managerLeaves.length})` : ''}` },
-        ] : [
+        {(role === 'admin' ? [
           { key: 'overview', label: `All Requests (${leaveRequests.length})` },
           { key: 'manager_approval', label: `My Approvals${managerLeaves.length > 0 ? ` (${managerLeaves.length})` : ''}` },
           { key: 'regularize', label: `Regularizations${regularizations.length > 0 ? ` (${regularizations.length})` : ''}` },
-          ...(role === 'admin' ? [{ key: 'history', label: 'History' }] : []),
+          { key: 'history', label: 'History' },
           { key: 'balances', label: 'Leave Balances' },
           { key: 'policy', label: 'Policy' },
+        ] : role === 'super_admin' ? [
+          { key: 'overview', label: `All Requests (${leaveRequests.length})` },
+          { key: 'regularize', label: `Regularizations${regularizations.length > 0 ? ` (${regularizations.length})` : ''}` },
+          { key: 'balances', label: 'Leave Balances' },
+          { key: 'policy', label: 'Policy' },
+        ] : [
+          { key: 'manager_approval', label: `My Approvals${managerLeaves.length > 0 ? ` (${managerLeaves.length})` : ''}` },
         ]).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             padding: '6px 16px', borderRadius: '7px', fontSize: '13px', fontWeight: 500,
@@ -296,149 +301,156 @@ export default function LeavesPage() {
       {/* ── PENDING APPROVALS (unified overview) ── */}
       {!loading && tab === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* ── Section 1: Leave Approvals ── */}
-          <div className="card overflow-hidden p-0">
-            <div className="card-header" style={{ cursor: 'pointer', userSelect: 'none' }}
-              onClick={() => setCollapsed(c => ({ ...c, leaves: !c.leaves }))}>
-              <span>Pending Leave Approvals</span>
-              <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400 }}>
-                {collapsed.leaves ? 'Show' : 'Hide'} ({managerLeaves.length})
-              </span>
-            </div>
-            {!collapsed.leaves && (
-              managerLeaves.length === 0 && leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length === 0
-                ? <div className="p-32 text-center text-muted2 text-sm">No pending leave approvals.</div>
-                : <>
-                    {/* Manager queue */}
-                    {managerLeaves.length > 0 && (
-                      <div style={{ padding: '8px 16px', fontSize: '11px', fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', background: 'var(--surface2)', borderBottom: '1px solid var(--border)' }}>
-                        Awaiting Your Approval — {managerLeaves.length}
-                      </div>
-                    )}
-                    {managerLeaves.map(r => (
-                      <div key={r.id} className="p-14-20 border-bottom" style={{ cursor: 'pointer', transition: 'background 0.1s' }}
-                        onClick={() => { setReviewModal(r); setReviewNote(''); }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
-                        onMouseLeave={e => e.currentTarget.style.background = ''}>
-                        <div className="flex-between items-start" style={{ gap: '12px' }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
-                              <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user?.name || 'Unknown'}</span>
-                              <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user?.code}</span>
-                              <span style={{ fontSize: '11px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
-                              <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
-                              {r.shiftSlot && <span style={{ fontSize: '10px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 6px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
-                              <StageBadge stage={r.approvalStage} />
-                            </div>
-                            <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
-                              {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                              {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
-                              {' · '}{r.reason}
-                            </div>
-                          </div>
-                          <div style={{ fontSize: '11px', color: 'var(--text3)', whiteSpace: 'nowrap' }}>Review →</div>
-                        </div>
-                      </div>
-                    ))}
-                    {/* Super admin pending */}
-                    {isSuperAdmin && leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length > 0 && (
-                      <>
-                        <div style={{ padding: '8px 16px', fontSize: '11px', fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', background: 'var(--surface2)', borderBottom: '1px solid var(--border)' }}>
-                          Super Admin Queue — {leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length}
-                        </div>
-                        {leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').map(r => (
-                          <div key={r.id} className="p-14-20 border-bottom" style={{ cursor: 'pointer', transition: 'background 0.1s' }}
-                            onClick={() => { setReviewModal(r); setReviewNote(''); }}
-                            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
-                            onMouseLeave={e => e.currentTarget.style.background = ''}>
-                            <div className="flex-between items-start" style={{ gap: '12px' }}>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
-                                  <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user?.name}</span>
-                                  <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user?.code}</span>
-                                  <span style={{ fontSize: '11px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
-                                  <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
-                                  {r.shiftSlot && <span style={{ fontSize: '10px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 6px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
-                                  <StageBadge stage={r.approvalStage} />
-                                </div>
-                                <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
-                                  {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                  {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
-                                  {' · '}{r.reason}
-                                </div>
-                              </div>
-                              <div style={{ fontSize: '11px', color: 'var(--text3)', whiteSpace: 'nowrap' }}>Review →</div>
-                            </div>
-                          </div>
-                        ))}
-                      </>
-                    )}
-                  </>
-            )}
-          </div>
 
-          {/* ── Section 2: Regularizations ── */}
-          <div className="card overflow-hidden p-0">
-            <div className="card-header" style={{ cursor: 'pointer', userSelect: 'none' }}
-              onClick={() => setCollapsed(c => ({ ...c, regs: !c.regs }))}>
-              <span>Pending Regularizations</span>
-              <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400 }}>
-                {collapsed.regs ? 'Show' : 'Hide'} ({regularizations.length + superRegularizations.length})
-              </span>
-            </div>
-            {!collapsed.regs && (
-              regularizations.length === 0 && superRegularizations.length === 0
-                ? <div className="p-32 text-center text-muted2 text-sm">No pending regularizations.</div>
-                : <>
-                    {regularizations.map(r => (
-                      <div key={r.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
-                        <div>
-                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px' }}>
-                            <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user.name}</span>
-                            <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user.code}</span>
-                            <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                          </div>
-                          <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
-                            {r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`}
-                            {' · '}{r.reason}
-                          </div>
+          {/* ── Admin: Leave Approvals ── */}
+          {role === 'admin' && (
+            <div className="card overflow-hidden p-0">
+              <div className="card-header" style={{ cursor: 'pointer', userSelect: 'none' }}
+                onClick={() => setCollapsed(c => ({ ...c, leaves: !c.leaves }))}>
+                <span>Pending Leave Approvals</span>
+                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400 }}>
+                  {collapsed.leaves ? 'Show' : 'Hide'} ({managerLeaves.length})
+                </span>
+              </div>
+              {!collapsed.leaves && (
+                managerLeaves.length === 0
+                  ? <div className="p-32 text-center text-muted2 text-sm">No pending leave approvals.</div>
+                  : <>
+                      {/* Manager queue */}
+                      {managerLeaves.length > 0 && (
+                        <div style={{ padding: '8px 16px', fontSize: '11px', fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', background: 'var(--surface2)', borderBottom: '1px solid var(--border)' }}>
+                          Awaiting Your Approval — {managerLeaves.length}
                         </div>
-                        <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                          <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '11px', background: 'var(--green)' }} onClick={() => handleReviewReg(r.id, true)}>Approve</button>
-                          <button style={{ padding: '5px 12px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleReviewReg(r.id, false)}>Reject</button>
-                        </div>
-                      </div>
-                    ))}
-                    {isSuperAdmin && superRegularizations.length > 0 && (
-                      <>
-                        {regularizations.length > 0 && <div style={{ height: '1px', background: 'var(--border)' }} />}
-                        <div style={{ padding: '8px 16px', fontSize: '11px', fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', background: 'var(--surface2)' }}>
-                          Super Admin — {superRegularizations.length}
-                        </div>
-                        {superRegularizations.map(r => (
-                          <div key={r.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
-                            <div>
-                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px' }}>
-                                <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user.name}</span>
-                                <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user.code}</span>
-                                <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                      )}
+                      {managerLeaves.map(r => (
+                        <div key={r.id} className="p-14-20 border-bottom" style={{ cursor: 'pointer', transition: 'background 0.1s' }}
+                          onClick={() => { setReviewModal(r); setReviewNote(''); }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
+                          onMouseLeave={e => e.currentTarget.style.background = ''}>
+                          <div className="flex-between items-start" style={{ gap: '12px' }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
+                                <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user?.name || 'Unknown'}</span>
+                                <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user?.code}</span>
+                                <span style={{ fontSize: '11px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
+                                <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
+                                {r.shiftSlot && <span style={{ fontSize: '10px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 6px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
+                                <StageBadge stage={r.approvalStage} />
                               </div>
                               <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
-                                {r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`}
+                                {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
                                 {' · '}{r.reason}
                               </div>
                             </div>
-                            <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                              <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '11px', background: 'var(--green)' }} onClick={() => handleSuperReviewReg(r.id, true)}>Final Approve</button>
-                              <button style={{ padding: '5px 12px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleSuperReviewReg(r.id, false)}>Reject</button>
+                            <div style={{ fontSize: '11px', color: 'var(--text3)', whiteSpace: 'nowrap' }}>Review →</div>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+              )}
+            </div>
+          )}
+
+          {/* ── Super Admin: Super Queue ── */}
+          {isSuperAdmin && leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length > 0 && (
+            <div className="card overflow-hidden p-0">
+              <div className="card-header">
+                Super Admin Queue — {leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length}
+              </div>
+              {leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').map(r => (
+                <div key={r.id} className="p-14-20 border-bottom" style={{ cursor: 'pointer', transition: 'background 0.1s' }}
+                  onClick={() => { setReviewModal(r); setReviewNote(''); }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
+                  onMouseLeave={e => e.currentTarget.style.background = ''}>
+                  <div className="flex-between items-start" style={{ gap: '12px' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user?.name}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user?.code}</span>
+                        <span style={{ fontSize: '11px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
+                        {r.shiftSlot && <span style={{ fontSize: '10px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 6px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
+                        <StageBadge stage={r.approvalStage} />
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                        {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                        {' · '}{r.reason}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text3)', whiteSpace: 'nowrap' }}>Review →</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Admin: Regularizations ── */}
+          {role === 'admin' && (
+            <div className="card overflow-hidden p-0">
+              <div className="card-header" style={{ cursor: 'pointer', userSelect: 'none' }}
+                onClick={() => setCollapsed(c => ({ ...c, regs: !c.regs }))}>
+                <span>Pending Regularizations</span>
+                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400 }}>
+                  {collapsed.regs ? 'Show' : 'Hide'} ({regularizations.length})
+                </span>
+              </div>
+              {!collapsed.regs && (
+                regularizations.length === 0
+                  ? <div className="p-32 text-center text-muted2 text-sm">No pending regularizations.</div>
+                  : <>
+                      {regularizations.map(r => (
+                        <div key={r.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
+                          <div>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px' }}>
+                              <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user.name}</span>
+                              <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user.code}</span>
+                              <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                              {r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`}
+                              {' · '}{r.reason}
                             </div>
                           </div>
-                        ))}
-                      </>
-                    )}
-                  </>
-            )}
-          </div>
+                          <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                            <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '11px', background: 'var(--green)' }} onClick={() => handleReviewReg(r.id, true)}>Approve</button>
+                            <button style={{ padding: '5px 12px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleReviewReg(r.id, false)}>Reject</button>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+              )}
+            </div>
+          )}
+
+          {/* ── Super Admin: Super Regularizations ── */}
+          {isSuperAdmin && superRegularizations.length > 0 && (
+            <div className="card overflow-hidden p-0">
+              <div className="card-header">
+                Super Admin — Regularizations ({superRegularizations.length})
+              </div>
+              {superRegularizations.map(r => (
+                <div key={r.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
+                  <div>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px' }}>
+                      <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user.name}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user.code}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                      {r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`}
+                      {' · '}{r.reason}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                    <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '11px', background: 'var(--green)' }} onClick={() => handleSuperReviewReg(r.id, true)}>Final Approve</button>
+                    <button style={{ padding: '5px 12px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleSuperReviewReg(r.id, false)}>Reject</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* ── Section 3: Attendance Adjustments (super_admin only) ── */}
           {isSuperAdmin && (
@@ -599,6 +611,7 @@ export default function LeavesPage() {
       {!loading && tab === 'regularize' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Admin review */}
+          {role === 'admin' && (
           <div className="card overflow-hidden p-0">
             <div className="card-header">
               Pending Admin Review ({regularizations.length})
@@ -626,6 +639,7 @@ export default function LeavesPage() {
               ))
             }
           </div>
+          )}
 
           {/* Super admin final approval */}
           {isSuperAdmin && (
