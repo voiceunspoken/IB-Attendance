@@ -3,6 +3,7 @@
 import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
+import { createNotification, getAdminUserIds } from './notifications';
 
 const LEAVE_TYPES = ['cl', 'sl', 'el', 'rl', 'ul', 'sh'];
 
@@ -43,6 +44,12 @@ export async function requestAdjustment(employeeCode, monthYear, day, currentTyp
 
   await logAction(requestedBy, 'attendance_adjustment_requested', 'pending_change', change.id,
     `Requested adjustment for ${employeeCode} day ${day} ${monthYear}: ${currentType} → ${newType}${warning ? ' (warning: ' + warning + ')' : ''}`);
+
+  const adminIds = await getAdminUserIds();
+  await Promise.all(adminIds.map(id => createNotification(id, 'adjustment_submitted',
+    `New Adjustment Request`,
+    `${user.name} requested an attendance adjustment for day ${day} (${currentType} → ${newType}).`,
+    { employeeCode, day, monthYear, currentType, newType, reason, warning })));
 
   revalidatePath('/');
   return { success: true, warning };
@@ -146,6 +153,15 @@ export async function reviewAdjustment(changeId, reviewedBy, approve) {
 
   await logAction(reviewedBy, approve ? 'attendance_adjustment_approved' : 'attendance_adjustment_rejected', 'pending_change', changeId,
     `${approve ? 'Approved' : 'Rejected'} adjustment for ${payload.employeeCode} day ${payload.day} ${payload.monthYear}: ${payload.currentType} → ${payload.newType}`);
+
+  const empUser = await prisma.user.findUnique({ where: { code: payload.employeeCode } });
+  if (empUser) {
+    const notifType = approve ? 'adjustment_approved' : 'adjustment_rejected';
+    const notifTitle = approve ? 'Adjustment Approved' : 'Adjustment Rejected';
+    await createNotification(empUser.id, notifType, notifTitle,
+      `Your attendance adjustment for day ${payload.day} (${payload.currentType} → ${payload.newType}) has been ${approve ? 'approved' : 'rejected'}.`,
+      { ...payload });
+  }
 
   revalidatePath('/');
   return { success: true };

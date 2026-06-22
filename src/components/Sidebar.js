@@ -3,8 +3,9 @@
 import { useAuth } from './AuthProvider';
 import { useRouter, usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { FiCalendar, FiFileText, FiTool, FiUser, FiHome, FiUsers, FiSettings } from 'react-icons/fi';
+import { FiCalendar, FiFileText, FiTool, FiUser, FiHome, FiUsers, FiSettings, FiBell } from 'react-icons/fi';
 import { checkIsManager } from '../actions/manager';
+import { useNotifications } from './NotificationProvider';
 
 const NAV_CONFIG = {
   super_admin: [
@@ -14,6 +15,7 @@ const NAV_CONFIG = {
       { label: 'Team', icon: <FiUsers size={14} />, path: '/team' },
       { label: 'Leaves', icon: <FiFileText size={14} />, path: '/leaves' },
       { label: 'Audit', icon: <FiFileText size={14} />, path: '/audit' },
+      { label: 'Notifications', icon: <FiBell size={14} />, path: '/notifications' },
       { label: 'Settings', icon: <FiSettings size={14} />, path: '/settings' },
     ]},
   ],
@@ -25,6 +27,7 @@ const NAV_CONFIG = {
       { label: 'Team', icon: <FiUsers size={14} />, path: '/team' },
       { label: 'Leaves', icon: <FiFileText size={14} />, path: '/leaves' },
       { label: 'Audit', icon: <FiFileText size={14} />, path: '/audit' },
+      { label: 'Notifications', icon: <FiBell size={14} />, path: '/notifications' },
       { label: 'Settings', icon: <FiSettings size={14} />, path: '/settings' },
     ]},
     { section: 'Employee', links: [
@@ -40,12 +43,13 @@ const NAV_CONFIG = {
       { label: 'Attendance', icon: <FiCalendar size={14} />, path: (code) => `/employee/${code}` },
       { label: 'Leave Requests', icon: <FiFileText size={14} />, path: (code) => `/employee/${code}/leaves` },
       { label: 'Regularization', icon: <FiTool size={14} />, path: (code) => `/employee/${code}/regularize` },
+      { label: 'Notifications', icon: <FiBell size={14} />, path: '/notifications' },
       { label: 'Profile', icon: <FiUser size={14} />, path: (code) => `/employee/${code}/profile` },
     ]},
   ],
 };
 
-function NavLink({ link, pathname, router, isMobile, onClose }) {
+function NavLink({ link, badge, pathname, router, isMobile, onClose }) {
   const resolvedPath = typeof link.path === 'function' ? link.path('') : link.path;
   const active = pathname === resolvedPath;
 
@@ -77,11 +81,18 @@ function NavLink({ link, pathname, router, isMobile, onClose }) {
       onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text2)'; }}}
     >
       {link.icon}{link.label}
+      {badge > 0 && (
+        <span style={{
+          marginLeft: 'auto', background: 'var(--red)', color: '#fff',
+          fontSize: '10px', fontWeight: 700, padding: '1px 6px',
+          borderRadius: '980px', lineHeight: 1.4,
+        }}>{badge > 99 ? '99+' : badge}</span>
+      )}
     </button>
   );
 }
 
-function NavSection({ section, userCode, pathname, router, isMobile, onClose }) {
+function NavSection({ section, userCode, pathname, router, isMobile, onClose, unreadCount }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
       <div style={{
@@ -92,10 +103,12 @@ function NavSection({ section, userCode, pathname, router, isMobile, onClose }) 
       </div>
       {section.links.map(link => {
         const resolvedPath = typeof link.path === 'function' ? link.path(userCode) : link.path;
+        const badge = link.label === 'Notifications' ? unreadCount : 0;
         return (
           <NavLink
             key={resolvedPath}
             link={{ ...link, path: resolvedPath }}
+            badge={badge}
             pathname={pathname}
             router={router}
             isMobile={isMobile}
@@ -109,6 +122,7 @@ function NavSection({ section, userCode, pathname, router, isMobile, onClose }) 
 
 export default function Sidebar({ open, onClose, isMobile }) {
   const { user, role, logout } = useAuth();
+  const { unreadCount } = useNotifications();
   const [isManager, setIsManager] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
@@ -191,6 +205,7 @@ export default function Sidebar({ open, onClose, isMobile }) {
               router={router}
               isMobile={isMobile}
               onClose={onClose}
+              unreadCount={unreadCount}
             />
           ))}
         </nav>

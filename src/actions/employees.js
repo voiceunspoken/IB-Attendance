@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { requireAdmin, requireSuperAdmin } from '../lib/auth-guard';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
+import { createNotification } from './notifications';
 import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
@@ -96,6 +97,16 @@ export async function reviewNameChange(changeId, reviewedBy, approve) {
   });
   await logAction(reviewedBy, approve ? 'name_change_approved' : 'name_change_rejected', 'pending_change', changeId,
     `${approve ? 'Approved' : 'Rejected'} name change: ${change.payload}`);
+
+  const requesterUser = await prisma.user.findUnique({ where: { username: change.requestedBy } });
+  if (requesterUser) {
+    const payload = JSON.parse(change.payload);
+    await createNotification(requesterUser.id, approve ? 'name_change_approved' : 'name_change_rejected',
+      `Name Change ${approve ? 'Approved' : 'Rejected'}`,
+      `Your name change request${payload.currentName ? ' from "' + payload.currentName + '"' : ''}${payload.newName ? ' to "' + payload.newName + '"' : ''} has been ${approve ? 'approved' : 'rejected'}.`,
+      { ...payload });
+  }
+
   revalidatePath('/');
   return { success: true };
 }

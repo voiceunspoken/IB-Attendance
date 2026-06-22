@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
 import { requireAdmin, requireSuperAdmin } from '../lib/auth-guard';
+import { createNotification, getAdminUserIds, sendLeaveStatusNotification } from './notifications';
 
 export async function getLeavePolicy(year) {
   return prisma.leavePolicy.findUnique({ where: { year } });
@@ -288,6 +289,14 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
   }
 
   revalidatePath(`/employee/${employeeCode}`);
+  
+  const adminIds = await getAdminUserIds();
+  await Promise.all(adminIds.map(id => createNotification(id, 'leave_submitted',
+    `New Leave Request`,
+    `${user.name} submitted ${leaveType.toUpperCase()} leave for ${computedDays} day(s).`,
+    { employeeCode, leaveType, fromDate, toDate, days: computedDays, reason }
+  )));
+  
   return { request: req, sandwichMessage };
 }
 
@@ -430,6 +439,35 @@ export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = 
   await logAction(reviewedBy, newStatus === 'approved' ? 'leave_approved' : 'leave_rejected', 'leave_request', req.id,
     `${newStatus === 'approved' ? 'Approved' : 'Rejected'} ${req.leaveType.toUpperCase()} leave (stage: ${newStage})`);
 
+  const leaveTypeLabel = req.leaveType.toUpperCase();
+
+  if (newStatus === 'approved' && newStage === 'approved') {
+    await createNotification(req.userId, 'leave_approved',
+      `Leave Approved`,
+      `Your ${leaveTypeLabel} request for ${req.days} day(s) has been fully approved.`,
+      { requestId: req.id, leaveType: req.leaveType, days: req.days });
+    await sendLeaveStatusNotification(req.user.code, req.user.name, req.leaveType, 'approved', note);
+  } else if (newStatus === 'rejected') {
+    await createNotification(req.userId, 'leave_rejected',
+      `Leave Rejected`,
+      `Your ${leaveTypeLabel} request for ${req.days} day(s) has been rejected.${note ? ' Note: ' + note : ''}`,
+      { requestId: req.id, leaveType: req.leaveType, days: req.days, note });
+    await sendLeaveStatusNotification(req.user.code, req.user.name, req.leaveType, 'rejected', note);
+  }
+
+  if (newStage === 'pending_super') {
+    const adminIds = await getAdminUserIds();
+    await Promise.all(adminIds.map(id => createNotification(id, 'leave_pending_super',
+      `Leave Pending Your Approval`,
+      `${req.user.name}'s ${leaveTypeLabel} request needs your approval.`,
+      { requestId: req.id, employeeCode: req.user.code, leaveType: req.leaveType, days: req.days })));
+  } else if (newApproverId) {
+    await createNotification(newApproverId, 'leave_mgr_pending',
+      `Leave Pending Your Approval`,
+      `${req.user.name}'s ${leaveTypeLabel} request needs your approval.`,
+      { requestId: req.id, employeeCode: req.user.code, leaveType: req.leaveType, days: req.days });
+  }
+
   revalidatePath('/');
   return { request: updated };
 }
@@ -450,6 +488,13 @@ export async function submitRegularization(employeeCode, { date, requestedIn, re
       superStatus: 'pending'
     }
   });
+
+  const adminIds = await getAdminUserIds();
+  await Promise.all(adminIds.map(id => createNotification(id, 'regularization_submitted',
+    `New Regularization`,
+    `${user.name} submitted a regularization for ${date}.`,
+    { employeeCode, date, requestedIn, requestedOut, reason })));
+
   return { request: req };
 }
 
@@ -482,6 +527,21 @@ export async function reviewRegularization(requestId, reviewedBy, approve, note 
       reviewNote: note || null
     }
   });
+
+  const notifType = approve ? 'regularization_approved' : 'regularization_rejected';
+  const notifTitle = approve ? 'Regularization Approved' : 'Regularization Rejected';
+  await createNotification(req.userId, notifType, notifTitle,
+    `Your regularization for ${new Date(req.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} has been ${approve ? 'approved' : 'rejected'}.${note ? ' Note: ' + note : ''}`,
+    { requestId: req.id, date: req.date, requestedIn: req.requestedIn, requestedOut: req.requestedOut, note });
+
+  if (approve) {
+    const adminIds = await getAdminUserIds();
+    await Promise.all(adminIds.map(id => createNotification(id, 'regularization_pending_super',
+      `Regularization Pending Final Approval`,
+      `A regularization is awaiting super admin final approval.`,
+      { requestId: req.id })));
+  }
+
   return { request: req };
 }
 
@@ -522,6 +582,17 @@ export async function reviewRegularizationSuper(requestId, superReviewedBy, appr
         data: { type: 'present', inT, outT }
       });
     }
+  }
+
+  const notifType = approve ? 'regularization_approved' : 'regularization_rejected';
+  const notifTitle = approve ? 'Regularization Fully Approved' : 'Regularization Rejected';
+  await createNotification(req.userId, notifType, notifTitle,
+    `Your regularization for ${new Date(req.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} has been ${approve ? 'fully approved' : 'rejected'} by super admin.`,
+    { requestId: req.id, date: req.date });
+
+  const reqUser = await prisma.user.findUnique({ where: { id: req.userId } });
+  if (reqUser) {
+    await sendLeaveStatusNotification(reqUser.code, reqUser.name, 'regularization', approve ? 'approved' : 'rejected', '');
   }
 
   return { request: req };

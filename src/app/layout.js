@@ -1,6 +1,7 @@
 import './globals.css';
 import { AuthProvider } from '../components/AuthProvider';
 import { ToastProvider } from '../components/Toast';
+import { NotificationProvider } from '../components/NotificationProvider';
 import AppShell from '../components/AppShell';
 
 export const metadata = {
@@ -14,7 +15,9 @@ export default function RootLayout({ children }) {
       <body>
         <AuthProvider>
           <ToastProvider>
-            <AppShell>{children}</AppShell>
+            <NotificationProvider>
+              <AppShell>{children}</AppShell>
+            </NotificationProvider>
           </ToastProvider>
         </AuthProvider>
       </body>

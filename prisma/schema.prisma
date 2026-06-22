@@ -41,6 +41,7 @@ model User {
   leaveRequests   LeaveRequest[]
   regularizations RegularizationRequest[]
   punchLogs       PunchLog[]
+  notifications   Notification[]
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -333,4 +334,21 @@ model AuditLog {
   entityId    String?  // id of the affected record
   detail      String   // human-readable description
   createdAt   DateTime @default(now())
+}
+
+// In-app notifications
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // leave_submitted, leave_approved, leave_rejected, regularization_submitted, regularization_approved, regularization_rejected, adjustment_submitted, adjustment_approved, adjustment_rejected, name_change_approved, name_change_rejected
+  title     String
+  message   String
+  payload   String?  // JSON string with request details
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
 }

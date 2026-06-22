@@ -151,3 +151,52 @@ export async function sendAllMonthlyReports(monthYear) {
   }
   return results;
 }
+
+// ── In-app notifications ──
+
+export async function createNotification(userId, type, title, message, payload = null) {
+  return prisma.notification.create({
+    data: { userId, type, title, message, payload: payload ? JSON.stringify(payload) : null }
+  });
+}
+
+export async function getNotifications(userId, limit = 50, offset = 0) {
+  const [notifications, total] = await Promise.all([
+    prisma.notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: offset,
+    }),
+    prisma.notification.count({ where: { userId } }),
+  ]);
+  return { notifications, total };
+}
+
+export async function getUnreadCount(userId) {
+  return prisma.notification.count({ where: { userId, isRead: false } });
+}
+
+export async function markAsRead(ids) {
+  await prisma.notification.updateMany({
+    where: { id: { in: ids } },
+    data: { isRead: true },
+  });
+  return { success: true };
+}
+
+export async function markAllAsRead(userId) {
+  await prisma.notification.updateMany({
+    where: { userId, isRead: false },
+    data: { isRead: true },
+  });
+  return { success: true };
+}
+
+export async function getAdminUserIds() {
+  const users = await prisma.user.findMany({
+    where: { role: { in: ['admin', 'super_admin'] } },
+    select: { id: true },
+  });
+  return users.map(u => u.id);
+}
