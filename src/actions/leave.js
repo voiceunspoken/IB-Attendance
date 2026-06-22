@@ -52,6 +52,18 @@ export async function getLeaveBalance(employeeCode, year) {
   const used = { cl: 0, sl: 0, el: 0, rl: 0, sh: 0 };
   approved.forEach(r => { used[r.leaveType] = (used[r.leaveType] || 0) + r.days; });
 
+  const leaveTypes = ['cl', 'sl', 'el', 'rl', 'sh'];
+  const dailyLeaveLogs = await prisma.dailyLog.findMany({
+    where: {
+      userId: user.id,
+      type: { in: leaveTypes },
+      monthYear: { contains: `_${year}` }
+    }
+  });
+  dailyLeaveLogs.forEach(log => {
+    if (used[log.type] !== undefined) used[log.type] += 1;
+  });
+
   const records = await prisma.monthRecord.findMany({
     where: { userId: user.id, monthYear: { contains: `_${year}` } }
   });
@@ -609,6 +621,82 @@ export async function getAllRegularizations() {
     orderBy: { createdAt: 'desc' },
     take: 200
   });
+}
+
+export async function requestLeaveDeduction(employeeCode, leaveType, days, reason, requestedBy) {
+  const auth = await requireAdmin(requestedBy);
+  if (auth) return auth;
+
+  const user = await prisma.user.findUnique({ where: { code: employeeCode } });
+  if (!user) return { error: 'Employee not found' };
+
+  const year = new Date().getFullYear();
+  const balance = await prisma.leaveBalance.findUnique({
+    where: { userId_year: { userId: user.id, year } }
+  });
+  if (balance) {
+    const totalKey = leaveType + 'Total';
+    const usedKey = leaveType + 'Used';
+    const total = balance[totalKey] || 0;
+    const currentUsed = balance[usedKey] || 0;
+    if (currentUsed + days > total) {
+      return { error: `${leaveType.toUpperCase()} balance insufficient (${currentUsed}/${total} used, need ${days} more).` };
+    }
+  }
+
+  const payload = JSON.stringify({ employeeCode, employeeName: user.name, leaveType, days, reason });
+  const change = await prisma.pendingChange.create({
+    data: { requestedBy, action: 'leave_deduction', payload, status: 'pending' }
+  });
+
+  const adminIds = await getAdminUserIds();
+  await Promise.all(adminIds.map(id => createNotification(id, 'leave_deduction_submitted',
+    `Leave Deduction Request`,
+    `${user.name} requested ${days} ${leaveType.toUpperCase()} deduction.`,
+    { employeeCode, leaveType, days, reason, changeId: change.id })));
+
+  return { success: true, change };
+}
+
+export async function reviewLeaveDeduction(changeId, reviewedBy, approve) {
+  const auth = await requireSuperAdmin(reviewedBy);
+  if (auth) return auth;
+
+  const change = await prisma.pendingChange.findUnique({ where: { id: changeId } });
+  if (!change) return { error: 'Change not found' };
+
+  const payload = JSON.parse(change.payload);
+
+  if (approve) {
+    const user = await prisma.user.findUnique({ where: { code: payload.employeeCode } });
+    if (user) {
+      const year = new Date().getFullYear();
+      const usedKey = payload.leaveType + 'Used';
+      await prisma.leaveBalance.upsert({
+        where: { userId_year: { userId: user.id, year } },
+        update: { [usedKey]: { increment: payload.days } },
+        create: { userId: user.id, year, [usedKey]: payload.days }
+      });
+    }
+  }
+
+  await prisma.pendingChange.update({
+    where: { id: changeId },
+    data: { status: approve ? 'approved' : 'rejected', reviewedBy, reviewedAt: new Date() }
+  });
+
+  const empUser = await prisma.user.findUnique({ where: { code: payload.employeeCode } });
+  if (empUser) {
+    await createNotification(empUser.id,
+      approve ? 'leave_deduction_approved' : 'leave_deduction_rejected',
+      approve ? 'Leave Deduction Approved' : 'Leave Deduction Rejected',
+      approve
+        ? `${payload.days} ${payload.leaveType.toUpperCase()} day(s) deducted from your balance.`
+        : `Your ${payload.leaveType.toUpperCase()} deduction request was rejected.`,
+      { ...payload });
+  }
+
+  return { success: true };
 }
 
 function parseTime(t) {

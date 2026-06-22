@@ -12,10 +12,11 @@ import {
   getPendingSuperRegularizations, reviewRegularizationSuper,
   getAllLeaveBalances, upsertLeavePolicy, getLeavePolicy,
   getLeaveBalancesForExport, getManagerLeaveRequests,
-  adminUpdateLeaveBalance, getAllRegularizations
+  adminUpdateLeaveBalance, getAllRegularizations,
+  requestLeaveDeduction, reviewLeaveDeduction
 } from '../../actions/leave';
 import { getManagedEmployees } from '../../actions/departments';
-import { getPendingChanges, getPendingChangesHistory } from '../../actions/auth';
+import { getPendingChanges, getPendingChangesHistory, getEmployees } from '../../actions/auth';
 import { reviewAdjustment } from '../../actions/attendanceChanges';
 import { getManagerWfhRequests, getAllWfhRequests, reviewWfhRequest, getWfhRequestsByStage } from '../../actions/wfh';
 
@@ -56,6 +57,9 @@ export default function LeavesPage() {
   const [superWfhRequests, setSuperWfhRequests] = useState([]);
   const [editBalanceTarget, setEditBalanceTarget] = useState(null);
   const [editBalanceForm, setEditBalanceForm] = useState({ clTotal: 0, slTotal: 0, elTotal: 0, rlTotal: 0, shTotal: 0 });
+  const [deductModal, setDeductModal] = useState(false);
+  const [deductForm, setDeductForm] = useState({ employeeCode: '', leaveType: 'cl', days: 1, reason: '' });
+  const [allDeductions, setAllDeductions] = useState([]);
   const year = new Date().getFullYear();
 
   // Export range state
@@ -191,7 +195,8 @@ export default function LeavesPage() {
             getPendingChanges()
           ]);
           setSuperRegularizations(supRegs);
-          setPendingChanges(pcs.filter(c => c.action === 'attendance_adjustment'));
+          setPendingChanges(pcs.filter(c => c.action === 'attendance_adjustment' || c.action === 'leave_deduction'));
+          setAllDeductions(pcs.filter(c => c.action === 'leave_deduction'));
         }
         if (role === 'admin') {
           const [allRegs, allChanges] = await Promise.all([
@@ -199,7 +204,7 @@ export default function LeavesPage() {
             getPendingChangesHistory()
           ]);
           setAllRegularizations(allRegs);
-          setHistoryChanges(allChanges.filter(c => c.action === 'attendance_adjustment' || c.action === 'update_employee_name'));
+          setHistoryChanges(allChanges.filter(c => c.action === 'attendance_adjustment' || c.action === 'update_employee_name' || c.action === 'leave_deduction'));
         }
         if (pol) setPolicy({ cl: pol.cl, sl: pol.sl, el: pol.el, rl: pol.rl, sh: pol.sh ?? 6 });
       } catch {
@@ -209,6 +214,7 @@ export default function LeavesPage() {
         setBalances([]);
         setSuperRegularizations([]);
         setPendingChanges([]);
+        setAllDeductions([]);
         setWfhRequests([]);
         setManagerWfhRequests([]);
         setSuperWfhRequests([]);
@@ -238,6 +244,25 @@ export default function LeavesPage() {
 
   const handleReviewAdjustment = async (changeId, approve) => {
     await reviewAdjustment(changeId, user.username, approve);
+    setFetchTrigger(t => t + 1);
+  };
+
+  const handleReviewDeduction = async (changeId, approve) => {
+    await reviewLeaveDeduction(changeId, user.username, approve);
+    toast.success(approve ? 'Deduction approved' : 'Deduction rejected');
+    setFetchTrigger(t => t + 1);
+  };
+
+  const handleDeductLeave = async (e) => {
+    e.preventDefault();
+    if (!deductForm.employeeCode) return toast.error('Select an employee');
+    if (deductForm.days < 1) return toast.error('Days must be at least 1');
+    if (!deductForm.reason.trim()) return toast.error('Reason is required');
+    const res = await requestLeaveDeduction(deductForm.employeeCode, deductForm.leaveType, deductForm.days, deductForm.reason, user.username);
+    if (res.error) return toast.error(res.error);
+    toast.success('Deduction request submitted for approval');
+    setDeductModal(false);
+    setDeductForm({ employeeCode: '', leaveType: 'cl', days: 1, reason: '' });
     setFetchTrigger(t => t + 1);
   };
 
@@ -479,25 +504,35 @@ export default function LeavesPage() {
             <div className="card overflow-hidden p-0">
               <div className="card-header" style={{ cursor: 'pointer', userSelect: 'none' }}
                 onClick={() => setCollapsed(c => ({ ...c, adjustments: !c.adjustments }))}>
-                <span>Pending Adjustments</span>
+                <span>Pending Approvals</span>
                 <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400 }}>
                   {collapsed.adjustments ? 'Show' : 'Hide'} ({pendingChanges.length})
                 </span>
               </div>
               {!collapsed.adjustments && (
                 pendingChanges.length === 0
-                  ? <div className="p-32 text-center text-muted2 text-sm">No pending adjustments.</div>
+                  ? <div className="p-32 text-center text-muted2 text-sm">No pending approvals.</div>
                   : pendingChanges.map(c => {
                       let payload = {};
                       try { payload = JSON.parse(c.payload); } catch { /* */ }
+                      const isDeduction = c.action === 'leave_deduction';
                       return (
                         <div key={c.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
                           <div>
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
                               <span style={{ fontWeight: 600, fontSize: '13px' }}>{payload.employeeName || payload.employeeCode}</span>
                               {payload.employeeCode && <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{payload.employeeCode}</span>}
-                              <span style={{ fontSize: '11px', color: 'var(--text2)' }}>Day {payload.day} · {payload.monthYear}</span>
-                              <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{payload.currentType} → {payload.newType}</span>
+                              {isDeduction ? (
+                                <>
+                                  <span style={{ fontSize: '11px', color: 'var(--orange)', fontWeight: 600 }}>Leave Deduction</span>
+                                  <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{payload.days}d {LEAVE_LABELS[payload.leaveType] || payload.leaveType}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span style={{ fontSize: '11px', color: 'var(--text2)' }}>Day {payload.day} · {payload.monthYear}</span>
+                                  <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{payload.currentType} → {payload.newType}</span>
+                                </>
+                              )}
                             </div>
                             <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
                               <span style={{ color: 'var(--text3)' }}>by </span><strong>{c.requestedBy}</strong>
@@ -507,8 +542,10 @@ export default function LeavesPage() {
                             {payload.warning && <div style={{ fontSize: '11px', color: 'var(--orange)', marginTop: '2px', fontWeight: 500 }}>⚠ {payload.warning}</div>}
                           </div>
                           <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                            <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '11px', background: 'var(--green)' }} onClick={() => handleReviewAdjustment(c.id, true)}>Approve</button>
-                            <button style={{ padding: '5px 12px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleReviewAdjustment(c.id, false)}>Reject</button>
+                            <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '11px', background: 'var(--green)' }}
+                              onClick={() => isDeduction ? handleReviewDeduction(c.id, true) : handleReviewAdjustment(c.id, true)}>Approve</button>
+                            <button style={{ padding: '5px 12px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
+                              onClick={() => isDeduction ? handleReviewDeduction(c.id, false) : handleReviewAdjustment(c.id, false)}>Reject</button>
                           </div>
                         </div>
                       );
@@ -835,6 +872,12 @@ export default function LeavesPage() {
                 style={{ padding: '7px 18px', fontSize: 'var(--fs-sm)', opacity: exporting ? 0.7 : 1 }}>
                 {exporting ? 'Exporting…' : '⬇ Export Excel'}
               </button>
+              {(isAdmin || isSuperAdmin) && (
+                <button className="btn btn-primary" onClick={() => setDeductModal(true)}
+                  style={{ padding: '7px 18px', fontSize: 'var(--fs-sm)', background: 'var(--orange)' }}>
+                  − Deduct Leave
+                </button>
+              )}
             </div>
           </div>
           <div style={{ overflowX: 'auto' }}>
@@ -1006,9 +1049,11 @@ export default function LeavesPage() {
                 {historyChanges.map(c => {
                   let payload = {};
                   try { payload = JSON.parse(c.payload); } catch { /* */ }
-                  const changeType = c.action === 'attendance_adjustment' ? 'Attendance Adjustment' : 'Name Change';
+                  const changeType = c.action === 'attendance_adjustment' ? 'Attendance Adjustment' : c.action === 'leave_deduction' ? 'Leave Deduction' : 'Name Change';
                   const detail = c.action === 'attendance_adjustment'
                     ? `${payload.employeeName || payload.employeeCode} · Day ${payload.day} · ${payload.currentType || ''} → ${payload.newType || ''}`
+                    : c.action === 'leave_deduction'
+                    ? `${payload.employeeName || payload.employeeCode} · ${payload.days}d ${LEAVE_LABELS[payload.leaveType] || payload.leaveType} deducted`
                     : `${payload.currentName || ''} → ${payload.newName || ''}`;
                   return (
                     <div key={c.id} className="p-14-20 border-bottom">
@@ -1190,6 +1235,57 @@ export default function LeavesPage() {
           </form>
         )}
         </Modal>
+
+      {/* ── DEDUCT LEAVE MODAL ── */}
+      <Modal open={deductModal} onClose={() => setDeductModal(false)} title="Deduct Leave" width="440px">
+        <form onSubmit={handleDeductLeave}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
+            <div>
+              <label className="input-label">Employee</label>
+              <select className="input-field" value={deductForm.employeeCode}
+                onChange={e => setDeductForm(f => ({ ...f, employeeCode: e.target.value }))}
+                style={{ width: '100%', padding: '10px 14px', boxSizing: 'border-box' }}>
+                <option value="">— Select —</option>
+                {balances.map(b => (
+                  <option key={b.code} value={b.code}>{b.name} #{b.code}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="input-label">Leave Type</label>
+              <select className="input-field" value={deductForm.leaveType}
+                onChange={e => setDeductForm(f => ({ ...f, leaveType: e.target.value }))}
+                style={{ width: '100%', padding: '10px 14px', boxSizing: 'border-box' }}>
+                {Object.entries(LEAVE_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>{v} — {k === 'cl' ? 'Casual Leave' : k === 'sl' ? 'Sick Leave' : k === 'el' ? 'Earned Leave' : k === 'rl' ? 'Restricted Holiday' : 'Short Leave'}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="input-label">Days</label>
+              <input className="input-field" type="number" min={1} max={30}
+                value={deductForm.days}
+                onChange={e => setDeductForm(f => ({ ...f, days: parseInt(e.target.value) || 1 }))}
+                style={{ width: '100%', padding: '10px 14px', boxSizing: 'border-box' }} />
+            </div>
+            <div>
+              <label className="input-label">Reason</label>
+              <textarea className="input-field" value={deductForm.reason}
+                onChange={e => setDeductForm(f => ({ ...f, reason: e.target.value }))}
+                style={{ width: '100%', padding: '10px 14px', boxSizing: 'border-box', minHeight: '60px', resize: 'vertical' }} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button type="submit" className="btn btn-primary" style={{ flex: 1, padding: '12px', fontSize: '14px', background: 'var(--orange)' }}>
+              Submit for Approval
+            </button>
+            <button type="button" style={{ flex: 1, padding: '12px', fontSize: '14px', borderRadius: '980px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text2)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
+              onClick={() => setDeductModal(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
