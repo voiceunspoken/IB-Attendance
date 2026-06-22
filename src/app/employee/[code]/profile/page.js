@@ -9,7 +9,7 @@ import { changePassword, getUsers } from '../../../../actions/auth';
 import { getDepartments, getDesignations, setEmployeeManagers, getEmployeeManagers } from '../../../../actions/departments';
 import { useToast } from '../../../../components/Toast';
 import { useEmployeeData } from '../context';
-import { FiCamera, FiUpload, FiLock, FiUser, FiPlus, FiX } from 'react-icons/fi';
+import { FiCamera, FiUpload, FiLock, FiUser, FiX } from 'react-icons/fi';
 
 const TABS = [
   { key: 'personal', label: 'Personal Info' },
@@ -64,6 +64,16 @@ export default function ProfilePage({ params }) {
     }
   }, [isAuthenticated, isAdmin, isSuperAdmin, user, authLoading, router, code]);
 
+  const loadManagers = async () => {
+    try {
+      const mgrs = await getEmployeeManagers(code);
+      setManagers(mgrs);
+      setMgrEditManagers(mgrs);
+      const users = await getUsers();
+      setAllUsers(users.filter(u => u.code));
+    } catch { /* */ }
+  };
+
   useEffect(() => {
     if (!emp) return;
     setProfileBirthday(emp.birthday ? new Date(emp.birthday).toISOString().split('T')[0] : '');
@@ -71,6 +81,7 @@ export default function ProfilePage({ params }) {
     setSelectedDesig(emp.designation?.id || '');
     setEmployeeType(emp.employeeType || 'regular');
     loadManagers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emp]);
 
   useEffect(() => {
@@ -80,16 +91,6 @@ export default function ProfilePage({ params }) {
       setDesignations(desigs);
     })();
   }, []);
-
-  const loadManagers = async () => {
-    try {
-      const mgrs = await getEmployeeManagers(code);
-      setManagers(mgrs);
-      setMgrEditManagers(mgrs);
-      const users = await getUsers();
-      setAllUsers(users.filter(u => u.code));
-    } catch {}
-  };
 
   useEffect(() => {
     if (!mgrSearch.trim()) {

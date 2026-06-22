@@ -16,7 +16,7 @@ import {
   requestLeaveDeduction, reviewLeaveDeduction
 } from '../../actions/leave';
 import { getManagedEmployees } from '../../actions/departments';
-import { getPendingChanges, getPendingChangesHistory, getEmployees } from '../../actions/auth';
+import { getPendingChanges, getPendingChangesHistory } from '../../actions/auth';
 import { reviewAdjustment } from '../../actions/attendanceChanges';
 import { getManagerWfhRequests, getAllWfhRequests, reviewWfhRequest, getWfhRequestsByStage } from '../../actions/wfh';
 
@@ -59,7 +59,6 @@ export default function LeavesPage() {
   const [editBalanceForm, setEditBalanceForm] = useState({ clTotal: 0, slTotal: 0, elTotal: 0, rlTotal: 0, shTotal: 0 });
   const [deductModal, setDeductModal] = useState(false);
   const [deductForm, setDeductForm] = useState({ employeeCode: '', leaveType: 'cl', days: 1, reason: '' });
-  const [allDeductions, setAllDeductions] = useState([]);
   const year = new Date().getFullYear();
 
   // Export range state
@@ -196,7 +195,6 @@ export default function LeavesPage() {
           ]);
           setSuperRegularizations(supRegs);
           setPendingChanges(pcs.filter(c => c.action === 'attendance_adjustment' || c.action === 'leave_deduction'));
-          setAllDeductions(pcs.filter(c => c.action === 'leave_deduction'));
         }
         if (role === 'admin') {
           const [allRegs, allChanges] = await Promise.all([
@@ -214,7 +212,6 @@ export default function LeavesPage() {
         setBalances([]);
         setSuperRegularizations([]);
         setPendingChanges([]);
-        setAllDeductions([]);
         setWfhRequests([]);
         setManagerWfhRequests([]);
         setSuperWfhRequests([]);
@@ -326,14 +323,15 @@ export default function LeavesPage() {
           { key: 'overview', label: `All Requests (${leaveRequests.length})` },
           { key: 'manager_approval', label: `My Approvals${managerLeaves.length > 0 ? ` (${managerLeaves.length})` : ''}` },
           { key: 'regularize', label: `Regularizations${regularizations.length > 0 ? ` (${regularizations.length})` : ''}` },
-          { key: 'wfh', label: `WFH${managerWfhRequests.length > 0 ? ` (${managerWfhRequests.length})` : ''}` },
+          { key: 'wfh', label: `Work Mode${managerWfhRequests.length > 0 ? ` (${managerWfhRequests.length})` : ''}` },
           { key: 'history', label: 'History' },
           { key: 'balances', label: 'Leave Balances' },
           { key: 'policy', label: 'Policy' },
-        ] : role === 'super_admin' ? [
+        ] : isSuperAdmin ? [
           { key: 'overview', label: `All Requests (${leaveRequests.length})` },
-          { key: 'regularize', label: `Regularizations${regularizations.length > 0 ? ` (${regularizations.length})` : ''}` },
-          { key: 'wfh', label: `WFH${superWfhRequests.length > 0 ? ` (${superWfhRequests.length})` : ''}` },
+          { key: 'regularize', label: `Regularizations${superRegularizations.length > 0 ? ` (${superRegularizations.length})` : ''}` },
+          { key: 'wfh', label: `Work Mode${superWfhRequests.length > 0 ? ` (${superWfhRequests.length})` : ''}` },
+          { key: 'history', label: 'History' },
           { key: 'balances', label: 'Leave Balances' },
           { key: 'policy', label: 'Policy' },
         ] : [

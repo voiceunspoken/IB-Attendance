@@ -29,6 +29,7 @@ export default function ClockWidget({ code, employeeType, allowedLocations = nul
   }, [code]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchStatus();
     const interval = setInterval(fetchStatus, 30000);
     return () => clearInterval(interval);

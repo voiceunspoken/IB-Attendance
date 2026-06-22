@@ -3,7 +3,6 @@
 import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
-import { requireAdmin, requireSuperAdmin } from '../lib/auth-guard';
 import { createNotification, getAdminUserIds } from './notifications';
 
 export async function submitWfhRequest(employeeCode, { date, reason, workType = 'wfh' }) {
@@ -138,6 +137,29 @@ export async function reviewWfhRequest(requestId, reviewedBy, approve, note = ''
     include: { user: { include: { managers: { include: { manager: true }, orderBy: { priority: 'asc' } } } } }
   });
   if (!req) return { error: 'Request not found' };
+
+  // Super admin approves directly — skip all staging
+  const reviewer = await prisma.user.findUnique({ where: { username: reviewedBy } });
+  if (reviewer?.role === 'super_admin') {
+    const newStatus = approve ? 'approved' : 'rejected';
+    const updated = await prisma.wfhRequest.update({
+      where: { id: requestId },
+      data: { status: newStatus, approvalStage: newStatus, currentApproverId: null, reviewedBy, reviewedAt: new Date(), reviewNote: approve ? null : (note || null) }
+    });
+
+    if (newStatus === 'approved') await applyWorkModeToDailyLog(req.userId, req.date, req.workType);
+
+    const workTypeLabel = (req.workType || 'wfh').toUpperCase();
+    await logAction(reviewedBy, newStatus === 'approved' ? 'wfh_approved' : 'wfh_rejected', 'wfh_request', req.id, `${newStatus === 'approved' ? 'Approved' : 'Rejected'} ${workTypeLabel} request (super admin direct)`);
+
+    await createNotification(req.userId, newStatus === 'approved' ? 'wfh_approved' : 'wfh_rejected',
+      `${workTypeLabel} ${newStatus === 'approved' ? 'Approved' : 'Rejected'}`,
+      `Your ${workTypeLabel} request for ${req.date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} has been ${newStatus}.${note ? ' Note: ' + note : ''}`,
+      { requestId: req.id, date: req.date.toISOString(), workType: req.workType });
+
+    revalidatePath('/');
+    return { request: updated };
+  }
 
   const config = await prisma.superAdminConfig.findFirst();
   const requireSuper = config?.requireSuperApproval ?? true;

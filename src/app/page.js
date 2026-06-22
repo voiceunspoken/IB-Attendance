@@ -90,7 +90,7 @@ export default function DashboardHome() {
     if (!authLoading && isAuthenticated && !isAdmin && !isSuperAdmin && user?.code) {
       router.push(`/employee/${user.code}`);
     }
-  }, [isAuthenticated, isAdmin, user, authLoading, router]);
+  }, [isAuthenticated, isAdmin, isSuperAdmin, user, authLoading, router]);
 
   const activeEmployees = employees.filter(e => !e.disabled).length;
   const totalPending = pendingCounts.policies + pendingCounts.regularizations + pendingCounts.leaves;

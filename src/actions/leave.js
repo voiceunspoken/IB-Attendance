@@ -367,6 +367,44 @@ export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = 
   });
   if (!req) return { error: 'Request not found' };
 
+  // Super admin approves directly — skip all staging
+  const reviewer = await prisma.user.findUnique({ where: { username: reviewedBy } });
+  if (reviewer?.role === 'super_admin') {
+    const newStatus = approve ? 'approved' : 'rejected';
+    const updated = await prisma.leaveRequest.update({
+      where: { id: requestId },
+      data: { status: newStatus, approvalStage: newStatus, currentApproverId: null, reviewedBy, reviewedAt: new Date(), reviewNote: note || null },
+      include: { user: true }
+    });
+    if (newStatus === 'approved' && req.sandwichCount > 0) {
+      await prisma.leaveBalance.updateMany({ where: { userId: req.userId, year: req.fromDate.getFullYear() }, data: { sandwichUsed: { increment: 1 } } });
+    }
+    if (newStatus === 'approved') {
+      const from = new Date(req.fromDate);
+      const to = new Date(req.toDate);
+      for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+        const monthYear = `${d.getMonth() + 1}_${d.getFullYear()}`;
+        const day = d.getDate();
+        const existing = await prisma.dailyLog.findUnique({ where: { userId_monthYear_day: { userId: req.userId, monthYear, day } } });
+        if (existing && existing.type === 'absent') {
+          const updateData = { type: req.leaveType === 'rl' ? 'rl' : 'present', raw: req.leaveType.toUpperCase() };
+          if (req.leaveType === 'sh' && req.shiftSlot) {
+            if (req.shiftSlot === '10-12') { updateData.inT = 600; updateData.outT = 720; }
+            else if (req.shiftSlot === '5-7') { updateData.inT = 1020; updateData.outT = 1140; }
+          }
+          await prisma.dailyLog.update({ where: { userId_monthYear_day: { userId: req.userId, monthYear, day } }, data: updateData });
+          await prisma.monthRecord.updateMany({ where: { userId: req.userId, monthYear }, data: { absent: { decrement: 1 }, present: { increment: 1 } } });
+        }
+      }
+    }
+    await logAction(reviewedBy, newStatus === 'approved' ? 'leave_approved' : 'leave_rejected', 'leave_request', req.id, `${newStatus === 'approved' ? 'Approved' : 'Rejected'} ${req.leaveType.toUpperCase()} leave (super admin direct)`);
+    const leaveTypeLabel = req.leaveType.toUpperCase();
+    await createNotification(req.userId, newStatus === 'approved' ? 'leave_approved' : 'leave_rejected', `Leave ${newStatus === 'approved' ? 'Approved' : 'Rejected'}`, `Your ${leaveTypeLabel} request for ${req.days} day(s) has been ${newStatus}.${note ? ' Note: ' + note : ''}`, { requestId: req.id, leaveType: req.leaveType, days: req.days });
+    if (newStatus === 'approved') await sendLeaveStatusNotification(req.user.code, req.user.name, req.leaveType, 'approved', note);
+    revalidatePath('/');
+    return { request: updated };
+  }
+
   const config = await prisma.superAdminConfig.findFirst();
   const requireSuper = config?.requireSuperApproval ?? true;
 
@@ -535,7 +573,28 @@ export async function getAllPendingRegularizations() {
 export async function reviewRegularization(requestId, reviewedBy, approve, note = '') {
   const auth = await requireAdmin(reviewedBy);
   if (auth) return auth;
-  const req = await prisma.regularizationRequest.update({
+  const req = await prisma.regularizationRequest.findUnique({
+    where: { id: requestId },
+    include: { user: true }
+  });
+  if (!req) return { error: 'Request not found' };
+
+  // Super admin approves directly — immediately apply
+  if (req.user.role === 'super_admin' || (await prisma.user.findUnique({ where: { username: reviewedBy } }))?.role === 'super_admin') {
+    if (approve) await applyRegularization(req);
+    const newStatus = approve ? 'approved' : 'rejected';
+    await prisma.regularizationRequest.update({
+      where: { id: requestId },
+      data: { status: newStatus, superStatus: approve ? 'approved' : 'rejected', reviewedBy, reviewedAt: new Date(), reviewNote: note || null }
+    });
+    await createNotification(req.userId, approve ? 'regularization_approved' : 'regularization_rejected',
+      approve ? 'Regularization Approved' : 'Regularization Rejected',
+      `Your regularization for ${new Date(req.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} has been ${newStatus}.${note ? ' Note: ' + note : ''}`,
+      { requestId: req.id, date: req.date, requestedIn: req.requestedIn, requestedOut: req.requestedOut, note });
+    return { request: { ...req, status: newStatus, superStatus: newStatus } };
+  }
+
+  await prisma.regularizationRequest.update({
     where: { id: requestId },
     data: {
       status: approve ? 'approved' : 'rejected',
@@ -560,6 +619,26 @@ export async function reviewRegularization(requestId, reviewedBy, approve, note 
   }
 
   return { request: req };
+}
+
+async function applyRegularization(req) {
+  const date = new Date(req.date);
+  const monthYear = `${date.getMonth() + 1}_${date.getFullYear()}`;
+  const day = date.getDate();
+
+  const existing = await prisma.dailyLog.findUnique({
+    where: { userId_monthYear_day: { userId: req.userId, monthYear, day } }
+  });
+
+  if (existing && (existing.type === 'absent' || !existing.inT)) {
+    const inT = req.requestedIn ? parseTime(req.requestedIn) : existing.inT;
+    const outT = req.requestedOut ? parseTime(req.requestedOut) : existing.outT;
+    await prisma.dailyLog.update({
+      where: { userId_monthYear_day: { userId: req.userId, monthYear, day } },
+      data: { type: 'present', inT, outT }
+    });
+    await updateMonthRecordCounts(req.userId, monthYear);
+  }
 }
 
 export async function getPendingSuperRegularizations() {
@@ -697,6 +776,23 @@ export async function reviewLeaveDeduction(changeId, reviewedBy, approve) {
   }
 
   return { success: true };
+}
+
+async function updateMonthRecordCounts(userId, monthYear) {
+  const logs = await prisma.dailyLog.findMany({ where: { userId, monthYear } });
+  let present = 0, absent = 0, halfDay = 0, wfh = 0, maxDay = 0;
+  for (const log of logs) {
+    maxDay = Math.max(maxDay, log.day);
+    if (log.type === 'absent') absent++;
+    else if (log.type === 'half') halfDay++;
+    else if (log.type === 'wfh' || log.type === 'wos' || log.type === 'wfm' || log.type === 'wfo') wfh++;
+    else if (log.type === 'present') present++;
+  }
+  await prisma.monthRecord.upsert({
+    where: { userId_monthYear: { userId, monthYear } },
+    update: { present: present + wfh, absent, halfDay, numDays: maxDay },
+    create: { userId, monthYear, present: present + wfh, absent, halfDay, numDays: maxDay },
+  });
 }
 
 function parseTime(t) {

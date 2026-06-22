@@ -84,7 +84,6 @@ export default function TeamPage() {
   const [showPromoteModal, setShowPromoteModal] = useState(false);
   const [promoteUserId, setPromoteUserId] = useState('');
   const [promoteRole, setPromoteRole] = useState('admin');
-  const [promoteResult, setPromoteResult] = useState('');
   const [promoting, setPromoting] = useState(false);
 
   // ── Type change modal ──
@@ -235,12 +234,11 @@ export default function TeamPage() {
     e.preventDefault();
     if (!promoteUserId) return;
     setPromoting(true);
-    setPromoteResult('');
     const target = users.find(x => x.id === promoteUserId);
     const result = await promoteToAdmin(promoteUserId, promoteRole, user.username);
     setPromoting(false);
     if (result.error) {
-      setPromoteResult(result.error);
+      toast.error(result.error);
       return;
     }
     toast.success(`"${target?.name || target?.username}" promoted to ${promoteRole === 'super_admin' ? 'Super Admin' : 'Admin'}.`);
@@ -558,7 +556,7 @@ export default function TeamPage() {
                   <button className="btn btn-secondary btn-sm" onClick={() => { setEmpForm({ code: '', name: '', employeeType: 'regular', departmentId: '', designationId: '' }); setEmpMsg(''); setShowCreateModal(true); }}>
                     + Create Employee
                   </button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => { setPromoteUserId(''); setPromoteRole('admin'); setPromoteResult(''); setShowPromoteModal(true); }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => { setPromoteUserId(''); setPromoteRole('admin'); setShowPromoteModal(true); }}>
                     + Promote
                   </button>
                   <SearchBar value={userSearch} onChange={v => { setUserSearch(v); setUserPage(1); }} placeholder="Search employees…" count={filteredUsers.length} />
