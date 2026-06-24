@@ -120,6 +120,9 @@ function getNavTarget(n) {
   const p = getPayload(n);
   const cat = getCategory(n.type);
   if (cat === 'leaves' || cat === 'wfh') {
+    if (isActionable(n.type) && p.requestId) {
+      return `/leaves/${p.requestId}`;
+    }
     if (n.type.includes('_approved') || n.type.includes('_rejected')) {
       return `/employee/${p.employeeCode || ''}/leaves`;
     }

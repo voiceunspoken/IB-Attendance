@@ -105,6 +105,12 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
 
       const rlDay = rlEligibleDays.find(r => r.day === d && r.month === currentMonth.month);
 
+      const tooltipText = info.inT != null
+        ? `In: ${fmtTime(info.inT)}${info.outT != null ? ` | Out: ${fmtTime(info.outT)}` : ''}`
+        : info.outT != null
+          ? `Out: ${fmtTime(info.outT)}`
+          : '';
+
       if (info.type === 'wo') { opacity = 0.35; cursor = 'default'; label = 'WO'; bg = 'transparent'; border = '1px solid var(--border)'; }
       else if (info.type === 'present') {
         if (info.inT === null) {
@@ -150,6 +156,7 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
           disabled={!isInteractive}
           onClick={(e) => isInteractive ? openPopup(e, d) : undefined}
           onKeyDown={(e) => { if (isInteractive && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openPopup(e, d); } }}
+          data-tooltip={tooltipText || undefined}
           style={{
             borderRadius: '5px', border, background: bg,
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -347,6 +354,8 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
   // ── Shared modal body (header + stats + calendar) ──
   const modalBody = (
     <>
+      <style>{`[data-tooltip]:hover::after{content:attr(data-tooltip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);padding:4px 9px;border-radius:6px;background:rgba(0,0,0,0.82);color:#fff;font-size:10px;font-weight:500;white-space:nowrap;z-index:20;pointer-events:none;font-family:inherit;line-height:1.3}
+[data-tooltip]:hover::before{content:'';position:absolute;bottom:calc(100% + 1px);left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:rgba(0,0,0,0.82);z-index:20;pointer-events:none}`}</style>
       {/* Header */}
       <div style={{
         padding: '20px 24px', borderBottom: '1px solid var(--border)',
@@ -395,6 +404,8 @@ export default function EmployeeModal({ employee, currentMonth, onClose, readOnl
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     return (
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        <style>{`[data-tooltip]:hover::after{content:attr(data-tooltip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);padding:4px 9px;border-radius:6px;background:rgba(0,0,0,0.82);color:#fff;font-size:10px;font-weight:500;white-space:nowrap;z-index:20;pointer-events:none;font-family:inherit;line-height:1.3}
+[data-tooltip]:hover::before{content:'';position:absolute;bottom:calc(100% + 1px);left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:rgba(0,0,0,0.82);z-index:20;pointer-events:none}`}</style>
         {/* Day name headers */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', marginBottom: '4px' }}>
           {dayNames.map((d, i) => (

@@ -396,7 +396,7 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
     await createNotification(currentApproverId, 'leave_pending',
       `Leave Request — ${user.name}`,
       `${user.name} submitted ${leaveType.toUpperCase()} leave for ${finalDays} day(s)${unpaidDays ? ` (${unpaidDays} unpaid)` : ''}. Reason: ${reason || 'N/A'}`,
-      { employeeCode, leaveType, fromDate, toDate, days: finalDays, unpaidDays, reason }
+      { requestId: req.id, employeeCode, leaveType, fromDate, toDate, days: finalDays, unpaidDays, reason }
     );
     if (approver?.manager?.code) {
       await sendLeavePendingNotification(approver.manager.code, approver.manager.name, user.name, leaveType, fromDate, toDate, finalDays, reason);
@@ -413,7 +413,7 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
   await Promise.all(adminIds.map(id => createNotification(id, 'leave_submitted',
     `New Leave Request`,
     `${user.name} submitted ${leaveType.toUpperCase()} leave for ${finalDays} day(s)${unpaidDays ? ` (${unpaidDays} unpaid)` : ''}. Status: ${stageLabel}.`,
-    { employeeCode, leaveType, fromDate, toDate, days: finalDays, unpaidDays, reason, status: approvalStage }
+    { requestId: req.id, employeeCode, leaveType, fromDate, toDate, days: finalDays, unpaidDays, reason, status: approvalStage }
   )));
   
   return { request: req, sandwichMessage, unpaidDays };
@@ -433,6 +433,28 @@ async function attachApproverName(requests) {
     currentApprover: r.currentApproverId ? map[r.currentApproverId] || null : null,
     reviewerName: r.reviewedBy ? revMap[r.reviewedBy] || null : null,
   }));
+}
+
+export async function getLeaveRequestById(id) {
+  const req = await prisma.leaveRequest.findUnique({
+    where: { id },
+    include: {
+      user: {
+        select: {
+          code: true, name: true, employeeType: true,
+          department: { select: { name: true } },
+          designation: { select: { name: true } },
+          managers: {
+            include: { manager: { select: { code: true, name: true } } },
+            orderBy: { priority: 'asc' }
+          }
+        }
+      }
+    }
+  });
+  if (!req) return null;
+  const arr = await attachApproverName([req]);
+  return arr[0] || null;
 }
 
 export async function getLeaveRequests(employeeCode) {
