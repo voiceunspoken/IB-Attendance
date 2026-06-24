@@ -605,6 +605,10 @@ body.modal-open .page-wrapper {
   font-weight: 600 !important;
 }
 
+.react-datepicker__day--selected.react-datepicker__day--today {
+  color: #fff !important;
+}
+
 .react-datepicker__day--selected:hover {
   background: var(--blue, #0071e3) !important;
 }

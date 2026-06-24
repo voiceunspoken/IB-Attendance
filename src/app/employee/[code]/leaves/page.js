@@ -306,14 +306,14 @@ export default function LeavesPage({ params }) {
             </div>
           )}
 
-          {leaveForm.leaveType === 'rl' ? (
+          {leaveForm.leaveType === 'rl' || leaveForm.isHalfDay || leaveForm.leaveType === 'sh' ? (
             <div>
               <label className="input-label">Date</label>
               <DatePickerInput
                 selected={leaveForm.fromDate}
                 onChange={d => setLeaveForm(f => ({ ...f, fromDate: d }))}
                 minDate={today}
-                placeholder="Select RL date"
+                placeholder="Select date"
                 className="input-field"
               />
             </div>
@@ -354,7 +354,7 @@ export default function LeavesPage({ params }) {
                     fontWeight: (opt === 'Half Day') === leaveForm.isHalfDay ? 600 : 400, fontSize: '13px', transition: 'all 0.15s'
                   }}>
                     <input type="radio" name="duration" checked={(opt === 'Half Day') === leaveForm.isHalfDay}
-                      onChange={() => setLeaveForm(f => ({ ...f, isHalfDay: opt === 'Half Day' }))} style={{ display: 'none' }} />
+                      onChange={() => setLeaveForm(f => ({ ...f, isHalfDay: opt === 'Half Day', toDate: opt === 'Half Day' ? null : f.toDate }))} style={{ display: 'none' }} />
                     {opt}
                   </label>
                 ))}
@@ -362,14 +362,16 @@ export default function LeavesPage({ params }) {
             </div>
           )}
 
-          <div style={{ fontSize: '13px', background: 'var(--surface2)', borderRadius: '10px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: 'var(--text2)' }}>Days:</span>
-            <strong style={{ fontSize: '16px' }}>{computedDays}</strong>
-            {computedDays !== 0.5 && computedDays === totalDays && totalDays > 1 && (
-              <span style={{ fontSize: '11px', color: 'var(--text3)' }}>({weekends} weekend{weekends !== 1 ? 's' : ''} · {weekdays} working day{weekdays !== 1 ? 's' : ''})</span>
-            )}
-            {computedDays === 0.5 && <span style={{ fontSize: '11px', color: 'var(--text3)' }}>Half day</span>}
-          </div>
+          {leaveForm.leaveType !== 'sh' && (
+            <div style={{ fontSize: '13px', background: 'var(--surface2)', borderRadius: '10px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ color: 'var(--text2)' }}>Days:</span>
+              <strong style={{ fontSize: '16px' }}>{computedDays}</strong>
+              {computedDays !== 0.5 && computedDays === totalDays && totalDays > 1 && (
+                <span style={{ fontSize: '11px', color: 'var(--text3)' }}>({weekends} weekend{weekends !== 1 ? 's' : ''} · {weekdays} working day{weekdays !== 1 ? 's' : ''})</span>
+              )}
+              {computedDays === 0.5 && <span style={{ fontSize: '11px', color: 'var(--text3)' }}>Half day</span>}
+            </div>
+          )}
 
           <div>
             <label className="input-label">Reason</label>

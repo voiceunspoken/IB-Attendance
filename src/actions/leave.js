@@ -323,7 +323,7 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
 
   let unpaidDays = 0;
   let paidDays = computedDays;
-  if (leaveType !== 'ul' && leaveType !== 'sh' && computedDays >= 1) {
+  if (leaveType !== 'ul' && leaveType !== 'sh' && computedDays >= 0.5) {
     const bal = await getLeaveBalance(employeeCode, from.getFullYear());
     const remaining = bal[`${leaveType}Remaining`] ?? 0;
     if (remaining <= 0) {
