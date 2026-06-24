@@ -41,6 +41,7 @@ const NAV_CONFIG = {
 
   employee: [
     { section: 'Employee', links: [
+      { label: 'Dashboard', icon: <FiHome size={14} />, path: (code) => `/employee/${code}/dashboard` },
       { label: 'Attendance', icon: <FiCalendar size={14} />, path: (code) => `/employee/${code}` },
       { label: 'Leave Requests', icon: <FiFileText size={14} />, path: (code) => `/employee/${code}/leaves` },
       { label: 'Work Mode', icon: <FiHome size={14} />, path: (code) => `/employee/${code}/wfh` },

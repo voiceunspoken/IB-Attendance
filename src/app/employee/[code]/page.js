@@ -4,10 +4,7 @@ import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../components/AuthProvider';
 import { requestAdjustment, updatePunchTimes } from '../../../actions/attendanceChanges';
-import { getWfhRequests } from '../../../actions/wfh';
-import { getTeamMembers } from '../../../actions/employees';
 import EmployeeModal from '../../../components/EmployeeModal';
-import ClockWidget from '../../../components/ClockWidget';
 import { useToast } from '../../../components/Toast';
 import { useEmployeeData } from './context';
 import { FiDownload, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
@@ -24,8 +21,6 @@ export default function AttendancePage({ params }) {
   const toast = useToast();
 
   const [selectedMonthIndex, setSelectedMonthIndex] = useState(0);
-  const [hasWfhToday, setHasWfhToday] = useState(false);
-  const [teamMembers, setTeamMembers] = useState([]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
@@ -34,29 +29,7 @@ export default function AttendancePage({ params }) {
     }
   }, [isAuthenticated, isAdmin, isSuperAdmin, user, authLoading, router, code]);
 
-  useEffect(() => {
-    if (!emp?.employeeType || emp.employeeType === 'hybrid') {
-      setHasWfhToday(true);
-    } else {
-      const fmtLocal = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-      const today = fmtLocal(new Date());
-      getWfhRequests(code).then(requests => {
-        const approved = requests.some(r =>
-          r.status === 'approved' &&
-          fmtLocal(new Date(r.date)) === today
-        );
-        setHasWfhToday(approved);
-      }).catch(() => setHasWfhToday(false));
-    }
-  }, [emp, code]);
-
-  useEffect(() => {
-    getTeamMembers(code).then(setTeamMembers).catch(() => setTeamMembers([]));
-  }, [code]);
-
   if (!emp) return null;
-
-  const showClockWidget = hasWfhToday || emp.employeeType === 'hybrid';
 
   const currentRecord = emp.records[selectedMonthIndex];
   const [month, year] = currentRecord.monthYear.split('_');
@@ -201,7 +174,6 @@ export default function AttendancePage({ params }) {
         <h1 style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text)' }}>{emp.name}</h1>
         <div style={{ fontSize: '13px', color: 'var(--text2)', marginTop: '2px' }}>#{emp.code}</div>
       </div>
-      {showClockWidget && <ClockWidget code={code} employeeType={emp.employeeType} />}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <button onClick={() => setSelectedMonthIndex(Math.min(emp.records.length - 1, selectedMonthIndex + 1))}
@@ -249,27 +221,6 @@ export default function AttendancePage({ params }) {
           onPunchUpdate={isAdmin || isSuperAdmin ? handlePunchUpdate : undefined}
         />
       </div>
-
-      {teamMembers.length > 0 && (
-        <div className="card" style={{ marginTop: '16px', padding: '16px 20px' }}>
-          <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '12px' }}>Team Today</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {teamMembers.map(m => (
-              <div key={m.code} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', borderRadius: '8px', background: 'var(--surface2)' }}>
-                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: m.statusColor, flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '13px', fontWeight: 600 }}>{m.name}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--text3)' }}>
-                    {m.department && <span>{m.department}{m.designation && ' · '}</span>}
-                    {m.designation && <span>{m.designation}</span>}
-                  </div>
-                </div>
-                <span style={{ fontSize: '11px', fontWeight: 600, color: m.statusColor, whiteSpace: 'nowrap' }}>{m.statusLabel}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

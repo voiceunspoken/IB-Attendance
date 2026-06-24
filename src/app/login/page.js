@@ -11,12 +11,15 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const { login, isAuthenticated, loading } = useAuth();
+  const { login, isAuthenticated, loading, role, user } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (isAuthenticated) router.push('/');
-  }, [isAuthenticated, router]);
+    if (isAuthenticated) {
+      const isAdmin = role === 'admin' || role === 'super_admin';
+      router.push(isAdmin ? '/' : `/employee/${user?.code}/dashboard`);
+    }
+  }, [isAuthenticated, role, user, router]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
