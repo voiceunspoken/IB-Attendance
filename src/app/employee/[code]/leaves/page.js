@@ -11,6 +11,28 @@ import DatePickerInput from '../../../../components/DatePicker';
 const LEAVE_LABELS = { cl: 'Casual Leave', sl: 'Sick Leave', el: 'Earned Leave', rl: 'Restricted Leave', sh: 'Short Leave', ul: 'Unpaid Leave' };
 const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b', ul: '#8e8e93' };
 
+function daysBetween(from, to) {
+  return Math.round((to - from) / (1000 * 60 * 60 * 24)) + 1;
+}
+
+function countWeekends(from, to) {
+  let c = 0;
+  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+    const day = d.getDay();
+    if (day === 0 || day === 6) c++;
+  }
+  return c;
+}
+
+function countWeekdays(from, to) {
+  let c = 0;
+  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+    const day = d.getDay();
+    if (day >= 1 && day <= 5) c++;
+  }
+  return c;
+}
+
 export default function LeavesPage({ params }) {
   const unwrappedParams = use(params);
   const code = unwrappedParams.code;
@@ -24,14 +46,48 @@ export default function LeavesPage({ params }) {
   const [leaveRequests, setLeaveRequests] = useState([]);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const [leaveForm, setLeaveForm] = useState({ leaveType: 'cl', fromDate: null, toDate: null, days: 1, reason: '', shiftSlot: '10-12' });
+  const [leaveForm, setLeaveForm] = useState({ leaveType: 'cl', fromDate: null, toDate: null, reason: '', shiftSlot: '10-12', isHalfDay: false });
   const [leaveError, setLeaveError] = useState('');
   const [leaveSuccess, setLeaveSuccess] = useState('');
   const [submittingLeave, setSubmittingLeave] = useState(false);
   const [prescriptionFile, setPrescriptionFile] = useState(null);
+  const [submitResult, setSubmitResult] = useState(null);
+
+  const computedDays = useMemo(() => {
+    if (!leaveForm.fromDate) return 1;
+    if (leaveForm.isHalfDay || leaveForm.leaveType === 'sh') return 0.5;
+    const from = new Date(leaveForm.fromDate);
+    const to = leaveForm.toDate ? new Date(leaveForm.toDate) : from;
+    if (from > to) return 1;
+    return daysBetween(from, to);
+  }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.isHalfDay, leaveForm.leaveType]);
+
+  const totalDays = useMemo(() => {
+    if (!leaveForm.fromDate) return 0;
+    const from = new Date(leaveForm.fromDate);
+    const to = leaveForm.toDate ? new Date(leaveForm.toDate) : from;
+    if (from > to) return 0;
+    return daysBetween(from, to);
+  }, [leaveForm.fromDate, leaveForm.toDate]);
+
+  const weekends = useMemo(() => {
+    if (!leaveForm.fromDate) return 0;
+    const from = new Date(leaveForm.fromDate);
+    const to = leaveForm.toDate ? new Date(leaveForm.toDate) : from;
+    if (from > to) return 0;
+    return countWeekends(from, to);
+  }, [leaveForm.fromDate, leaveForm.toDate]);
+
+  const weekdays = useMemo(() => {
+    if (!leaveForm.fromDate) return 0;
+    const from = new Date(leaveForm.fromDate);
+    const to = leaveForm.toDate ? new Date(leaveForm.toDate) : from;
+    if (from > to) return 0;
+    return countWeekdays(from, to);
+  }, [leaveForm.fromDate, leaveForm.toDate]);
 
   const sandwichWarning = useMemo(() => {
-    if (!leaveForm.fromDate) return '';
+    if (!leaveForm.fromDate || leaveForm.isHalfDay || leaveForm.leaveType === 'sh') return '';
     const from = new Date(leaveForm.fromDate);
     const to = leaveForm.toDate ? new Date(leaveForm.toDate) : from;
     if (from > to) return '';
@@ -42,7 +98,38 @@ export default function LeavesPage({ params }) {
       return 'This period spans a weekend (Fri–Mon). If approved, weekend days may be counted as sandwich leave.';
     }
     return '';
-  }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.leaveType]);
+  }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.leaveType, leaveForm.isHalfDay]);
+
+  const leavePreview = useMemo(() => {
+    if (!leaveForm.fromDate || totalDays <= 0) return null;
+    const type = leaveForm.leaveType;
+    const isHalfOrSH = leaveForm.isHalfDay || type === 'sh';
+    if (isHalfOrSH) {
+      const remaining = type !== 'ul' && type !== 'sh' && leaveBalanceDetail ? (leaveBalanceDetail[`${type}Remaining`] ?? 0) : null;
+      const paid = type === 'sh' ? 0.5 : (type === 'ul' ? 0 : Math.min(0.5, remaining ?? 0));
+      const unpaid = type === 'ul' ? 0.5 : (type === 'sh' ? 0 : Math.max(0, 0.5 - (remaining ?? 0)));
+      return { totalDays: 0.5, weekends: 0, weekdays: 0, paid, unpaid, isHalfOrSH };
+    }
+    if (type === 'ul') {
+      return { totalDays, weekends, weekdays, paid: 0, unpaid: totalDays, isHalfOrSH: false };
+    }
+    const remaining = leaveBalanceDetail ? (leaveBalanceDetail[`${type}Remaining`] ?? 0) : 0;
+    if (remaining <= 0) {
+      return { totalDays, weekends, weekdays, paid: 0, unpaid: totalDays, isHalfOrSH: false, noBalance: true };
+    }
+    const paid = Math.min(totalDays, remaining);
+    const unpaid = Math.max(0, totalDays - remaining);
+    return { totalDays, weekends, weekdays, paid, unpaid, isHalfOrSH: false };
+  }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.leaveType, leaveForm.isHalfDay, totalDays, weekends, weekdays, leaveBalanceDetail]);
+
+  const availableLeaveTypes = useMemo(() => {
+    const types = ['cl', 'sl'];
+    if (emp?.joiningDate && new Date(new Date(emp.joiningDate).getTime() + 365 * 24 * 60 * 60 * 1000) <= new Date()) {
+      types.push('el');
+    }
+    types.push('rl', 'sh');
+    return types;
+  }, [emp]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
@@ -56,32 +143,32 @@ export default function LeavesPage({ params }) {
     getLeaveRequests(code).then(setLeaveRequests).catch(() => setLeaveRequests([]));
   }, [code, triggerRefetch]);
 
-  const availableLeaveTypes = ['cl', 'sl'];
-  if (emp?.joiningDate && new Date(new Date(emp.joiningDate).getTime() + 365 * 24 * 60 * 60 * 1000) <= new Date()) {
-    availableLeaveTypes.push('el');
-  }
-  availableLeaveTypes.push('rl', 'sh');
-
   const handleSubmitLeave = async (e) => {
     e.preventDefault();
-    setLeaveError(''); setLeaveSuccess('');
+    setLeaveError('');
+    setLeaveSuccess('');
+    setSubmitResult(null);
     if (!leaveForm.fromDate) return setLeaveError('Please select a start date.');
     if (leaveForm.fromDate < today) return setLeaveError('Leave cannot be applied for a past date.');
     if (!leaveForm.reason.trim()) return setLeaveError('Please provide a reason.');
+    if (leavePreview?.noBalance) return setLeaveError(`You have no ${leaveForm.leaveType.toUpperCase()} balance remaining. Please select Unpaid Leave (UL) instead.`);
     const fmt = (d) => d instanceof Date && !isNaN(d) ? d.toISOString().split('T')[0] : '';
     setSubmittingLeave(true);
     const result = await submitLeaveRequest(code, {
-      ...leaveForm,
+      leaveType: leaveForm.leaveType,
       fromDate: fmt(leaveForm.fromDate),
       toDate: leaveForm.toDate ? fmt(leaveForm.toDate) : fmt(leaveForm.fromDate),
-      days: parseFloat(leaveForm.days) || 1,
+      days: computedDays,
+      reason: leaveForm.reason,
       prescriptionFile: leaveForm.leaveType === 'sl' ? prescriptionFile : null,
-      shiftSlot: leaveForm.leaveType === 'sh' ? leaveForm.shiftSlot : null
+      shiftSlot: leaveForm.leaveType === 'sh' ? leaveForm.shiftSlot : null,
+      isHalfDay: leaveForm.isHalfDay
     });
     setSubmittingLeave(false);
     if (result.error) return setLeaveError(result.error);
     setLeaveSuccess('Leave request submitted successfully.');
-    setLeaveForm({ leaveType: 'cl', fromDate: null, toDate: null, days: 1, reason: '', shiftSlot: '10-12' });
+    setSubmitResult(result);
+    setLeaveForm({ leaveType: 'cl', fromDate: null, toDate: null, reason: '', shiftSlot: '10-12', isHalfDay: false });
     setPrescriptionFile(null);
     triggerRefetch();
   };
@@ -123,21 +210,21 @@ export default function LeavesPage({ params }) {
         <form onSubmit={handleSubmitLeave} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
             <label className="input-label">Leave Type</label>
-            <select className="input-field" value={leaveForm.leaveType} onChange={e => setLeaveForm(f => ({ ...f, leaveType: e.target.value, shiftSlot: '10-12' }))}>
+            <select className="input-field" value={leaveForm.leaveType} onChange={e => setLeaveForm(f => ({ ...f, leaveType: e.target.value, shiftSlot: '10-12', isHalfDay: false }))}>
               {availableLeaveTypes.map(type => {
-                const avail = leaveBalanceDetail ? (leaveBalanceDetail[`${type}Avail`] ?? 0) : '?';
+                const remaining = leaveBalanceDetail ? (leaveBalanceDetail[`${type}Remaining`] ?? 0) : '?';
                 const total = leaveBalanceDetail ? (leaveBalanceDetail[`${type}Total`] ?? 0) : '?';
                 return (
                   <option key={type} value={type}>
-                    {LEAVE_LABELS[type]} ({type.toUpperCase()}) — {avail}/{total} remaining
+                    {LEAVE_LABELS[type]} ({type.toUpperCase()}) — {remaining}/{total} remaining
                   </option>
                 );
               })}
               <option value="ul" style={{ borderTop: '1px solid var(--border)' }}>Unpaid Leave (UL) — no limit</option>
             </select>
-            {leaveForm.leaveType !== 'ul' && leaveBalanceDetail && leaveBalanceDetail[`${leaveForm.leaveType}Avail`] <= 0 && (
+            {leaveForm.leaveType !== 'ul' && leaveForm.leaveType !== 'sh' && leaveBalanceDetail && leaveBalanceDetail[`${leaveForm.leaveType}Remaining`] <= 0 && (
               <div style={{ fontSize: '12px', color: 'var(--orange)', marginTop: '6px', background: 'rgba(255,159,10,0.1)', borderRadius: '8px', padding: '8px 12px', fontWeight: 500 }}>
-                You have no {LEAVE_LABELS[leaveForm.leaveType]} remaining. This will be treated as unpaid leave.
+                You have no {LEAVE_LABELS[leaveForm.leaveType]} remaining. Please select Unpaid Leave (UL).
               </div>
             )}
             {leaveForm.leaveType === 'ul' && (
@@ -164,9 +251,9 @@ export default function LeavesPage({ params }) {
             </div>
           )}
 
-          {leaveForm.leaveType === 'sl' && (
+          {leaveForm.leaveType === 'sl' && computedDays > 1 && (
             <div>
-              <label className="input-label">Prescription (required for Sick Leave)</label>
+              <label className="input-label">Prescription (required for Sick Leave &gt; 1 day)</label>
               <input className="input-field" type="file" accept="image/*,.pdf"
                 style={{ padding: '8px', fontSize: '12px' }}
                 onChange={e => {
@@ -178,6 +265,12 @@ export default function LeavesPage({ params }) {
                   }
                 }} />
               {prescriptionFile && <div style={{ fontSize: '11px', color: 'var(--green)', marginTop: '4px' }}>Prescription uploaded</div>}
+            </div>
+          )}
+
+          {leaveForm.leaveType === 'sl' && computedDays <= 1 && (
+            <div style={{ fontSize: '12px', color: 'var(--text3)', background: 'var(--surface2)', borderRadius: '8px', padding: '8px 12px' }}>
+              No prescription needed for single-day sick leave.
             </div>
           )}
 
@@ -223,24 +316,78 @@ export default function LeavesPage({ params }) {
               />
             </div>
           </div>
-          <div>
-            <label className="input-label">Days</label>
-            <select className="input-field" value={leaveForm.leaveType === 'sh' ? 0.5 : leaveForm.days}
-              onChange={e => setLeaveForm(f => ({ ...f, days: parseFloat(e.target.value) }))}
-              disabled={leaveForm.leaveType === 'sh'}
-              style={{ opacity: leaveForm.leaveType === 'sh' ? 0.6 : 1 }}>
-              <option value={0.5}>Half Day (0.5)</option>
-              <option value={1}>1 Day</option>
-              {[2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n} Days</option>)}
-            </select>
+
+          {leaveForm.leaveType !== 'sh' && computedDays > 0.5 && (
+            <div>
+              <label className="input-label">Duration</label>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+                {['Full Day', 'Half Day'].map(opt => (
+                  <label key={opt} style={{
+                    flex: 1, padding: '10px', borderRadius: '10px', cursor: 'pointer', textAlign: 'center',
+                    border: (opt === 'Half Day') === leaveForm.isHalfDay ? '2px solid #0071e3' : '2px solid var(--border)',
+                    background: (opt === 'Half Day') === leaveForm.isHalfDay ? 'rgba(0,113,227,0.08)' : 'var(--surface2)',
+                    fontWeight: (opt === 'Half Day') === leaveForm.isHalfDay ? 600 : 400, fontSize: '13px', transition: 'all 0.15s'
+                  }}>
+                    <input type="radio" name="duration" checked={(opt === 'Half Day') === leaveForm.isHalfDay}
+                      onChange={() => setLeaveForm(f => ({ ...f, isHalfDay: opt === 'Half Day' }))} style={{ display: 'none' }} />
+                    {opt}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div style={{ fontSize: '13px', background: 'var(--surface2)', borderRadius: '10px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ color: 'var(--text2)' }}>Days:</span>
+            <strong style={{ fontSize: '16px' }}>{computedDays}</strong>
+            {computedDays !== 0.5 && computedDays === totalDays && totalDays > 1 && (
+              <span style={{ fontSize: '11px', color: 'var(--text3)' }}>({weekends} weekend{weekends !== 1 ? 's' : ''} · {weekdays} working day{weekdays !== 1 ? 's' : ''})</span>
+            )}
+            {computedDays === 0.5 && <span style={{ fontSize: '11px', color: 'var(--text3)' }}>Half day</span>}
           </div>
+
           <div>
             <label className="input-label">Reason</label>
             <textarea className="input-field" rows={3} placeholder="Brief reason for leave…" value={leaveForm.reason} onChange={e => setLeaveForm(f => ({ ...f, reason: e.target.value }))} style={{ resize: 'vertical' }} />
           </div>
 
+          {leavePreview && (
+            <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '12px 14px', fontSize: '12px' }}>
+              <div style={{ fontWeight: 700, marginBottom: '8px', fontSize: '12px' }}>Leave Preview</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
+                <div>Total days: <strong>{leavePreview.totalDays}</strong></div>
+                {!leavePreview.isHalfOrSH && (
+                  <>
+                    <div>Weekends: <strong>{leavePreview.weekends}</strong></div>
+                    <div>Working days: <strong>{leavePreview.weekdays}</strong></div>
+                  </>
+                )}
+                <div>Leave type: <strong style={{ color: LEAVE_COLORS[leaveForm.leaveType] }}>{LEAVE_LABELS[leaveForm.leaveType]} ({leaveForm.leaveType.toUpperCase()})</strong></div>
+                {leaveForm.leaveType !== 'ul' && leaveForm.leaveType !== 'sh' && !leavePreview.isHalfOrSH && (
+                  <>
+                    <div style={{ color: 'var(--green)' }}>Paid: <strong>{leavePreview.paid}d</strong></div>
+                    {leavePreview.unpaid > 0 && <div style={{ color: 'var(--orange)' }}>Unpaid: <strong>{leavePreview.unpaid}d</strong></div>}
+                  </>
+                )}
+                {leaveForm.leaveType === 'ul' && (
+                  <div style={{ color: 'var(--orange)' }}>All <strong>unpaid</strong></div>
+                )}
+                {leaveForm.leaveType === 'sh' && (
+                  <div style={{ color: 'var(--text2)' }}>2-hour slot · <strong>half-day</strong></div>
+                )}
+                {leavePreview.isHalfOrSH && leaveForm.leaveType !== 'sh' && leaveForm.leaveType !== 'ul' && (
+                  <>
+                    <div style={{ color: 'var(--green)' }}>Paid: <strong>{leavePreview.paid}d</strong></div>
+                    {leavePreview.unpaid > 0 && <div style={{ color: 'var(--orange)' }}>Unpaid: <strong>{leavePreview.unpaid}d</strong></div>}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {sandwichWarning && (
             <div style={{ background: 'rgba(255,159,10,0.1)', borderRadius: '10px', padding: '10px 14px', fontSize: '12px', color: '#b36200', fontWeight: 500 }}>
+              <FiAlertTriangle size={12} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
               {sandwichWarning}
             </div>
           )}
@@ -248,13 +395,13 @@ export default function LeavesPage({ params }) {
           {leaveBalanceDetail && (
             <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '12px 14px', fontSize: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               {availableLeaveTypes.map(type => {
-                const avail = leaveBalanceDetail[`${type}Avail`] ?? 0;
+                const remaining = leaveBalanceDetail[`${type}Remaining`] ?? 0;
                 const total = leaveBalanceDetail[`${type}Total`] ?? 0;
                 const used = leaveBalanceDetail[`${type}Used`] ?? 0;
                 return (
-                    <div key={type} style={{ borderLeft: `3px solid ${LEAVE_COLORS[type]}`, paddingLeft: '8px' }}>
+                  <div key={type} style={{ borderLeft: `3px solid ${LEAVE_COLORS[type]}`, paddingLeft: '8px' }}>
                     <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: '11px' }}>{LEAVE_LABELS[type]}</div>
-                    <div style={{ color: 'var(--text2)' }}>{avail} avail · {used} used · {total} total</div>
+                    <div style={{ color: 'var(--text2)' }}>{remaining} remaining · {used} used · {total} total</div>
                   </div>
                 );
               })}
@@ -263,7 +410,17 @@ export default function LeavesPage({ params }) {
 
           {leaveError && <div style={{ color: 'var(--red)', fontSize: '13px' }}>{leaveError}</div>}
           {leaveSuccess && <div style={{ color: 'var(--green)', fontSize: '13px' }}>{leaveSuccess}</div>}
-          <button type="submit" className="btn btn-primary" disabled={submittingLeave} style={{ opacity: submittingLeave ? 0.7 : 1 }}>
+          {submitResult?.unpaidDays > 0 && (
+            <div style={{ fontSize: '12px', color: 'var(--orange)', background: 'rgba(255,159,10,0.1)', borderRadius: '8px', padding: '8px 12px', fontWeight: 500 }}>
+              {submitResult.unpaidDays} day{submitResult.unpaidDays !== 1 ? 's' : ''} will be unpaid (auto-split).
+            </div>
+          )}
+          {submitResult?.sandwichMessage && (
+            <div style={{ fontSize: '12px', color: 'var(--orange)', background: 'rgba(255,159,10,0.1)', borderRadius: '8px', padding: '8px 12px', fontWeight: 500 }}>
+              {submitResult.sandwichMessage}
+            </div>
+          )}
+          <button type="submit" className="btn btn-primary" disabled={submittingLeave || !!leavePreview?.noBalance} style={{ opacity: submittingLeave || leavePreview?.noBalance ? 0.7 : 1 }}>
             {submittingLeave ? 'Submitting…' : 'Submit Request'}
           </button>
         </form>
@@ -282,6 +439,7 @@ export default function LeavesPage({ params }) {
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <span style={{ fontSize: '13px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{r.leaveType.toUpperCase()}</span>
                     <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
+                    {r.unpaidDays > 0 && <span style={{ fontSize: '11px', color: 'var(--orange)', background: 'rgba(255,159,10,0.1)', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.unpaidDays} unpaid</span>}
                     {r.shiftSlot && <span style={{ fontSize: '11px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
                   </div>
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>

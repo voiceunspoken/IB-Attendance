@@ -52,7 +52,10 @@ export async function getLeaveBalance(employeeCode, year) {
   });
 
   const used = { cl: 0, sl: 0, el: 0, rl: 0, sh: 0 };
-  approved.forEach(r => { used[r.leaveType] = (used[r.leaveType] || 0) + r.days; });
+  approved.forEach(r => {
+    const paidDays = r.days - (r.unpaidDays || 0);
+    used[r.leaveType] = (used[r.leaveType] || 0) + Math.max(0, paidDays);
+  });
 
   const leaveTypes = ['cl', 'sl', 'el', 'rl', 'sh'];
   const dailyLeaveLogs = await prisma.dailyLog.findMany({
@@ -90,13 +93,13 @@ export async function getLeaveBalance(employeeCode, year) {
     slUsed: used.sl,
     elUsed: used.el,
     rlUsed: Math.max(used.rl, attendanceRL),
-    clAvail: clAccrued - used.cl,
-    slAvail: balance.slTotal - used.sl,
-    elAvail: elAccrued - used.el,
-    rlAvail: balance.rlTotal - Math.max(used.rl, attendanceRL),
+    clRemaining: clAccrued - used.cl,
+    slRemaining: balance.slTotal - used.sl,
+    elRemaining: elAccrued - used.el,
+    rlRemaining: balance.rlTotal - Math.max(used.rl, attendanceRL),
     shTotal: balance.shTotal,
     shUsed: used.sh,
-    shAvail: balance.shTotal - used.sh,
+    shRemaining: balance.shTotal - used.sh,
   };
 }
 
@@ -189,7 +192,71 @@ function daysBetween(from, to) {
   return Math.round((to - from) / (1000 * 60 * 60 * 24)) + 1;
 }
 
-export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, toDate, days, reason, prescriptionFile, shiftSlot }) {
+async function applyLeaveToDailyLogs(req) {
+  const from = new Date(req.fromDate);
+  const to = new Date(req.toDate);
+  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+    const monthYear = `${d.getMonth() + 1}_${d.getFullYear()}`;
+    const day = d.getDate();
+    const existing = await prisma.dailyLog.findUnique({
+      where: { userId_monthYear_day: { userId: req.userId, monthYear, day } }
+    });
+    if (existing && existing.type === 'absent') {
+      const isHalf = req.days === 0.5 || req.leaveType === 'sh';
+      const updateData = {};
+      if (isHalf) {
+        updateData.type = 'half';
+        updateData.hdReason = 'leave';
+        updateData.raw = req.leaveType.toUpperCase();
+        if (req.leaveType === 'sh' && req.shiftSlot) {
+          if (req.shiftSlot === '10-12') { updateData.inT = 600; updateData.outT = 720; }
+          else if (req.shiftSlot === '5-7') { updateData.inT = 1020; updateData.outT = 1140; }
+        }
+      } else if (req.leaveType === 'rl') {
+        updateData.type = 'rl';
+        updateData.raw = 'RL';
+      } else {
+        updateData.type = 'present';
+        updateData.raw = req.leaveType.toUpperCase();
+      }
+      await prisma.dailyLog.update({
+        where: { userId_monthYear_day: { userId: req.userId, monthYear, day } },
+        data: updateData
+      });
+      if (isHalf) {
+        await prisma.monthRecord.updateMany({
+          where: { userId: req.userId, monthYear },
+          data: { absent: { decrement: 1 }, halfDay: { increment: 1 } }
+        });
+      } else {
+        await prisma.monthRecord.updateMany({
+          where: { userId: req.userId, monthYear },
+          data: { absent: { decrement: 1 }, present: { increment: 1 } }
+        });
+      }
+    }
+  }
+}
+
+function countWeekends(from, to) {
+  let weekends = 0;
+  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+    const day = d.getDay();
+    if (day === 0 || day === 6) weekends++;
+  }
+  return weekends;
+}
+
+function countWeekdays(from, to) {
+  let weekdays = 0;
+  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+    const day = d.getDay();
+    if (day >= 1 && day <= 5) weekdays++;
+  }
+  return weekdays;
+}
+
+export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, toDate, days: clientDays, reason, prescriptionFile, shiftSlot, isHalfDay }) {
   const user = await prisma.user.findUnique({
     where: { code: employeeCode },
     include: { managers: { include: { manager: true }, orderBy: { priority: 'asc' } } }
@@ -198,11 +265,14 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
 
   const from = new Date(fromDate);
   const to = new Date(toDate);
-
   from.setHours(0, 0, 0, 0);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   if (from < today) return { error: 'Leave cannot be applied for a past date.' };
+
+  let computedDays = daysBetween(from, to);
+  if (isHalfDay) computedDays = 0.5;
+  if (leaveType === 'sh') computedDays = 0.5;
 
   if (leaveType === 'rl') {
     const monthStart = new Date(from.getFullYear(), from.getMonth(), 1);
@@ -218,18 +288,17 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
     if (existingRL) return { error: 'You can only take 1 Restricted Leave per month.' };
   }
 
-  if (leaveType === 'sl' && !prescriptionFile) {
-    return { error: 'Prescription is mandatory for Sick Leave. Please upload a prescription.' };
+  if (leaveType === 'sl' && computedDays > 1 && !prescriptionFile) {
+    return { error: 'Prescription is mandatory for Sick Leave longer than 1 day. Please upload a prescription.' };
   }
 
   if (leaveType === 'sh') {
     if (!shiftSlot) return { error: 'Please select a shift slot (10-12 or 5-7).' };
     if (!['10-12', '5-7'].includes(shiftSlot)) return { error: 'Invalid shift slot.' };
-    if (fromDate !== toDate) return { error: 'Short Leave can only be taken for a single day.' };
-    days = 0.5;
+    if (computedDays > 0.5) return { error: 'Short Leave can only be taken for a single day.' };
 
     const bal = await getLeaveBalance(employeeCode, from.getFullYear());
-    if (bal.shAvail <= 0) return { error: 'No Short Leave balance remaining for this year.' };
+    if (bal.shRemaining <= 0) return { error: 'No Short Leave balance remaining for this year.' };
 
     const window = Math.ceil(from.getMonth() / 2);
     const windowStart = (window - 1) * 2 + 1;
@@ -247,30 +316,46 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
     if (existingSH) return { error: 'You can only take 1 Short Leave per 2-month window. Your next window opens after ' + (windowEnd % 12 + 1) + '/' + from.getFullYear() + '.' };
   }
 
-  let computedDays = days;
   let sandwichCount = 0;
   let sandwichMessage = '';
-  const { sandwich, sandwichDays } = detectSandwich(from, to);
-  if (sandwich) {
-    const balance = await prisma.leaveBalance.findUnique({
-      where: { userId_year: { userId: user.id, year: from.getFullYear() } }
-    });
-    const usedSoFar = balance?.sandwichUsed ?? 0;
-    const totalDays = Math.max(sandwichDays, daysBetween(from, to));
-    if (usedSoFar === 0) {
-      computedDays = 2;
-      sandwichCount = 1;
-      sandwichMessage = 'This is your 1st sandwich leave — only 2 days (Fri + Mon) will be deducted.';
-    } else {
-      computedDays = totalDays >= 4 ? totalDays : 4;
-      sandwichCount = usedSoFar + 1;
-      sandwichMessage = `This is your ${sandwichCount} sandwich leave — all ${Math.round(computedDays)} days will be deducted.`;
+  let sandwichDaysCount = computedDays;
+  if (!isHalfDay && leaveType !== 'sh' && computedDays >= 1) {
+    const { sandwich, sandwichDays } = detectSandwich(from, to);
+    if (sandwich) {
+      const balance = await prisma.leaveBalance.findUnique({
+        where: { userId_year: { userId: user.id, year: from.getFullYear() } }
+      });
+      const usedSoFar = balance?.sandwichUsed ?? 0;
+      const totalDays = Math.max(sandwichDays, computedDays);
+      if (usedSoFar === 0) {
+        sandwichDaysCount = 2;
+        sandwichCount = 1;
+        sandwichMessage = 'This is your 1st sandwich leave — only 2 days (Fri + Mon) will be deducted.';
+      } else {
+        sandwichDaysCount = totalDays >= 4 ? totalDays : 4;
+        sandwichCount = usedSoFar + 1;
+        sandwichMessage = `This is your ${sandwichCount} sandwich leave — all ${Math.round(sandwichDaysCount)} days will be deducted.`;
+      }
     }
   }
 
+  let unpaidDays = 0;
+  let paidDays = computedDays;
+  if (leaveType !== 'ul' && leaveType !== 'sh' && computedDays >= 1) {
+    const bal = await getLeaveBalance(employeeCode, from.getFullYear());
+    const remaining = bal[`${leaveType}Remaining`] ?? 0;
+    if (remaining <= 0) {
+      return { error: `You have no ${leaveType.toUpperCase()} balance remaining. Please select Unpaid Leave (UL) instead.` };
+    }
+    if (computedDays > remaining) {
+      unpaidDays = computedDays - remaining;
+      paidDays = remaining;
+    }
+  }
+  const finalDays = sandwichCount > 0 ? sandwichDaysCount : paidDays;
+
   const config = await prisma.superAdminConfig.findFirst();
   const requireSuper = config?.requireSuperApproval ?? true;
-
   const managers = user.managers;
   let approvalStage = 'pending_mgr';
   let currentApproverId = null;
@@ -289,9 +374,10 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
       leaveType,
       fromDate: from,
       toDate: to,
-      days: computedDays,
+      days: finalDays,
+      unpaidDays,
       reason,
-      prescriptionFile: prescriptionFile || null,
+      prescriptionFile: leaveType === 'sl' ? (prescriptionFile || null) : null,
       shiftSlot: shiftSlot || null,
       approvalStage,
       currentApproverId,
@@ -301,7 +387,7 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
   });
 
   await logAction(employeeCode, 'leave_submitted', 'leave_request', req.id,
-    `Submitted ${leaveType.toUpperCase()} leave (${computedDays}d)`);
+    `Submitted ${leaveType.toUpperCase()} leave (${finalDays}d${unpaidDays ? ', ' + unpaidDays + ' unpaid' : ''})`);
 
   if (currentApproverId) {
     const approver = managers.find(m => m.managerUserId === currentApproverId);
@@ -309,11 +395,11 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
       `Leave request from ${user.name} awaiting your approval`);
     await createNotification(currentApproverId, 'leave_pending',
       `Leave Request — ${user.name}`,
-      `${user.name} submitted ${leaveType.toUpperCase()} leave for ${computedDays} day(s). Reason: ${reason || 'N/A'}`,
-      { employeeCode, leaveType, fromDate, toDate, days: computedDays, reason }
+      `${user.name} submitted ${leaveType.toUpperCase()} leave for ${finalDays} day(s)${unpaidDays ? ` (${unpaidDays} unpaid)` : ''}. Reason: ${reason || 'N/A'}`,
+      { employeeCode, leaveType, fromDate, toDate, days: finalDays, unpaidDays, reason }
     );
     if (approver?.manager?.code) {
-      await sendLeavePendingNotification(approver.manager.code, approver.manager.name, user.name, leaveType, fromDate, toDate, computedDays, reason);
+      await sendLeavePendingNotification(approver.manager.code, approver.manager.name, user.name, leaveType, fromDate, toDate, finalDays, reason);
     }
   }
 
@@ -326,11 +412,11 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
   const adminIds = await getAdminUserIds();
   await Promise.all(adminIds.map(id => createNotification(id, 'leave_submitted',
     `New Leave Request`,
-    `${user.name} submitted ${leaveType.toUpperCase()} leave for ${computedDays} day(s). Status: ${stageLabel}.`,
-    { employeeCode, leaveType, fromDate, toDate, days: computedDays, reason, status: approvalStage }
+    `${user.name} submitted ${leaveType.toUpperCase()} leave for ${finalDays} day(s)${unpaidDays ? ` (${unpaidDays} unpaid)` : ''}. Status: ${stageLabel}.`,
+    { employeeCode, leaveType, fromDate, toDate, days: finalDays, unpaidDays, reason, status: approvalStage }
   )));
   
-  return { request: req, sandwichMessage };
+  return { request: req, sandwichMessage, unpaidDays };
 }
 
 async function attachApproverName(requests) {
@@ -416,22 +502,7 @@ export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = 
       await prisma.leaveBalance.updateMany({ where: { userId: req.userId, year: req.fromDate.getFullYear() }, data: { sandwichUsed: { increment: 1 } } });
     }
     if (newStatus === 'approved') {
-      const from = new Date(req.fromDate);
-      const to = new Date(req.toDate);
-      for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-        const monthYear = `${d.getMonth() + 1}_${d.getFullYear()}`;
-        const day = d.getDate();
-        const existing = await prisma.dailyLog.findUnique({ where: { userId_monthYear_day: { userId: req.userId, monthYear, day } } });
-        if (existing && existing.type === 'absent') {
-          const updateData = { type: req.leaveType === 'rl' ? 'rl' : 'present', raw: req.leaveType.toUpperCase() };
-          if (req.leaveType === 'sh' && req.shiftSlot) {
-            if (req.shiftSlot === '10-12') { updateData.inT = 600; updateData.outT = 720; }
-            else if (req.shiftSlot === '5-7') { updateData.inT = 1020; updateData.outT = 1140; }
-          }
-          await prisma.dailyLog.update({ where: { userId_monthYear_day: { userId: req.userId, monthYear, day } }, data: updateData });
-          await prisma.monthRecord.updateMany({ where: { userId: req.userId, monthYear }, data: { absent: { decrement: 1 }, present: { increment: 1 } } });
-        }
-      }
+      await applyLeaveToDailyLogs(req);
     }
     await logAction(reviewedBy, newStatus === 'approved' ? 'leave_approved' : 'leave_rejected', 'leave_request', req.id, `${newStatus === 'approved' ? 'Approved' : 'Rejected'} ${req.leaveType.toUpperCase()} leave (super admin direct)`);
     const leaveTypeLabel = req.leaveType.toUpperCase();
@@ -504,35 +575,7 @@ export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = 
   }
 
   if (newStatus === 'approved') {
-    const from = new Date(req.fromDate);
-    const to = new Date(req.toDate);
-    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-      const monthYear = `${d.getMonth() + 1}_${d.getFullYear()}`;
-      const day = d.getDate();
-      const existing = await prisma.dailyLog.findUnique({
-        where: { userId_monthYear_day: { userId: req.userId, monthYear, day } }
-      });
-      if (existing && existing.type === 'absent') {
-        const updateData = { type: req.leaveType === 'rl' ? 'rl' : 'present', raw: req.leaveType.toUpperCase() };
-        if (req.leaveType === 'sh' && req.shiftSlot) {
-          if (req.shiftSlot === '10-12') {
-            updateData.inT = 600;
-            updateData.outT = 720;
-          } else if (req.shiftSlot === '5-7') {
-            updateData.inT = 1020;
-            updateData.outT = 1140;
-          }
-        }
-        await prisma.dailyLog.update({
-          where: { userId_monthYear_day: { userId: req.userId, monthYear, day } },
-          data: updateData
-        });
-        await prisma.monthRecord.updateMany({
-          where: { userId: req.userId, monthYear },
-          data: { absent: { decrement: 1 }, present: { increment: 1 } }
-        });
-      }
-    }
+    await applyLeaveToDailyLogs(req);
   }
 
   await logAction(reviewedBy, newStatus === 'approved' ? 'leave_approved' : 'leave_rejected', 'leave_request', req.id,

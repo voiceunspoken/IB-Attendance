@@ -138,7 +138,7 @@ export default function DashboardHome() {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
           </div>
           <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '-0.04em', margin: '0 0 4px' }}>
-            Welcome back{user?.name ? `, ${user.name.split(' ')[0].replace(/\b\w/g, c => c.toUpperCase())}` : ''}
+            Welcome back{user?.name ? `, ${user.name.replace(/\b\w/g, c => c.toUpperCase())}` : user?.username ? `, ${user.username.replace(/\b\w/g, c => c.toUpperCase())}` : ''}
           </h1>
           <p className="text-sm" style={{ opacity: 0.75, margin: 0 }}>
             {headerMonth ? `Attendance overview for ${formatMonth(headerMonth)}` : 'Attendance Portal'}
@@ -174,18 +174,16 @@ export default function DashboardHome() {
                 <div className="text-sm text-muted">Active Employees</div>
               </div>
             </div>
-            <div className="card flex items-center gap-16" style={{ padding: '20px 24px' }}>
+            <div className="card flex items-center gap-16" style={{ padding: '20px 24px', cursor: 'pointer', transition: 'all 0.15s' }}
+              onClick={() => router.push('/leaves')}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = 'var(--shadow-md)'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}>
               <div className="grid-center" style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'linear-gradient(135deg, #ff3b30, #ff6b6b)', color: '#fff', flexShrink: 0 }}>
                 <FiAlertTriangle size={22} />
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: '24px', fontWeight: 700, lineHeight: 1.2 }}>
                   {totalPending}
-                  {totalPending > 0 && (
-                    <span className="badge" style={{ background: 'rgba(255,59,48,0.1)', color: '#ff3b30', marginLeft: '8px', verticalAlign: 'middle' }}>
-                      Needs review
-                    </span>
-                  )}
                 </div>
                 <div className="text-sm text-muted">Pending Approvals</div>
               </div>

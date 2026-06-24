@@ -95,19 +95,19 @@ export default function LeavesPage() {
         'Employee Name': name,
         'CL Total': balance?.clTotal ?? 0,
         'CL Used (Period)': rangeUsed.cl,
-        'CL Remaining': balance?.clAvail ?? 0,
+        'CL Remaining': balance?.clRemaining ?? 0,
         'SL Total': balance?.slTotal ?? 0,
         'SL Used (Period)': rangeUsed.sl,
-        'SL Remaining': balance?.slAvail ?? 0,
+        'SL Remaining': balance?.slRemaining ?? 0,
         'EL Total': balance?.elTotal ?? 0,
         'EL Used (Period)': rangeUsed.el,
-        'EL Remaining': balance?.elAvail ?? 0,
+        'EL Remaining': balance?.elRemaining ?? 0,
         'RL Total': balance?.rlTotal ?? 0,
         'RL Used (Period)': rangeUsed.rl,
-        'RL Remaining': balance?.rlAvail ?? 0,
+        'RL Remaining': balance?.rlRemaining ?? 0,
         'SH Total': balance?.shTotal ?? 0,
         'SH Used (Period)': rangeUsed.sh,
-        'SH Remaining': balance?.shAvail ?? 0,
+        'SH Remaining': balance?.shRemaining ?? 0,
         'Leave Details': leaveDetail,
       }));
 
@@ -338,15 +338,14 @@ export default function LeavesPage() {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', background: 'var(--surface3)', borderRadius: '10px', padding: '3px', marginBottom: '24px', width: 'fit-content', flexWrap: 'wrap' }}>
         {(role === 'admin' ? [
-          { key: 'overview', label: `Overview` },
-          { key: 'manager_approval', label: `My Approvals${managerLeaves.length > 0 ? ` (${managerLeaves.length})` : ''}` },
+          { key: 'overview', label: `Pending Approvals` },
           { key: 'regularize', label: `Regularizations${regularizations.length > 0 ? ` (${regularizations.length})` : ''}` },
           { key: 'wfh', label: `Work Mode${managerWfhRequests.length > 0 ? ` (${managerWfhRequests.length})` : ''}` },
           { key: 'history', label: 'History' },
           { key: 'balances', label: 'Leave Balances' },
           { key: 'policy', label: 'Policy' },
         ] : isSuperAdmin ? [
-          { key: 'overview', label: `Overview` },
+          { key: 'overview', label: `Pending Approvals` },
           { key: 'regularize', label: `Regularizations${superRegularizations.length > 0 ? ` (${superRegularizations.length})` : ''}` },
           { key: 'wfh', label: `Work Mode${superWfhRequests.length > 0 ? ` (${superWfhRequests.length})` : ''}` },
           { key: 'history', label: 'History' },
@@ -430,7 +429,7 @@ export default function LeavesPage() {
           {isSuperAdmin && leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length > 0 && (
             <div className="card overflow-hidden p-0">
               <div className="card-header">
-                Super Admin Queue
+                Leave Approvals
                 <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400, marginLeft: '8px' }}>
                   ({leaveRequests.filter(r => r.approvalStage === 'pending_super' && r.status === 'pending').length})
                 </span>
@@ -542,7 +541,7 @@ export default function LeavesPage() {
             <div className="card overflow-hidden p-0">
               <div className="card-header" style={{ cursor: 'pointer', userSelect: 'none' }}
                 onClick={() => setCollapsed(c => ({ ...c, adjustments: !c.adjustments }))}>
-                <span>Pending Approvals</span>
+                <span>Adjustments & Deductions</span>
                 <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400, display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span style={{ background: 'var(--surface3)', padding: '1px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, color: 'var(--text3)' }}>
                     {pendingChanges.length}
@@ -949,7 +948,7 @@ export default function LeavesPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
                 <tr>
-                  {['Employee', 'CL Avail', 'SL Avail', 'EL Avail', 'RL Avail', 'SH Avail', 'CL Used', 'SL Used', 'EL Used', 'RL Used', 'SH Used', 'Actions'].map(h => (
+                  {['Employee', 'CL Remaining', 'SL Remaining', 'EL Remaining', 'RL Remaining', 'SH Remaining', 'CL Used', 'SL Used', 'EL Used', 'RL Used', 'SH Used', 'Actions'].map(h => (
                     <th key={h} style={{ background: 'var(--surface2)', padding: '10px 14px', textAlign: 'left', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text2)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
@@ -962,8 +961,8 @@ export default function LeavesPage() {
                     <tr key={code} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td style={{ padding: '11px 14px', fontWeight: 500 }}>{name} <span style={{ color: 'var(--text3)', fontSize: '11px' }}>#{code}</span></td>
                       {['cl', 'sl', 'el', 'rl', 'sh'].map(t => (
-                        <td key={t} style={{ padding: '11px 14px', color: (balance[`${t}Avail`] ?? 0) <= 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>
-                          {balance[`${t}Avail`] ?? 0}
+                        <td key={t} style={{ padding: '11px 14px', color: (balance[`${t}Remaining`] ?? 0) <= 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>
+                          {balance[`${t}Remaining`] ?? 0}
                         </td>
                       ))}
                       {['cl', 'sl', 'el', 'rl', 'sh'].map(t => (

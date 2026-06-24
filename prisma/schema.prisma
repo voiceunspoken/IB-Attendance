@@ -212,6 +212,7 @@ model LeaveRequest {
   fromDate       DateTime
   toDate         DateTime
   days           Float    // 0.5 for half day, 1+ for full days
+  unpaidDays     Float    @default(0)
   reason         String
   status         String   @default("pending") // "pending" | "approved" | "rejected"
 
