@@ -124,7 +124,7 @@ export default function LeavesPage({ params }) {
     const paid = Math.min(totalDays, remaining);
     const unpaid = Math.max(0, totalDays - remaining);
     return { totalDays, weekends, weekdays, paid, unpaid, isHalfOrSH: false };
-  }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.leaveType, leaveForm.isHalfDay, totalDays, weekends, weekdays, leaveBalanceDetail]);
+  }, [leaveForm.fromDate, leaveForm.leaveType, leaveForm.isHalfDay, totalDays, weekends, weekdays, leaveBalanceDetail]);
 
   const availableLeaveTypes = useMemo(() => {
     const types = ['cl', 'sl'];

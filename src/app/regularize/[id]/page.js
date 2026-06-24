@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../components/AuthProvider';
 import { getRegularizationById, reviewRegularization } from '../../../actions/leave';
 import { useToast } from '../../../components/Toast';
-import { FiArrowLeft, FiCalendar, FiClock, FiAlertTriangle, FiCheck, FiX, FiUser } from 'react-icons/fi';
+import { FiArrowLeft, FiCalendar, FiClock, FiAlertTriangle, FiCheck, FiX } from 'react-icons/fi';
 
 export default function RegularizationDetailPage({ params }) {
   const unwrappedParams = use(params);
@@ -64,7 +64,6 @@ export default function RegularizationDetailPage({ params }) {
   if (!req) return null;
 
   const isPending = req.status === 'pending';
-  const isSuperPending = isPending && req.superStatus === 'pending';
   const canAdminReview = isAdmin && isPending && req.superStatus !== 'approved';
   const canSuperReview = isSuperAdmin && (req.superStatus === 'pending');
 

@@ -28,8 +28,8 @@ export function AuthProvider({ children }) {
     return () => clearTimeout(id);
   }, []);
 
-  const login = async (username, password) => {
-    const result = await loginUser(username, password);
+  const login = async (email, password) => {
+    const result = await loginUser(email, password);
     if (result.error) return { error: result.error };
 
     localStorage.setItem('ib_user', JSON.stringify(result.user));

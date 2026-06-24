@@ -6,7 +6,7 @@ import { useAuth } from '../../components/AuthProvider';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -25,7 +25,7 @@ export default function LoginPage() {
     e.preventDefault();
     setSubmitting(true);
     setError('');
-    const result = await login(username.trim(), password);
+    const result = await login(email.trim(), password);
     if (result?.error) {
       setError(result.error);
       setSubmitting(false);
@@ -49,16 +49,16 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
-            <label className="input-label" htmlFor="username">Username</label>
+            <label className="input-label" htmlFor="email">Email</label>
             <input
-              id="username"
-              type="text"
+              id="email"
+              type="email"
               className="input-field"
-              placeholder="Enter your username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Enter your email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               autoFocus
-              autoComplete="username"
+              autoComplete="email"
             />
           </div>
           <div>

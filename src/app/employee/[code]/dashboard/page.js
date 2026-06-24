@@ -8,7 +8,7 @@ import { getWfhRequests } from '../../../../actions/wfh';
 import { getLeaveRequests, getRegularizations } from '../../../../actions/leave';
 import { useEmployeeData } from '../context';
 import ClockWidget from '../../../../components/ClockWidget';
-import { FiUsers, FiCalendar, FiFileText, FiHome, FiTool, FiArrowRight } from 'react-icons/fi';
+import { FiCalendar, FiFileText, FiHome, FiTool, FiArrowRight } from 'react-icons/fi';
 
 export default function EmployeeDashboard({ params }) {
   const unwrappedParams = use(params);

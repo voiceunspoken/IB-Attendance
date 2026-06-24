@@ -5,10 +5,11 @@ import bcrypt from 'bcryptjs';
 import { logAction } from './audit';
 import { requireAdminOrSuperAdmin, requireSuperAdmin } from '../lib/auth-guard';
 
-export async function loginUser(username, password) {
+export async function loginUser(email, password) {
   try {
-    const user = await prisma.user.findUnique({ where: { username } });
-    if (!user) return { error: 'Invalid username or password.' };
+    if (!email) return { error: 'Invalid email or password.' };
+    const user = await prisma.user.findFirst({ where: { email: email.toLowerCase().trim() } });
+    if (!user) return { error: 'Invalid email or password.' };
 
     if (user.disabled) return { error: 'Your account has been disabled. Contact your admin.' };
 
@@ -16,7 +17,7 @@ export async function loginUser(username, password) {
       ? await bcrypt.compare(password, user.password)
       : user.password === password;
 
-    if (!valid) return { error: 'Invalid username or password.' };
+    if (!valid) return { error: 'Invalid email or password.' };
     return { user: { id: user.id, username: user.username, role: user.role, code: user.code ?? null, email: user.email ?? null } };
   } catch (e) {
     console.error('[loginUser error]', e.message);
@@ -127,7 +128,14 @@ export async function ensureAdminExists() {
     const count = await prisma.user.count({ where: { role: 'super_admin' } });
     if (count === 0) {
       const hashed = await bcrypt.hash('admin123', 10);
-      await prisma.user.create({ data: { username: 'superadmin', password: hashed, role: 'super_admin' } });
+      await prisma.user.create({
+        data: { username: 'superadmin', password: hashed, role: 'super_admin', email: 'superadmin@interactivebees.com', name: 'Super Admin' }
+      });
+    } else {
+      const superAdmins = await prisma.user.findMany({ where: { role: 'super_admin', email: null } });
+      for (const sa of superAdmins) {
+        await prisma.user.update({ where: { id: sa.id }, data: { email: 'superadmin@interactivebees.com', name: sa.name || 'Super Admin' } });
+      }
     }
   } catch (e) {
     console.error('[ensureAdminExists error]', e.message);

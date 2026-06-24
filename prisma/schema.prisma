@@ -12,7 +12,7 @@ model User {
   id              String     @id @default(cuid())
   username        String     @unique
   password        String
-  email           String?
+  email           String?    @unique
   role            String     @default("employee") // "super_admin" | "admin" | "employee"
   disabled        Boolean    @default(false)
   code            String?    @unique

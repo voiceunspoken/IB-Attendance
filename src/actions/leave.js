@@ -238,25 +238,7 @@ async function applyLeaveToDailyLogs(req) {
   }
 }
 
-function countWeekends(from, to) {
-  let weekends = 0;
-  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-    const day = d.getDay();
-    if (day === 0 || day === 6) weekends++;
-  }
-  return weekends;
-}
-
-function countWeekdays(from, to) {
-  let weekdays = 0;
-  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-    const day = d.getDay();
-    if (day >= 1 && day <= 5) weekdays++;
-  }
-  return weekdays;
-}
-
-export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, toDate, days: clientDays, reason, prescriptionFile, shiftSlot, isHalfDay }) {
+export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, toDate, reason, prescriptionFile, shiftSlot, isHalfDay }) {
   const user = await prisma.user.findUnique({
     where: { code: employeeCode },
     include: { managers: { include: { manager: true }, orderBy: { priority: 'asc' } } }
