@@ -175,17 +175,13 @@ export async function adminUpdateLeaveBalance(employeeCode, year, fields, perfor
   return { success: true };
 }
 
-function detectSandwich(from, to) {
-  let sandwich = false;
-  let sandwichDays = 0;
-  const startDow = from.getDay();
-  const endDow = to.getDay();
-  if (startDow === 5 && (endDow === 1 || endDow === 0 || endDow === 6)) {
-    sandwich = true;
-    const diffDays = Math.round((to - from) / (1000 * 60 * 60 * 24)) + 1;
-    sandwichDays = diffDays >= 4 ? diffDays : 4;
+function countWeekends(from, to) {
+  let c = 0;
+  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+    const day = d.getDay();
+    if (day === 0 || day === 6) c++;
   }
-  return { sandwich, sandwichDays };
+  return c;
 }
 
 function daysBetween(from, to) {
@@ -301,28 +297,24 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
   let sandwichCount = 0;
   let sandwichMessage = '';
   let sandwichDaysCount = computedDays;
-  if (!isHalfDay && leaveType !== 'sh' && computedDays >= 1) {
-    const { sandwich, sandwichDays } = detectSandwich(from, to);
-    if (sandwich) {
-      const balance = await prisma.leaveBalance.findUnique({
-        where: { userId_year: { userId: user.id, year: from.getFullYear() } }
-      });
-      const usedSoFar = balance?.sandwichUsed ?? 0;
-      const totalDays = Math.max(sandwichDays, computedDays);
-      if (usedSoFar === 0) {
-        sandwichDaysCount = 2;
-        sandwichCount = 1;
-        sandwichMessage = 'This is your 1st sandwich leave — only 2 days (Fri + Mon) will be deducted.';
-      } else {
-        sandwichDaysCount = totalDays >= 4 ? totalDays : 4;
-        sandwichCount = usedSoFar + 1;
-        sandwichMessage = `This is your ${sandwichCount} sandwich leave — all ${Math.round(sandwichDaysCount)} days will be deducted.`;
-      }
+  const weekendDays = countWeekends(from, to);
+  if (!isHalfDay && (leaveType === 'cl' || leaveType === 'el') && computedDays >= 1 && weekendDays > 0) {
+    const balance = await prisma.leaveBalance.findUnique({
+      where: { userId_year: { userId: user.id, year: from.getFullYear() } }
+    });
+    const usedSoFar = balance?.sandwichUsed ?? 0;
+    sandwichCount = usedSoFar + 1;
+    if (usedSoFar === 0) {
+      const freeDays = Math.min(weekendDays, 2);
+      sandwichDaysCount = computedDays - freeDays;
+      sandwichMessage = `1st leave spanning weekends — ${freeDays} day${freeDays !== 1 ? 's' : ''} excluded.`;
+    } else {
+      sandwichDaysCount = computedDays;
+      sandwichMessage = `${usedSoFar + 1} leave spanning weekends — all ${Math.round(sandwichDaysCount)} days counted.`;
     }
   }
 
   let unpaidDays = 0;
-  let paidDays = computedDays;
   if (leaveType !== 'ul' && leaveType !== 'sh' && computedDays >= 0.5) {
     const bal = await getLeaveBalance(employeeCode, from.getFullYear());
     const remaining = bal[`${leaveType}Remaining`] ?? 0;
@@ -331,10 +323,16 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
     }
     if (computedDays > remaining) {
       unpaidDays = computedDays - remaining;
-      paidDays = remaining;
     }
   }
-  const finalDays = sandwichCount > 0 ? sandwichDaysCount : paidDays;
+  const finalDays = sandwichCount > 0 ? sandwichDaysCount : computedDays;
+
+  // Recalculate paid/unpaid against the actual final days after sandwich reduction
+  if (sandwichCount > 0 && leaveType !== 'ul') {
+    const bal = await getLeaveBalance(employeeCode, from.getFullYear());
+    const remaining = bal[`${leaveType}Remaining`] ?? 0;
+    unpaidDays = finalDays > remaining ? finalDays - remaining : 0;
+  }
 
   const config = await prisma.superAdminConfig.findFirst();
   const requireSuper = config?.requireSuperApproval ?? true;

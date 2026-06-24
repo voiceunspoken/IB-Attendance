@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '../../../../components/AuthProvider';
 import { getLeaveRequests, submitLeaveRequest } from '../../../../actions/leave';
 import { FiSun, FiAlertTriangle } from 'react-icons/fi';
@@ -87,44 +88,76 @@ export default function LeavesPage({ params }) {
     return countWeekdays(from, to);
   }, [leaveForm.fromDate, leaveForm.toDate]);
 
+  function weekendCount(from, to) {
+    let c = 0;
+    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+      const day = d.getDay();
+      if (day === 0 || day === 6) c++;
+    }
+    return c;
+  }
+
   const sandwichWarning = useMemo(() => {
     if (!leaveForm.fromDate || leaveForm.isHalfDay || leaveForm.leaveType === 'sh' || leaveForm.leaveType === 'rl') return '';
     const from = new Date(leaveForm.fromDate);
     const to = leaveForm.toDate ? new Date(leaveForm.toDate) : from;
     if (from > to) return '';
-    const fromDay = from.getDay();
-    const toDay = to.getDay();
-    const isSandwich = (fromDay <= 5 && toDay >= 1 && toDay <= 2) && (to.getTime() - from.getTime()) > 86400000 * 2;
-    if (isSandwich && (leaveForm.leaveType === 'cl' || leaveForm.leaveType === 'el')) {
-      return 'This period spans a weekend (Fri–Mon). If approved, weekend days may be counted as sandwich leave.';
-    }
-    return '';
-  }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.leaveType, leaveForm.isHalfDay]);
+    const wk = weekendCount(from, to);
+    if (wk === 0 || (leaveForm.leaveType !== 'cl' && leaveForm.leaveType !== 'el')) return '';
+    const usedSoFar = leaveBalanceDetail?.sandwichUsed ?? 0;
+    if (usedSoFar > 0) return '';
+    return `First leave spanning weekends — 2 weekend days free. Remaining weekends (if any) will be counted as sandwich leave.`;
+  }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.leaveType, leaveForm.isHalfDay, leaveBalanceDetail]);
+
+  const sandwichInfo = useMemo(() => {
+    if (!leaveForm.fromDate || leaveForm.isHalfDay || leaveForm.leaveType === 'sh' || leaveForm.leaveType === 'rl' || leaveForm.leaveType === 'ul') return null;
+    const from = new Date(leaveForm.fromDate);
+    const to = leaveForm.toDate ? new Date(leaveForm.toDate) : from;
+    if (from > to) return null;
+    const wk = weekendCount(from, to);
+    if (wk === 0) return null;
+    const usedSoFar = leaveBalanceDetail?.sandwichUsed ?? 0;
+    const isFirst = usedSoFar === 0;
+    const freeDays = Math.min(wk, 2);
+    const deducted = computedDays - (isFirst ? freeDays : 0);
+    return {
+      count: usedSoFar + 1,
+      deductedDays: deducted,
+      weekendFree: isFirst,
+      label: isFirst
+        ? `1st leave spanning weekends — ${freeDays} weekend day${freeDays !== 1 ? 's' : ''} excluded`
+        : `${usedSoFar + 1} leave spanning weekends — all ${Math.round(computedDays)} days counted`
+    };
+  }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.leaveType, leaveForm.isHalfDay, computedDays, leaveBalanceDetail]);
 
   const leavePreview = useMemo(() => {
     if (!leaveForm.fromDate || totalDays <= 0) return null;
     const type = leaveForm.leaveType;
     if (type === 'rl') {
-      return { totalDays: 1, weekends: 0, weekdays: 1, paid: 1, unpaid: 0, isHalfOrSH: false, isRL: true };
+      return { totalDays: 1, weekends: 0, weekdays: 1, paid: 1, unpaid: 0, isHalfOrSH: false, isRL: true, sandwich: null };
     }
     const isHalfOrSH = leaveForm.isHalfDay || type === 'sh';
     if (isHalfOrSH) {
       const remaining = type !== 'ul' && type !== 'sh' && leaveBalanceDetail ? (leaveBalanceDetail[`${type}Remaining`] ?? 0) : null;
       const paid = type === 'sh' ? 0.5 : (type === 'ul' ? 0 : Math.min(0.5, remaining ?? 0));
       const unpaid = type === 'ul' ? 0.5 : (type === 'sh' ? 0 : Math.max(0, 0.5 - (remaining ?? 0)));
-      return { totalDays: 0.5, weekends: 0, weekdays: 0, paid, unpaid, isHalfOrSH };
+      return { totalDays: 0.5, weekends: 0, weekdays: 0, paid, unpaid, isHalfOrSH, sandwich: null };
     }
+    // Use sandwich-reduced days if applicable
+    const displayDays = sandwichInfo ? sandwichInfo.deductedDays : totalDays;
+    const displayWeekends = sandwichInfo ? 0 : weekends;
+    const displayWeekdays = sandwichInfo ? displayDays : weekdays;
     if (type === 'ul') {
-      return { totalDays, weekends, weekdays, paid: 0, unpaid: totalDays, isHalfOrSH: false };
+      return { totalDays: displayDays, weekends: displayWeekends, weekdays: displayWeekdays, paid: 0, unpaid: displayDays, isHalfOrSH: false, sandwich: sandwichInfo };
     }
     const remaining = leaveBalanceDetail ? (leaveBalanceDetail[`${type}Remaining`] ?? 0) : 0;
     if (remaining <= 0) {
-      return { totalDays, weekends, weekdays, paid: 0, unpaid: totalDays, isHalfOrSH: false, noBalance: true };
+      return { totalDays: displayDays, weekends: displayWeekends, weekdays: displayWeekdays, paid: 0, unpaid: displayDays, isHalfOrSH: false, noBalance: true, sandwich: sandwichInfo };
     }
-    const paid = Math.min(totalDays, remaining);
-    const unpaid = Math.max(0, totalDays - remaining);
-    return { totalDays, weekends, weekdays, paid, unpaid, isHalfOrSH: false };
-  }, [leaveForm.fromDate, leaveForm.leaveType, leaveForm.isHalfDay, totalDays, weekends, weekdays, leaveBalanceDetail]);
+    const paid = Math.min(displayDays, remaining);
+    const unpaid = Math.max(0, displayDays - remaining);
+    return { totalDays: displayDays, weekends: displayWeekends, weekdays: displayWeekdays, paid, unpaid, isHalfOrSH: false, sandwich: sandwichInfo };
+  }, [leaveForm.fromDate, leaveForm.leaveType, leaveForm.isHalfDay, totalDays, weekends, weekdays, leaveBalanceDetail, sandwichInfo]);
 
   const availableLeaveTypes = useMemo(() => {
     const types = ['cl', 'sl'];
@@ -366,9 +399,7 @@ export default function LeavesPage({ params }) {
             <div style={{ fontSize: '13px', background: 'var(--surface2)', borderRadius: '10px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ color: 'var(--text2)' }}>Days:</span>
               <strong style={{ fontSize: '16px' }}>{computedDays}</strong>
-              {computedDays !== 0.5 && computedDays === totalDays && totalDays > 1 && (
-                <span style={{ fontSize: '11px', color: 'var(--text3)' }}>({weekends} weekend{weekends !== 1 ? 's' : ''} · {weekdays} working day{weekdays !== 1 ? 's' : ''})</span>
-              )}
+              {sandwichInfo && <span style={{ fontSize: '11px', color: 'var(--blue)' }}>({sandwichInfo.deductedDays} counted)</span>}
               {computedDays === 0.5 && <span style={{ fontSize: '11px', color: 'var(--text3)' }}>Half day</span>}
             </div>
           )}
@@ -384,12 +415,8 @@ export default function LeavesPage({ params }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
                 <div>Total days: <strong>{leavePreview.totalDays}</strong></div>
                 {!leavePreview.isHalfOrSH && (
-                  <>
-                    <div>Weekends: <strong>{leavePreview.weekends}</strong></div>
-                    <div>Working days: <strong>{leavePreview.weekdays}</strong></div>
-                  </>
+                  <div>Leave type: <strong style={{ color: LEAVE_COLORS[leaveForm.leaveType] }}>{LEAVE_LABELS[leaveForm.leaveType]} ({leaveForm.leaveType.toUpperCase()})</strong></div>
                 )}
-                <div>Leave type: <strong style={{ color: LEAVE_COLORS[leaveForm.leaveType] }}>{LEAVE_LABELS[leaveForm.leaveType]} ({leaveForm.leaveType.toUpperCase()})</strong></div>
                 {leaveForm.leaveType !== 'ul' && leaveForm.leaveType !== 'sh' && !leavePreview.isHalfOrSH && (
                   <>
                     <div style={{ color: 'var(--green)' }}>Paid: <strong>{leavePreview.paid}d</strong></div>
@@ -457,36 +484,57 @@ export default function LeavesPage({ params }) {
         <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontSize: '14px', fontWeight: 700 }}>
           My Requests ({leaveRequests.length})
         </div>
+        {leaveRequests.length > 0 && (() => {
+          const year = new Date().getFullYear();
+          const yr = leaveRequests.filter(r => new Date(r.createdAt).getFullYear() === year);
+          const approved = yr.filter(r => r.status === 'approved');
+          const pending = yr.filter(r => r.status === 'pending');
+          const rejected = yr.filter(r => r.status === 'rejected');
+          const totalDays = approved.reduce((s, r) => s + (r.days || 0), 0);
+          return (
+            <div style={{ display: 'flex', gap: '12px', padding: '12px 16px', borderBottom: '1px solid var(--border)', fontSize: '12px' }}>
+              <span style={{ color: 'var(--text2)' }}>{year}</span>
+              <span style={{ color: '#34c759' }}>{approved.length} approved</span>
+              <span style={{ color: '#ff9f0a' }}>{pending.length} pending</span>
+              <span style={{ color: '#ff3b30' }}>{rejected.length} rejected</span>
+              <span style={{ color: 'var(--text2)' }}>{totalDays} days</span>
+            </div>
+          );
+        })()}
         <div style={{ maxHeight: '480px', overflowY: 'auto' }}>
           {leaveRequests.length === 0
             ? <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text3)', fontSize: '13px' }}>No requests yet.</div>
             : leaveRequests.map(r => (
-              <div key={r.id} style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{r.leaveType.toUpperCase()}</span>
-                    <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
-                    {r.unpaidDays > 0 && <span style={{ fontSize: '11px', color: 'var(--orange)', background: 'rgba(255,159,10,0.1)', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.unpaidDays} unpaid</span>}
-                    {r.shiftSlot && <span style={{ fontSize: '11px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
+              <Link key={r.id} href={`/leaves/${r.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', cursor: 'pointer', transition: 'background 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
+                  onMouseLeave={e => e.currentTarget.style.background = ''}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{r.leaveType.toUpperCase()}</span>
+                      <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
+                      {r.unpaidDays > 0 && <span style={{ fontSize: '11px', color: 'var(--orange)', background: 'rgba(255,159,10,0.1)', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.unpaidDays} unpaid</span>}
+                      {r.shiftSlot && <span style={{ fontSize: '11px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      {r.approvalStage && r.status === 'pending' && <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} reviewerName={r.reviewerName} />}
+                      {(!r.approvalStage || r.status !== 'pending') && statusBadge(r.status)}
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                    {r.approvalStage && r.status === 'pending' && <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} reviewerName={r.reviewerName} />}
-                    {(!r.approvalStage || r.status !== 'pending') && statusBadge(r.status)}
+                  {r.sandwichCount > 0 && (
+                    <div style={{ fontSize: '11px', color: 'var(--orange)', marginBottom: '2px', fontWeight: 500 }}>
+                      <FiAlertTriangle size={11} style={{ marginRight: '2px', verticalAlign: 'middle' }} /> {r.sandwichCount === 1 ? '1st sandwich' : `${r.sandwichCount} sandwich`} leave
+                    </div>
+                  )}
+                  <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
+                    {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                    {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
                   </div>
+                  <div style={{ fontSize: '12px', color: 'var(--text2)', marginTop: '2px' }}>{r.reason}</div>
+                  {r.prescriptionFile && <div style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '2px' }}>Prescription attached</div>}
+                  {r.reviewNote && <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '4px', fontStyle: 'italic' }}>Note: {r.reviewNote}</div>}
                 </div>
-                {r.sandwichCount > 0 && (
-                  <div style={{ fontSize: '11px', color: 'var(--orange)', marginBottom: '2px', fontWeight: 500 }}>
-                    <FiAlertTriangle size={11} style={{ marginRight: '2px', verticalAlign: 'middle' }} /> {r.sandwichCount === 1 ? '1st sandwich' : `${r.sandwichCount} sandwich`} leave
-                  </div>
-                )}
-                <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
-                  {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                  {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
-                </div>
-                <div style={{ fontSize: '12px', color: 'var(--text2)', marginTop: '2px' }}>{r.reason}</div>
-                {r.prescriptionFile && <div style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '2px' }}>Prescription attached</div>}
-                {r.reviewNote && <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '4px', fontStyle: 'italic' }}>Note: {r.reviewNote}</div>}
-              </div>
+              </Link>
             ))
           }
         </div>
