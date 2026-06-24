@@ -630,26 +630,6 @@ export async function reviewRegularization(requestId, reviewedBy, approve, note 
   return { request: req };
 }
 
-async function applyRegularization(req) {
-  const date = new Date(req.date);
-  const monthYear = `${date.getMonth() + 1}_${date.getFullYear()}`;
-  const day = date.getDate();
-
-  const existing = await prisma.dailyLog.findUnique({
-    where: { userId_monthYear_day: { userId: req.userId, monthYear, day } }
-  });
-
-  if (existing && (existing.type === 'absent' || !existing.inT)) {
-    const inT = req.requestedIn ? parseTime(req.requestedIn) : existing.inT;
-    const outT = req.requestedOut ? parseTime(req.requestedOut) : existing.outT;
-    await prisma.dailyLog.update({
-      where: { userId_monthYear_day: { userId: req.userId, monthYear, day } },
-      data: { type: 'present', inT, outT }
-    });
-    await updateMonthRecordCounts(req.userId, monthYear);
-  }
-}
-
 export async function getPendingSuperRegularizations() {
   return prisma.regularizationRequest.findMany({
     where: { status: 'approved', superStatus: 'pending' },
@@ -785,23 +765,6 @@ export async function reviewLeaveDeduction(changeId, reviewedBy, approve) {
   }
 
   return { success: true };
-}
-
-async function updateMonthRecordCounts(userId, monthYear) {
-  const logs = await prisma.dailyLog.findMany({ where: { userId, monthYear } });
-  let present = 0, absent = 0, halfDay = 0, wfh = 0, maxDay = 0;
-  for (const log of logs) {
-    maxDay = Math.max(maxDay, log.day);
-    if (log.type === 'absent') absent++;
-    else if (log.type === 'half') halfDay++;
-    else if (log.type === 'wfh' || log.type === 'wos' || log.type === 'wfm' || log.type === 'wfo') wfh++;
-    else if (log.type === 'present') present++;
-  }
-  await prisma.monthRecord.upsert({
-    where: { userId_monthYear: { userId, monthYear } },
-    update: { present: present + wfh, absent, halfDay, numDays: maxDay },
-    create: { userId, monthYear, present: present + wfh, absent, halfDay, numDays: maxDay },
-  });
 }
 
 function parseTime(t) {

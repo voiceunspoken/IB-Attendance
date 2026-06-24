@@ -245,7 +245,7 @@ export default function NotificationsPage() {
                   </span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {group.items.map((n, i) => {
+                  {group.items.map(n => {
                     const color = TYPE_COLORS[n.type] || 'var(--text3)';
                     const actionable = isActionable(n.type);
                     const summary = getEmployeeSummary(n);
