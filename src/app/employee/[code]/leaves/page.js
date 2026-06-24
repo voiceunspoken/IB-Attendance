@@ -96,7 +96,7 @@ export default function LeavesPage({ params }) {
     return <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: '980px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.color }}>{s.label}</span>;
   };
 
-  const StageBadge = ({ stage, approverName }) => {
+  const StageBadge = ({ stage, approverName, reviewerName }) => {
     const map = {
       pending_mgr: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3' },
       pending_l2: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3' },
@@ -106,8 +106,11 @@ export default function LeavesPage({ params }) {
       rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' },
     };
     const s = map[stage] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)' };
-    const label = (stage === 'pending_mgr' || stage === 'pending_l2' || stage === 'pending_l1') && approverName
-      ? `With ${approverName}` : (map[stage]?.label || stage?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || stage);
+    let label;
+    if (stage === 'approved' && reviewerName) label = `Approved by ${reviewerName}`;
+    else if (stage === 'rejected' && reviewerName) label = `Rejected by ${reviewerName}`;
+    else if ((stage === 'pending_mgr' || stage === 'pending_l2' || stage === 'pending_l1') && approverName) label = `With ${approverName}`;
+    else label = map[stage]?.label || stage?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || stage;
     return <span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, background: s.bg, color: s.color }}>{label}</span>;
   };
 
@@ -282,8 +285,8 @@ export default function LeavesPage({ params }) {
                     {r.shiftSlot && <span style={{ fontSize: '11px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
                   </div>
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                    {r.approvalStage && r.status === 'pending' && <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} />}
-                    {statusBadge(r.status)}
+                    {r.approvalStage && r.status === 'pending' && <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} reviewerName={r.reviewerName} />}
+                    {(!r.approvalStage || r.status !== 'pending') && statusBadge(r.status)}
                   </div>
                 </div>
                 {r.sandwichCount > 0 && (

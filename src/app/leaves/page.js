@@ -294,7 +294,7 @@ export default function LeavesPage() {
   if (!isAdmin && !isSuperAdmin && managerLoading) return null;
   if (!isAdmin && !isSuperAdmin && !managerLoading && !user?.code) return null;
 
-  const StageBadge = ({ stage, approverName }) => {
+  const StageBadge = ({ stage, approverName, reviewerName }) => {
     const map = {
       pending_mgr: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3' },
       pending_l2: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3' },
@@ -304,8 +304,11 @@ export default function LeavesPage() {
       rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' },
     };
     const s = map[stage] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)' };
-    const label = (stage === 'pending_mgr' || stage === 'pending_l2' || stage === 'pending_l1') && approverName
-      ? `With ${approverName}` : (map[stage]?.label || stage?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || stage);
+    let label;
+    if (stage === 'approved' && reviewerName) label = `Approved by ${reviewerName}`;
+    else if (stage === 'rejected' && reviewerName) label = `Rejected by ${reviewerName}`;
+    else if ((stage === 'pending_mgr' || stage === 'pending_l2' || stage === 'pending_l1') && approverName) label = `With ${approverName}`;
+    else label = map[stage]?.label || stage?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || stage;
     return <span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, background: s.bg, color: s.color }}>{label}</span>;
   };
 
@@ -406,7 +409,7 @@ export default function LeavesPage() {
                                 <span style={{ fontSize: '11px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
                                 <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
                                 {r.shiftSlot && <span style={{ fontSize: '10px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 6px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
-                                <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} />
+                                <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} reviewerName={r.reviewerName} />
                               </div>
                               <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
                                 {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -445,7 +448,7 @@ export default function LeavesPage() {
                         <span style={{ fontSize: '11px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
                         <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
                         {r.shiftSlot && <span style={{ fontSize: '10px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 6px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
-                        <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} />
+                        <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} reviewerName={r.reviewerName} />
                       </div>
                       <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
                         {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -623,7 +626,7 @@ export default function LeavesPage() {
                         <span style={{ fontSize: '12px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
                         <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
                         {r.shiftSlot && <span style={{ fontSize: '11px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
-                        <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} />
+                        <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} reviewerName={r.reviewerName} />
                       </div>
                       {r.sandwichCount > 0 && (
                         <div style={{ fontSize: '11px', color: 'var(--orange)', marginBottom: '2px', fontWeight: 500 }}>
@@ -670,7 +673,7 @@ export default function LeavesPage() {
                           <span style={{ fontSize: '12px', fontWeight: 600, color: LEAVE_COLORS[r.leaveType] }}>{LEAVE_LABELS[r.leaveType]}</span>
                           <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
                           {r.shiftSlot && <span style={{ fontSize: '11px', background: 'rgba(255,107,107,0.1)', color: '#d94a4a', padding: '1px 7px', borderRadius: '980px', fontWeight: 500 }}>{r.shiftSlot}</span>}
-                          <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} />
+                          <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} reviewerName={r.reviewerName} />
                         </div>
                         {r.sandwichCount > 0 && (
                           <div style={{ fontSize: '11px', color: 'var(--orange)', marginBottom: '2px', fontWeight: 500 }}>
@@ -807,7 +810,7 @@ export default function LeavesPage() {
                         <span style={{ fontSize: '12px', color: 'var(--text2)' }}>
                           {new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </span>
-                        <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} />
+                        <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} reviewerName={r.reviewerName} />
                       </div>
                       <div style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.reason}</div>
                     </div>
@@ -844,7 +847,7 @@ export default function LeavesPage() {
                         <span style={{ fontSize: '12px', color: 'var(--text2)' }}>
                           {new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </span>
-                        <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} />
+                        <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} reviewerName={r.reviewerName} />
                       </div>
                       <div style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.reason}</div>
                     </div>
@@ -881,14 +884,14 @@ export default function LeavesPage() {
                         <span style={{ fontSize: '12px', color: 'var(--text2)' }}>
                           {new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </span>
-                        {r.approvalStage && r.status === 'pending' && <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} />}
+                        {r.approvalStage && r.status === 'pending' && <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} reviewerName={r.reviewerName} />}
                       </div>
                       <div style={{ fontSize: '12px', color: 'var(--text2)' }}>{r.reason}</div>
                       {r.reviewNote && (
                         <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '2px', fontStyle: 'italic' }}>Note: {r.reviewNote}</div>
                       )}
                     </div>
-                    <StatusBadge status={r.status} />
+                    {(!r.approvalStage || r.status !== 'pending') && <StatusBadge status={r.status} />}
                   </div>
                 </div>
               ))
@@ -1052,8 +1055,7 @@ export default function LeavesPage() {
                         {LEAVE_LABELS[r.leaveType]}
                       </span>
                       <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{r.days} day{r.days !== 1 ? 's' : ''}</span>
-                      <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} />
-                      <StatusBadge status={r.status} />
+                      <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} reviewerName={r.reviewerName} />
                     </div>
                     <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
                       {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -1062,8 +1064,9 @@ export default function LeavesPage() {
                       {r.reviewNote && <span style={{ color: 'var(--text3)', fontStyle: 'italic' }}> · Note: {r.reviewNote}</span>}
                     </div>
                   </div>
-                ))}
-              </div>
+                ))
+              }
+            </div>
             )}
           </div>
 
@@ -1149,7 +1152,7 @@ export default function LeavesPage() {
               <span style={{ fontSize: '13px', fontWeight: 600, color: LEAVE_COLORS[reviewModal.leaveType], padding: '2px 10px', borderRadius: '980px', background: `${LEAVE_COLORS[reviewModal.leaveType]}15` }}>
                 {LEAVE_LABELS[reviewModal.leaveType]}
               </span>
-              <StageBadge stage={reviewModal.approvalStage} approverName={reviewModal.currentApprover?.name} />
+              <StageBadge stage={reviewModal.approvalStage} approverName={reviewModal.currentApprover?.name} reviewerName={reviewModal.reviewerName} />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>

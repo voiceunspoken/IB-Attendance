@@ -318,12 +318,16 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
   }
 
   revalidatePath(`/employee/${employeeCode}`);
+
+  const stageLabel = approvalStage === 'pending_mgr' ? 'Pending Manager Approval'
+    : approvalStage === 'pending_super' ? 'Pending Super Admin Approval'
+    : approvalStage === 'approved' ? 'Approved' : approvalStage;
   
   const adminIds = await getAdminUserIds();
   await Promise.all(adminIds.map(id => createNotification(id, 'leave_submitted',
     `New Leave Request`,
-    `${user.name} submitted ${leaveType.toUpperCase()} leave for ${computedDays} day(s).`,
-    { employeeCode, leaveType, fromDate, toDate, days: computedDays, reason }
+    `${user.name} submitted ${leaveType.toUpperCase()} leave for ${computedDays} day(s). Status: ${stageLabel}.`,
+    { employeeCode, leaveType, fromDate, toDate, days: computedDays, reason, status: approvalStage }
   )));
   
   return { request: req, sandwichMessage };
@@ -331,10 +335,18 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
 
 async function attachApproverName(requests) {
   const ids = [...new Set(requests.map(r => r.currentApproverId).filter(Boolean))];
-  if (ids.length === 0) return requests.map(r => ({ ...r, currentApprover: null }));
-  const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
+  const reviewerUsernames = [...new Set(requests.map(r => r.reviewedBy).filter(Boolean))];
+  const [users, reviewerUsers] = await Promise.all([
+    ids.length ? prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }) : [],
+    reviewerUsernames.length ? prisma.user.findMany({ where: { username: { in: reviewerUsernames } }, select: { username: true, name: true } }) : [],
+  ]);
   const map = Object.fromEntries(users.map(u => [u.id, u]));
-  return requests.map(r => ({ ...r, currentApprover: r.currentApproverId ? map[r.currentApproverId] || null : null }));
+  const revMap = Object.fromEntries(reviewerUsers.map(u => [u.username, u.name]));
+  return requests.map(r => ({
+    ...r,
+    currentApprover: r.currentApproverId ? map[r.currentApproverId] || null : null,
+    reviewerName: r.reviewedBy ? revMap[r.reviewedBy] || null : null,
+  }));
 }
 
 export async function getLeaveRequests(employeeCode) {
@@ -425,6 +437,14 @@ export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = 
     const leaveTypeLabel = req.leaveType.toUpperCase();
     await createNotification(req.userId, newStatus === 'approved' ? 'leave_approved' : 'leave_rejected', `Leave ${newStatus === 'approved' ? 'Approved' : 'Rejected'}`, `Your ${leaveTypeLabel} request for ${req.days} day(s) has been ${newStatus}.${note ? ' Note: ' + note : ''}`, { requestId: req.id, leaveType: req.leaveType, days: req.days });
     if (newStatus === 'approved') await sendLeaveStatusNotification(req.user.code, req.user.name, req.leaveType, 'approved', note);
+
+    const adminIdsSA = await getAdminUserIds();
+    await Promise.all(adminIdsSA.map(id => createNotification(id, newStatus === 'approved' ? 'leave_approved' : 'leave_rejected',
+      `Leave ${newStatus === 'approved' ? 'Approved' : 'Rejected'}`,
+      `${req.user.name}'s ${leaveTypeLabel} request was ${newStatus} by ${reviewer?.name || reviewedBy}.${note ? ' Note: ' + note : ''}`,
+      { requestId: req.id, employeeCode: req.user.code, leaveType: req.leaveType, days: req.days, note }
+    )));
+
     revalidatePath('/');
     return { request: updated };
   }
@@ -520,18 +540,34 @@ export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = 
 
   const leaveTypeLabel = req.leaveType.toUpperCase();
 
+  const reviewerName = reviewer?.name || reviewedBy;
+
   if (newStatus === 'approved' && newStage === 'approved') {
     await createNotification(req.userId, 'leave_approved',
       `Leave Approved`,
       `Your ${leaveTypeLabel} request for ${req.days} day(s) has been fully approved.`,
       { requestId: req.id, leaveType: req.leaveType, days: req.days });
     await sendLeaveStatusNotification(req.user.code, req.user.name, req.leaveType, 'approved', note);
+
+    const adminIds = await getAdminUserIds();
+    await Promise.all(adminIds.map(id => createNotification(id, 'leave_approved',
+      `Leave Approved`,
+      `${req.user.name}'s ${leaveTypeLabel} request was approved by ${reviewerName}.`,
+      { requestId: req.id, employeeCode: req.user.code, leaveType: req.leaveType, days: req.days }
+    )));
   } else if (newStatus === 'rejected') {
     await createNotification(req.userId, 'leave_rejected',
       `Leave Rejected`,
       `Your ${leaveTypeLabel} request for ${req.days} day(s) has been rejected.${note ? ' Note: ' + note : ''}`,
       { requestId: req.id, leaveType: req.leaveType, days: req.days, note });
     await sendLeaveStatusNotification(req.user.code, req.user.name, req.leaveType, 'rejected', note);
+
+    const adminIds = await getAdminUserIds();
+    await Promise.all(adminIds.map(id => createNotification(id, 'leave_rejected',
+      `Leave Rejected`,
+      `${req.user.name}'s ${leaveTypeLabel} request was rejected by ${reviewerName}.${note ? ' Note: ' + note : ''}`,
+      { requestId: req.id, employeeCode: req.user.code, leaveType: req.leaveType, days: req.days, note }
+    )));
   }
 
   if (newStage === 'pending_super') {

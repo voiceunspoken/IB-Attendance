@@ -82,11 +82,15 @@ export async function submitWfhRequest(employeeCode, { date, reason, workType = 
 
   revalidatePath(`/employee/${employeeCode}`);
 
+  const stageLabel = approvalStage === 'pending_mgr' ? 'Pending Manager Approval'
+    : approvalStage === 'pending_super' ? 'Pending Super Admin Approval'
+    : approvalStage === 'approved' ? 'Approved' : approvalStage;
+
   const adminIds = await getAdminUserIds();
   await Promise.all(adminIds.map(id => createNotification(id, 'wfh_submitted',
     `New ${workTypeLabel} Request`,
-    `${user.name} requested ${workTypeLabel} on ${reqDate.toLocaleDateString('en-IN')}.`,
-    { employeeCode, date, reason, workType }
+    `${user.name} requested ${workTypeLabel} on ${reqDate.toLocaleDateString('en-IN')}. Status: ${stageLabel}.`,
+    { employeeCode, date, reason, workType, status: approvalStage }
   )));
 
   if (approvalStage === 'approved') {
@@ -98,10 +102,18 @@ export async function submitWfhRequest(employeeCode, { date, reason, workType = 
 
 async function attachApproverName(requests) {
   const ids = [...new Set(requests.map(r => r.currentApproverId).filter(Boolean))];
-  if (ids.length === 0) return requests.map(r => ({ ...r, currentApprover: null }));
-  const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
+  const reviewerUsernames = [...new Set(requests.map(r => r.reviewedBy).filter(Boolean))];
+  const [users, reviewerUsers] = await Promise.all([
+    ids.length ? prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }) : [],
+    reviewerUsernames.length ? prisma.user.findMany({ where: { username: { in: reviewerUsernames } }, select: { username: true, name: true } }) : [],
+  ]);
   const map = Object.fromEntries(users.map(u => [u.id, u]));
-  return requests.map(r => ({ ...r, currentApprover: r.currentApproverId ? map[r.currentApproverId] || null : null }));
+  const revMap = Object.fromEntries(reviewerUsers.map(u => [u.username, u.name]));
+  return requests.map(r => ({
+    ...r,
+    currentApprover: r.currentApproverId ? map[r.currentApproverId] || null : null,
+    reviewerName: r.reviewedBy ? revMap[r.reviewedBy] || null : null,
+  }));
 }
 
 export async function getWfhRequests(employeeCode) {
@@ -177,6 +189,13 @@ export async function reviewWfhRequest(requestId, reviewedBy, approve, note = ''
       `Your ${workTypeLabel} request for ${req.date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} has been ${newStatus}.${note ? ' Note: ' + note : ''}`,
       { requestId: req.id, date: req.date.toISOString(), workType: req.workType });
 
+    const adminIdsSA = await getAdminUserIds();
+    await Promise.all(adminIdsSA.map(id => createNotification(id, newStatus === 'approved' ? 'wfh_approved' : 'wfh_rejected',
+      `${workTypeLabel} ${newStatus === 'approved' ? 'Approved' : 'Rejected'}`,
+      `${req.user.name}'s ${workTypeLabel} request was ${newStatus} by ${reviewer?.name || reviewedBy}.${note ? ' Note: ' + note : ''}`,
+      { requestId: req.id, employeeCode: req.user.code, date: req.date.toISOString(), workType: req.workType, note }
+    )));
+
     revalidatePath('/');
     return { request: updated };
   }
@@ -233,6 +252,7 @@ export async function reviewWfhRequest(requestId, reviewedBy, approve, note = ''
   }
 
   const workTypeLabel = (req.workType || 'wfh').toUpperCase();
+  const reviewerName = reviewer?.name || reviewedBy;
 
   await logAction(reviewedBy, newStatus === 'approved' ? 'wfh_approved' : 'wfh_rejected', 'wfh_request', req.id,
     `${newStatus === 'approved' ? 'Approved' : 'Rejected'} ${workTypeLabel} request (stage: ${newStage})`);
@@ -242,11 +262,25 @@ export async function reviewWfhRequest(requestId, reviewedBy, approve, note = ''
       `${workTypeLabel} Approved`,
       `Your ${workTypeLabel} request for ${req.date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} has been approved.`,
       { requestId: req.id, date: req.date.toISOString(), workType: req.workType });
+
+    const adminIds = await getAdminUserIds();
+    await Promise.all(adminIds.map(id => createNotification(id, 'wfh_approved',
+      `${workTypeLabel} Approved`,
+      `${req.user.name}'s ${workTypeLabel} request was approved by ${reviewerName}.`,
+      { requestId: req.id, employeeCode: req.user.code, date: req.date.toISOString(), workType: req.workType }
+    )));
   } else if (newStatus === 'rejected') {
     await createNotification(req.userId, 'wfh_rejected',
       `${workTypeLabel} Rejected`,
       `Your ${workTypeLabel} request for ${req.date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} has been rejected.${note ? ' Note: ' + note : ''}`,
       { requestId: req.id, date: req.date.toISOString(), note, workType: req.workType });
+
+    const adminIds = await getAdminUserIds();
+    await Promise.all(adminIds.map(id => createNotification(id, 'wfh_rejected',
+      `${workTypeLabel} Rejected`,
+      `${req.user.name}'s ${workTypeLabel} request was rejected by ${reviewerName}.${note ? ' Note: ' + note : ''}`,
+      { requestId: req.id, employeeCode: req.user.code, date: req.date.toISOString(), note, workType: req.workType }
+    )));
   }
 
   if (newStage === 'pending_super') {

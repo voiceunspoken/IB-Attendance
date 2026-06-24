@@ -88,8 +88,12 @@ export default function WfhPage({ params }) {
     return <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: '980px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.color }}>{s.label}</span>;
   };
 
-  const StageBadge = ({ stage, approverName }) => {
-    const label = stage === 'pending_mgr' && approverName ? `With ${approverName}` : (STAGE_LABELS[stage]?.label || stage?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || stage);
+  const StageBadge = ({ stage, approverName, reviewerName }) => {
+    let label;
+    if (stage === 'approved' && reviewerName) label = `Approved by ${reviewerName}`;
+    else if (stage === 'rejected' && reviewerName) label = `Rejected by ${reviewerName}`;
+    else if ((stage === 'pending_mgr' || stage === 'pending_l2' || stage === 'pending_l1') && approverName) label = `With ${approverName}`;
+    else label = STAGE_LABELS[stage]?.label || stage?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || stage;
     const s = STAGE_LABELS[stage] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)' };
     return <span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, background: s.bg, color: s.color }}>{label}</span>;
   };
@@ -172,8 +176,8 @@ export default function WfhPage({ params }) {
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                      {r.approvalStage && r.status === 'pending' && <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} />}
-                      <StatusBadge status={r.status} />
+                      {r.approvalStage && r.status === 'pending' && <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} reviewerName={r.reviewerName} />}
+                      {(!r.approvalStage || r.status !== 'pending') && <StatusBadge status={r.status} />}
                     </div>
                   </div>
                   <div style={{ fontSize: '12px', color: 'var(--text3)', marginTop: '2px' }}>{r.reason}</div>
