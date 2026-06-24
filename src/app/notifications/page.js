@@ -119,19 +119,23 @@ function getEmployeeSummary(n) {
 function getNavTarget(n) {
   const p = getPayload(n);
   const cat = getCategory(n.type);
-  if (cat === 'leaves' || cat === 'wfh') {
-    if (isActionable(n.type) && p.requestId) {
-      return `/leaves/${p.requestId}`;
-    }
-    if (n.type.includes('_approved') || n.type.includes('_rejected')) {
-      return `/employee/${p.employeeCode || ''}/leaves`;
-    }
+  if (cat === 'leaves') {
+    if (isActionable(n.type) && p.requestId) return `/leaves/${p.requestId}`;
+    if (n.type.includes('_approved') || n.type.includes('_rejected')) return `/employee/${p.employeeCode || ''}/leaves`;
     return '/leaves';
   }
-  if (cat === 'regularization' || cat === 'adjustment') {
-    if (n.type.includes('_approved') || n.type.includes('_rejected')) {
-      return `/employee/${p.employeeCode || ''}/regularize`;
-    }
+  if (cat === 'wfh') {
+    if (isActionable(n.type) && p.requestId) return `/wfh/${p.requestId}`;
+    if (n.type.includes('_approved') || n.type.includes('_rejected')) return `/employee/${p.employeeCode || ''}/wfh`;
+    return '/leaves';
+  }
+  if (cat === 'regularization') {
+    if (isActionable(n.type) && p.requestId) return `/regularize/${p.requestId}`;
+    if (n.type.includes('_approved') || n.type.includes('_rejected')) return `/employee/${p.employeeCode || ''}/regularize`;
+    return '/leaves';
+  }
+  if (cat === 'adjustment') {
+    if (isActionable(n.type)) return '/leaves';
     return '/leaves';
   }
   if (cat === 'name_change') return '/team?tab=pending';

@@ -73,7 +73,7 @@ export async function submitWfhRequest(employeeCode, { date, reason, workType = 
     await createNotification(currentApproverId, 'wfh_pending',
       `${workTypeLabel} Request — ${user.name}`,
       `${user.name} requested ${workTypeLabel} on ${reqDate.toLocaleDateString('en-IN')}. Reason: ${reason || 'N/A'}`,
-      { employeeCode, date, reason, workType }
+      { requestId: req.id, employeeCode, date, reason, workType }
     );
     if (approver?.manager?.code) {
       await sendWfhPendingNotification(approver.manager.code, approver.manager.name, user.name, date, reason, workType);
@@ -90,7 +90,7 @@ export async function submitWfhRequest(employeeCode, { date, reason, workType = 
   await Promise.all(adminIds.map(id => createNotification(id, 'wfh_submitted',
     `New ${workTypeLabel} Request`,
     `${user.name} requested ${workTypeLabel} on ${reqDate.toLocaleDateString('en-IN')}. Status: ${stageLabel}.`,
-    { employeeCode, date, reason, workType, status: approvalStage }
+    { requestId: req.id, employeeCode, date, reason, workType, status: approvalStage }
   )));
 
   if (approvalStage === 'approved') {
@@ -114,6 +114,28 @@ async function attachApproverName(requests) {
     currentApprover: r.currentApproverId ? map[r.currentApproverId] || null : null,
     reviewerName: r.reviewedBy ? revMap[r.reviewedBy] || null : null,
   }));
+}
+
+export async function getWfhRequestById(id) {
+  const req = await prisma.wfhRequest.findUnique({
+    where: { id },
+    include: {
+      user: {
+        select: {
+          code: true, name: true, employeeType: true,
+          department: { select: { name: true } },
+          designation: { select: { name: true } },
+          managers: {
+            include: { manager: { select: { code: true, name: true } } },
+            orderBy: { priority: 'asc' }
+          }
+        }
+      }
+    }
+  });
+  if (!req) return null;
+  const arr = await attachApproverName([req]);
+  return arr[0] || null;
 }
 
 export async function getWfhRequests(employeeCode) {

@@ -673,9 +673,25 @@ export async function submitRegularization(employeeCode, { date, requestedIn, re
   await Promise.all(adminIds.map(id => createNotification(id, 'regularization_submitted',
     `New Regularization`,
     `${user.name} submitted a regularization for ${date}.`,
-    { employeeCode, date, requestedIn, requestedOut, reason })));
+    { requestId: req.id, employeeCode, date, requestedIn, requestedOut, reason })));
 
   return { request: req };
+}
+
+export async function getRegularizationById(id) {
+  const req = await prisma.regularizationRequest.findUnique({
+    where: { id },
+    include: {
+      user: {
+        select: {
+          code: true, name: true, employeeType: true,
+          department: { select: { name: true } },
+          designation: { select: { name: true } }
+        }
+      }
+    }
+  });
+  return req;
 }
 
 export async function getRegularizations(employeeCode) {

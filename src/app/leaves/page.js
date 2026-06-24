@@ -61,7 +61,7 @@ export default function LeavesPage() {
   const [pendingChanges, setPendingChanges] = useState([]);
   const [allRegularizations, setAllRegularizations] = useState([]);
   const [historyChanges, setHistoryChanges] = useState([]);
-  const [collapsed, setCollapsed] = useState({ leaves: false, regs: false, adjustments: false });
+  const [collapsed, setCollapsed] = useState({ leaves: false, regs: false, adjustments: false, wfh: false });
   const [wfhRequests, setWfhRequests] = useState([]);
   const [managerWfhRequests, setManagerWfhRequests] = useState([]);
   const [superWfhRequests, setSuperWfhRequests] = useState([]);
@@ -505,6 +505,50 @@ export default function LeavesPage() {
             </div>
           )}
 
+          {/* ── Admin: Work Mode Requests ── */}
+          {role === 'admin' && managerWfhRequests.length > 0 && (
+            <div className="card overflow-hidden p-0">
+              <div className="card-header" style={{ cursor: 'pointer', userSelect: 'none' }}
+                onClick={() => setCollapsed(c => ({ ...c, wfh: !c.wfh }))}>
+                <span>Work Mode Requests</span>
+                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ background: 'var(--surface3)', padding: '1px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, color: 'var(--text3)' }}>
+                    {managerWfhRequests.length}
+                  </span>
+                  <span style={{ color: 'var(--text3)', fontSize: '10px', fontWeight: 500 }}>
+                    {collapsed.wfh ? 'Show' : 'Hide'}
+                  </span>
+                </span>
+              </div>
+              {!collapsed.wfh && (
+                managerWfhRequests.length === 0
+                  ? <div className="p-32 text-center text-muted2 text-sm">No requests awaiting your approval.</div>
+                  : managerWfhRequests.map(r => (
+                    <div key={r.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
+                      <div>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user?.name || 'Unknown'}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user?.code}</span>
+                          <WorkTypeBadge workType={r.workType} />
+                          <span style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                            {new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                          <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} reviewerName={r.reviewerName} />
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--text2)' }}>{r.reason}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                        <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '11px', background: 'var(--green)' }}
+                          onClick={() => handleReviewWfh(r.id, true)}>Approve</button>
+                        <button style={{ padding: '5px 12px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
+                          onClick={() => handleReviewWfh(r.id, false)}>Reject</button>
+                      </div>
+                    </div>
+                  ))
+              )}
+            </div>
+          )}
+
           {/* ── Super Admin: Super Regularizations ── */}
           {isSuperAdmin && superRegularizations.length > 0 && (
             <div className="card overflow-hidden p-0">
@@ -533,6 +577,50 @@ export default function LeavesPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* ── Super Admin: Work Mode Requests ── */}
+          {isSuperAdmin && superWfhRequests.length > 0 && (
+            <div className="card overflow-hidden p-0">
+              <div className="card-header" style={{ cursor: 'pointer', userSelect: 'none' }}
+                onClick={() => setCollapsed(c => ({ ...c, wfh: !c.wfh }))}>
+                <span>Work Mode Requests — Super Admin</span>
+                <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ background: 'var(--surface3)', padding: '1px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, color: 'var(--text3)' }}>
+                    {superWfhRequests.length}
+                  </span>
+                  <span style={{ color: 'var(--text3)', fontSize: '10px', fontWeight: 500 }}>
+                    {collapsed.wfh ? 'Show' : 'Hide'}
+                  </span>
+                </span>
+              </div>
+              {!collapsed.wfh && (
+                superWfhRequests.length === 0
+                  ? <div className="p-32 text-center text-muted2 text-sm">No requests awaiting super admin approval.</div>
+                  : superWfhRequests.map(r => (
+                    <div key={r.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
+                      <div>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user?.name}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user?.code}</span>
+                          <WorkTypeBadge workType={r.workType} />
+                          <span style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                            {new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                          <StageBadge stage={r.approvalStage} approverName={r.currentApprover?.name} reviewerName={r.reviewerName} />
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--text2)' }}>{r.reason}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                        <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '11px', background: 'var(--green)' }}
+                          onClick={() => handleReviewWfh(r.id, true)}>Final Approve</button>
+                        <button style={{ padding: '5px 12px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
+                          onClick={() => handleReviewWfh(r.id, false)}>Reject</button>
+                      </div>
+                    </div>
+                  ))
+              )}
             </div>
           )}
 
