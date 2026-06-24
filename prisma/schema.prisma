@@ -159,6 +159,7 @@ model DailyLog {
   isLate     Boolean  @default(false)
   isSS       Boolean  @default(false)
   isSL       Boolean  @default(false)
+  isHD       Boolean  @default(false)
   hdReason   String?  // null | "late" | "ss" — why this day was marked half-day
   workLocation String? // "wfh" | "wos" | "wfm" | "wfo"
 

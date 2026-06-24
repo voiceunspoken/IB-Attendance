@@ -133,15 +133,14 @@ async function recalculateMonthRecord(userId, monthYear, numDays = 31) {
     if (log.type === 'absent') { absent++; }
     else if (log.type === 'rl') { rl++; }
     else if (log.type === 'holiday') { holi++; }
-    else if (log.type === 'half') { halfDay++; }
-    else if (log.type === 'wfh' || log.type === 'wos' || log.type === 'wfm' || log.type === 'wfo') { wfh++; }
+    else if (log.type === 'half') { halfDay++; if (log.hdReason === 'late') lateHD++; if (log.hdReason === 'ss') ssHD++; }
+    else if (log.type === 'wfh' || log.type === 'wos' || log.type === 'wfm' || log.type === 'wfo') { present++; }
     else if (log.type === 'present') {
-      if (log.isHD) { halfDay++; } else { present++; }
+      if (log.isHD) { halfDay++; if (log.hdReason === 'late') lateHD++; if (log.hdReason === 'ss') ssHD++; }
+      else { present++; }
       if (log.isLate) late++;
       if (log.isSS) ss++;
       if (log.isSL) sl++;
-      if (log.hdReason === 'late') lateHD++;
-      if (log.hdReason === 'ss') ssHD++;
     }
   }
   await prisma.monthRecord.upsert({

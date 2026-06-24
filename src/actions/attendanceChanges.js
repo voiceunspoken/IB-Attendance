@@ -66,15 +66,14 @@ function recalcTotals(logs) {
       else present++;
     } else if (log.type === 'absent') absent++;
     else if (log.type === 'holiday') holi++;
-    else if (log.type === 'half') halfDay++;
+    else if (log.type === 'half') { halfDay++; if (log.hdReason === 'late') lateHD++; if (log.hdReason === 'ss') ssHD++; }
+    else if (['wfh', 'wos', 'wfm', 'wfo'].includes(log.type)) { present++; }
     else if (log.type === 'present') {
-      if (log.isHD) halfDay++;
-      else present++;
+      if (log.isHD) { halfDay++; if (log.hdReason === 'late') lateHD++; if (log.hdReason === 'ss') ssHD++; }
+      else { present++; }
       if (log.isLate) late++;
       if (log.isSS) ss++;
       if (log.isSL) sl++;
-      if (log.hdReason === 'late') lateHD++;
-      if (log.hdReason === 'ss') ssHD++;
     }
   }
   return { present, absent, halfDay, late, lateHD, shortShift: ss, ssHD, shortLeave: sl, rl, holi, maxDay };

@@ -346,17 +346,26 @@ async function applyWorkModeToDailyLog(userId, date, workType) {
 
 async function updateMonthRecordCounts(userId, monthYear) {
   const logs = await prisma.dailyLog.findMany({ where: { userId, monthYear } });
-  let present = 0, absent = 0, halfDay = 0, wfh = 0, maxDay = 0;
+  let present = 0, absent = 0, halfDay = 0, late = 0, ss = 0, sl = 0, rl = 0, holi = 0;
+  let lateHD = 0, ssHD = 0, maxDay = 0;
   for (const log of logs) {
     maxDay = Math.max(maxDay, log.day);
     if (log.type === 'absent') absent++;
-    else if (log.type === 'half') halfDay++;
-    else if (['wfh', 'wos', 'wfm', 'wfo'].includes(log.type)) wfh++;
-    else if (log.type === 'present') present++;
+    else if (log.type === 'rl') rl++;
+    else if (log.type === 'holiday') holi++;
+    else if (log.type === 'half') { halfDay++; if (log.hdReason === 'late') lateHD++; if (log.hdReason === 'ss') ssHD++; }
+    else if (['wfh', 'wos', 'wfm', 'wfo'].includes(log.type)) { present++; }
+    else if (log.type === 'present') {
+      if (log.isHD) { halfDay++; if (log.hdReason === 'late') lateHD++; if (log.hdReason === 'ss') ssHD++; }
+      else { present++; }
+      if (log.isLate) late++;
+      if (log.isSS) ss++;
+      if (log.isSL) sl++;
+    }
   }
   await prisma.monthRecord.upsert({
     where: { userId_monthYear: { userId, monthYear } },
-    update: { present: present + wfh, absent, halfDay, numDays: maxDay },
-    create: { userId, monthYear, present: present + wfh, absent, halfDay, numDays: maxDay },
+    update: { present, absent, halfDay, late, lateHD, shortShift: ss, ssHD, shortLeave: sl, rl, holi, numDays: maxDay },
+    create: { userId, monthYear, present, absent, halfDay, late, lateHD, shortShift: ss, ssHD, shortLeave: sl, rl, holi, numDays: maxDay },
   });
 }

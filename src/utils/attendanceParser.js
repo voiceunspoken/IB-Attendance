@@ -1,4 +1,4 @@
-const DEFAULT_POLICY = {
+export const DEFAULT_POLICY = {
   shiftStartH: 10, shiftStartM: 0, shiftEndH: 19, shiftEndM: 0,
   graceMinutes: 15, lateStartMin: 30,
   shortLeaveStartMin: 60, shortLeaveEndMin: 120, halfDayAfterMin: 120,
@@ -18,6 +18,41 @@ function parseT(str) {
     if (!isNaN(h) && !isNaN(m)) return h * 60 + m;
   }
   return null;
+}
+
+export function analyzeDayTimes(inT, outT, policy = DEFAULT_POLICY) {
+  const LATE_THRESHOLD = policy.shiftStartH * 60 + policy.shiftStartM + policy.graceMinutes;
+  const SL_START = policy.shortLeaveStartMin !== undefined
+    ? policy.shiftStartH * 60 + policy.shortLeaveStartMin
+    : policy.shiftStartH * 60 + 60;
+  const SL_END = policy.shortLeaveEndMin !== undefined
+    ? policy.shiftStartH * 60 + policy.shortLeaveEndMin
+    : policy.shiftStartH * 60 + 120;
+  const MORNING_HD_CUTOFF = policy.morningHalfDayCutoffH * 60 + policy.morningHalfDayCutoffM;
+  const EVENING_HD_START = policy.eveningHalfDayStartH * 60 + policy.eveningHalfDayStartM;
+  const EVENING_EXIT = policy.eveningEarliestExitH * 60 + policy.eveningEarliestExitM;
+  const EVENING_SL_WINDOW = policy.eveningShortLeaveWindowMin ?? 10;
+  const MIN_WH = policy.minHours;
+
+  let isLate = false, isSS = false, isSL = false, isHD = false;
+
+  if (inT !== null && inT > LATE_THRESHOLD) isLate = true;
+
+  if (inT !== null && outT !== null) {
+    const wh = (outT - inT) / 60;
+    const isEveningSL = outT >= EVENING_EXIT && outT <= EVENING_EXIT + EVENING_SL_WINDOW;
+
+    if (!isLate && outT <= MORNING_HD_CUTOFF) { isHD = true; }
+    else if (!isLate && inT >= EVENING_HD_START) { isHD = true; }
+    else if (!isLate && isEveningSL && inT >= SL_START && inT <= SL_END) { isSL = true; }
+    else if (!isLate && inT >= SL_START && inT <= SL_END) { isSL = true; }
+    else if (!isLate && wh < MIN_WH) { isSS = true; }
+  } else if (inT !== null && outT === null) {
+    if (!isLate && inT >= SL_START && inT <= SL_END) { isSL = true; }
+    else if (!isLate && inT <= MORNING_HD_CUTOFF) { isHD = true; }
+  }
+
+  return { isLate, isSS, isSL, isHD };
 }
 
 export function parseAndAnalyze(rows, policy = DEFAULT_POLICY, dbHolidays = []) {
@@ -126,7 +161,7 @@ export function parseAndAnalyze(rows, policy = DEFAULT_POLICY, dbHolidays = []) 
     if (!name || name === 'NA') continue;
     results.push(analyzeEmployee(code, name, row, numDays, dayStartCol, weekends, gazHolidays, rlDays,
       LATE_THRESHOLD, SL_START, SL_END, HD_AFTER, MORNING_HD_CUTOFF, EVENING_HD_START,
-      EVENING_EXIT, EVENING_SL_WINDOW, MIN_WH, policy.latesPerHD, policy.ssPerHD));
+      EVENING_EXIT, EVENING_SL_WINDOW, MIN_WH, policy.latesPerHD, policy.ssPerHD, policy));
   }
 
   return { results, currentMonth, numDays };
@@ -134,7 +169,7 @@ export function parseAndAnalyze(rows, policy = DEFAULT_POLICY, dbHolidays = []) 
 
 function analyzeEmployee(code, name, row, numDays, dayStartCol, weekends, gazHolidays, rlDays,
   LATE_THRESHOLD, SL_START, SL_END, HD_AFTER, MORNING_HD_CUTOFF, EVENING_HD_START,
-  EVENING_EXIT, EVENING_SL_WINDOW, MIN_WH, latesPerHD, ssPerHD) {
+  EVENING_EXIT, EVENING_SL_WINDOW, MIN_WH, latesPerHD, ssPerHD, policy = DEFAULT_POLICY) {
 
   const days = [];
   let present = 0, absent = 0, halfDay = 0, late = 0, shortShift = 0, shortLeave = 0, rl = 0, holi = 0;
@@ -155,41 +190,28 @@ function analyzeEmployee(code, name, row, numDays, dayStartCol, weekends, gazHol
     let inT = parseT(parts[0]), outT = parseT(parts[1] || '');
     if (parts.length === 1 && inT !== null && inT >= 15 * 60) { outT = inT; inT = null; }
 
-    let isLate = false, isSS = false, isSL = false, isHD = false;
+    let { isLate: rawLate, isSS: rawSS, isSL, isHD: rawHD } = analyzeDayTimes(inT, outT, policy);
+    let isLate = rawLate, isSS = rawSS, isHD = rawHD;
     let hdReason = null;
 
-    if (inT !== null && inT > LATE_THRESHOLD) { isLate = true; late++; }
-
-    // Determine HD/SL/SS — late is mutually exclusive with all
-    if (inT !== null && outT !== null) {
-      const wh = (outT - inT) / 60;
-      const isEveningSL = outT >= EVENING_EXIT && outT <= EVENING_EXIT + EVENING_SL_WINDOW;
-
-      if (!isLate && outT <= MORNING_HD_CUTOFF) { isHD = true; halfDay++; }
-      else if (!isLate && inT >= EVENING_HD_START) { isHD = true; halfDay++; }
-      else if (!isLate && isEveningSL && inT >= SL_START && inT <= SL_END) { isSL = true; shortLeave++; }
-      else if (!isLate && inT >= SL_START && inT <= SL_END) { isSL = true; shortLeave++; }
-      else if (!isLate && wh < MIN_WH) { isSS = true; shortShift++; }
-    } else if (inT !== null && outT === null) {
-      if (!isLate && inT >= SL_START && inT <= SL_END) { isSL = true; shortLeave++; }
-      else if (!isLate && inT <= MORNING_HD_CUTOFF) { isHD = true; halfDay++; }
-    }
+    if (isLate) lateCounter++;
+    if (isSS) ssCounter++;
 
     // Threshold: every Nth late → HD, every Nth SS → HD
-    if (isLate) {
-      lateCounter++;
-      if (lateCounter % latesPerHD === 0) {
-        isLate = false; isHD = true; hdReason = 'late'; late--; halfDay++; lateToHD++;
-      }
+    if (isLate && latesPerHD > 0 && lateCounter % latesPerHD === 0) {
+      isLate = false; isHD = true; hdReason = 'late'; lateToHD++;
     }
-    if (isSS) {
-      ssCounter++;
-      if (ssCounter % ssPerHD === 0) {
-        isSS = false; isHD = true; hdReason = 'ss'; shortShift--; halfDay++; ssToHD++;
-      }
+    if (isSS && ssPerHD > 0 && ssCounter % ssPerHD === 0) {
+      isSS = false; isHD = true; hdReason = 'ss'; ssToHD++;
     }
 
-    if (!isHD) present++;
+    if (isHD) halfDay++;
+    else {
+      if (isLate) late++;
+      if (isSL) shortLeave++;
+      if (isSS) shortShift++;
+      present++;
+    }
     days.push({ d, type: isHD ? 'half' : 'present', raw, isLate, isSS, isSL, isHD, inT, outT, hdReason });
   }
 

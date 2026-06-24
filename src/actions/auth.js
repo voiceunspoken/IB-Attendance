@@ -8,7 +8,8 @@ import { requireAdminOrSuperAdmin, requireSuperAdmin } from '../lib/auth-guard';
 export async function loginUser(email, password) {
   try {
     if (!email) return { error: 'Invalid email or password.' };
-    const user = await prisma.user.findFirst({ where: { email: email.toLowerCase().trim() } });
+    const trimmed = email.toLowerCase().trim();
+    const user = await prisma.user.findFirst({ where: { email: trimmed } });
     if (!user) return { error: 'Invalid email or password.' };
 
     if (user.disabled) return { error: 'Your account has been disabled. Contact your admin.' };

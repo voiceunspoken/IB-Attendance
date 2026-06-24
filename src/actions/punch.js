@@ -2,6 +2,7 @@
 
 import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { analyzeDayTimes, DEFAULT_POLICY } from '../utils/attendanceParser';
 
 export async function clockIn(employeeCode, workLocation) {
   const user = await prisma.user.findUnique({ where: { code: employeeCode } });
@@ -60,12 +61,30 @@ export async function clockOut(employeeCode) {
   const monthYear = `${now.getMonth() + 1}_${now.getFullYear()}`;
   const day = now.getDate();
 
-  const dayType = punchLog.workLocation || 'present';
+  // Analyze the day based on punch times
+  const { isLate: rawLate, isSS: rawSS, isSL, isHD: rawHD } = analyzeDayTimes(inMinutes, outMinutes, DEFAULT_POLICY);
+  let isLate = rawLate, isSS = rawSS, isHD = rawHD;
+  let hdReason = null;
+
+  // Count existing late/SS records this month for threshold conversion
+  const [lateCount, ssCount] = await Promise.all([
+    prisma.dailyLog.count({ where: { userId: user.id, monthYear, isLate: true } }),
+    prisma.dailyLog.count({ where: { userId: user.id, monthYear, isSS: true } }),
+  ]);
+
+  if (isLate && DEFAULT_POLICY.latesPerHD > 0 && (lateCount + 1) % DEFAULT_POLICY.latesPerHD === 0) {
+    isLate = false; isHD = true; hdReason = 'late';
+  }
+  if (isSS && DEFAULT_POLICY.ssPerHD > 0 && (ssCount + 1) % DEFAULT_POLICY.ssPerHD === 0) {
+    isSS = false; isHD = true; hdReason = 'ss';
+  }
+
+  const dayType = isHD ? 'half' : (punchLog.workLocation || 'present');
 
   await prisma.dailyLog.upsert({
     where: { userId_monthYear_day: { userId: user.id, monthYear, day } },
-    update: { type: dayType, inT: inMinutes, outT: outMinutes, raw: 'WEB', workLocation: punchLog.workLocation || null },
-    create: { userId: user.id, monthYear, day, type: dayType, inT: inMinutes, outT: outMinutes, raw: 'WEB', workLocation: punchLog.workLocation || null },
+    update: { type: dayType, inT: inMinutes, outT: outMinutes, raw: 'WEB', workLocation: punchLog.workLocation || null, isLate, isSS, isSL, isHD, hdReason },
+    create: { userId: user.id, monthYear, day, type: dayType, inT: inMinutes, outT: outMinutes, raw: 'WEB', workLocation: punchLog.workLocation || null, isLate, isSS, isSL, isHD, hdReason },
   });
 
   await updateMonthRecordCounts(user.id, monthYear);
@@ -102,17 +121,26 @@ export async function getTodayPunch(employeeCode) {
 
 async function updateMonthRecordCounts(userId, monthYear) {
   const logs = await prisma.dailyLog.findMany({ where: { userId, monthYear } });
-  let present = 0, absent = 0, halfDay = 0, wfh = 0, maxDay = 0;
+  let present = 0, absent = 0, halfDay = 0, late = 0, ss = 0, sl = 0, rl = 0, holi = 0;
+  let lateHD = 0, ssHD = 0, maxDay = 0;
   for (const log of logs) {
     maxDay = Math.max(maxDay, log.day);
     if (log.type === 'absent') absent++;
-    else if (log.type === 'half') halfDay++;
-    else if (log.type === 'wfh' || log.type === 'wos' || log.type === 'wfm' || log.type === 'wfo') wfh++;
-    else if (log.type === 'present') present++;
+    else if (log.type === 'rl') rl++;
+    else if (log.type === 'holiday') holi++;
+    else if (log.type === 'half') { halfDay++; if (log.hdReason === 'late') lateHD++; if (log.hdReason === 'ss') ssHD++; }
+    else if (['wfh', 'wos', 'wfm', 'wfo'].includes(log.type)) { present++; }
+    else if (log.type === 'present') {
+      if (log.isHD) { halfDay++; if (log.hdReason === 'late') lateHD++; if (log.hdReason === 'ss') ssHD++; }
+      else { present++; }
+      if (log.isLate) late++;
+      if (log.isSS) ss++;
+      if (log.isSL) sl++;
+    }
   }
   await prisma.monthRecord.upsert({
     where: { userId_monthYear: { userId, monthYear } },
-    update: { present: present + wfh, absent, halfDay, numDays: maxDay },
-    create: { userId, monthYear, present: present + wfh, absent, halfDay, numDays: maxDay },
+    update: { present, absent, halfDay, late, lateHD, shortShift: ss, ssHD, shortLeave: sl, rl, holi, numDays: maxDay },
+    create: { userId, monthYear, present, absent, halfDay, late, lateHD, shortShift: ss, ssHD, shortLeave: sl, rl, holi, numDays: maxDay },
   });
 }

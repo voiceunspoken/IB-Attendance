@@ -100,7 +100,7 @@ export default function LoginPage() {
             disabled={submitting}
             style={{ width: '100%', marginTop: '4px', padding: '12px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, opacity: submitting ? 0.7 : 1 }}
           >
-            {submitting ? 'Signing in…' : 'Continue'}
+            {submitting ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
       </div>
