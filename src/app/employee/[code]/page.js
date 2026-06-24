@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../components/AuthProvider';
 import { requestAdjustment, updatePunchTimes } from '../../../actions/attendanceChanges';
 import { getWfhRequests } from '../../../actions/wfh';
+import { getTeamMembers } from '../../../actions/employees';
 import EmployeeModal from '../../../components/EmployeeModal';
 import ClockWidget from '../../../components/ClockWidget';
 import { useToast } from '../../../components/Toast';
@@ -24,6 +25,7 @@ export default function AttendancePage({ params }) {
 
   const [selectedMonthIndex, setSelectedMonthIndex] = useState(0);
   const [hasWfhToday, setHasWfhToday] = useState(false);
+  const [teamMembers, setTeamMembers] = useState([]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
@@ -36,16 +38,21 @@ export default function AttendancePage({ params }) {
     if (!emp?.employeeType || emp.employeeType === 'hybrid') {
       setHasWfhToday(true);
     } else {
-      const today = new Date().toISOString().split('T')[0];
+      const fmtLocal = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      const today = fmtLocal(new Date());
       getWfhRequests(code).then(requests => {
         const approved = requests.some(r =>
           r.status === 'approved' &&
-          new Date(r.date).toISOString().split('T')[0] === today
+          fmtLocal(new Date(r.date)) === today
         );
         setHasWfhToday(approved);
       }).catch(() => setHasWfhToday(false));
     }
   }, [emp, code]);
+
+  useEffect(() => {
+    getTeamMembers(code).then(setTeamMembers).catch(() => setTeamMembers([]));
+  }, [code]);
 
   if (!emp) return null;
 
@@ -242,6 +249,27 @@ export default function AttendancePage({ params }) {
           onPunchUpdate={isAdmin || isSuperAdmin ? handlePunchUpdate : undefined}
         />
       </div>
+
+      {teamMembers.length > 0 && (
+        <div className="card" style={{ marginTop: '16px', padding: '16px 20px' }}>
+          <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '12px' }}>Team Today</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {teamMembers.map(m => (
+              <div key={m.code} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', borderRadius: '8px', background: 'var(--surface2)' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: m.statusColor, flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600 }}>{m.name}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text3)' }}>
+                    {m.department && <span>{m.department}{m.designation && ' · '}</span>}
+                    {m.designation && <span>{m.designation}</span>}
+                  </div>
+                </div>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: m.statusColor, whiteSpace: 'nowrap' }}>{m.statusLabel}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

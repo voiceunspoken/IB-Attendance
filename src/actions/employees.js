@@ -135,3 +135,111 @@ export async function getAvatarUrl(code) {
   if (fs.existsSync(filePath)) return `/uploads/avatars/${code}.webp`;
   return null;
 }
+
+export async function getTeamMembers(employeeCode) {
+  const user = await prisma.user.findUnique({
+    where: { code: employeeCode },
+    include: { managers: { select: { managerUserId: true } } }
+  });
+  if (!user || user.managers.length === 0) return [];
+
+  const managerIds = user.managers.map(m => m.managerUserId);
+
+  const teamUsers = await prisma.user.findMany({
+    where: {
+      code: { not: null },
+      id: { not: user.id },
+      managedUsers: { some: { managerUserId: { in: managerIds } } }
+    },
+    select: {
+      id: true, code: true, name: true, employeeType: true,
+      department: { select: { name: true } },
+      designation: { select: { name: true } }
+    },
+    orderBy: { name: 'asc' }
+  });
+
+  if (teamUsers.length === 0) return [];
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const teamIds = teamUsers.map(u => u.id);
+
+  const [leaveRequests, wfhRequests, dailyLogs] = await Promise.all([
+    prisma.leaveRequest.findMany({
+      where: {
+        userId: { in: teamIds },
+        status: 'approved',
+        fromDate: { lte: tomorrow },
+        toDate: { gte: today }
+      },
+      select: { userId: true, leaveType: true }
+    }),
+    prisma.wfhRequest.findMany({
+      where: {
+        userId: { in: teamIds },
+        status: 'approved',
+        date: { gte: today, lt: tomorrow }
+      },
+      select: { userId: true, workType: true }
+    }),
+    prisma.dailyLog.findMany({
+      where: {
+        userId: { in: teamIds },
+        monthYear: `${today.getMonth() + 1}_${today.getFullYear()}`,
+        day: today.getDate()
+      },
+      select: { userId: true, type: true, workLocation: true }
+    })
+  ]);
+
+  const leaveMap = {};
+  leaveRequests.forEach(r => { if (!leaveMap[r.userId]) leaveMap[r.userId] = []; leaveMap[r.userId].push(r.leaveType.toUpperCase()); });
+  const wfhMap = {};
+  wfhRequests.forEach(r => { wfhMap[r.userId] = r.workType; });
+  const dailyMap = {};
+  dailyLogs.forEach(r => { dailyMap[r.userId] = r; });
+
+  return teamUsers.map(u => {
+    const leaves = leaveMap[u.id];
+    const wfh = wfhMap[u.id];
+    const daily = dailyMap[u.id];
+
+    let status, statusColor, statusLabel;
+    if (leaves && leaves.length > 0) {
+      status = 'leave';
+      statusColor = '#ff9f0a';
+      statusLabel = `On Leave (${leaves.join('/')})`;
+    } else if (wfh) {
+      status = 'wfh';
+      statusColor = '#af52de';
+      statusLabel = { wfh: 'WFH', wos: 'WOS', wfm: 'WFM', wfo: 'WFO' }[wfh] || wfh.toUpperCase();
+    } else if (daily && daily.type === 'absent') {
+      status = 'absent';
+      statusColor = '#ff3b30';
+      statusLabel = 'Absent';
+    } else if (daily && ['present', 'half', 'holiday', 'rl'].includes(daily.type)) {
+      status = 'present';
+      statusColor = '#34c759';
+      statusLabel = 'Present';
+    } else {
+      status = 'unknown';
+      statusColor = '#8e8e93';
+      statusLabel = 'No data';
+    }
+
+    return {
+      code: u.code,
+      name: u.name,
+      employeeType: u.employeeType,
+      department: u.department?.name || null,
+      designation: u.designation?.name || null,
+      status,
+      statusColor,
+      statusLabel
+    };
+  });
+}

@@ -310,10 +310,13 @@ async function applyWorkModeToDailyLog(userId, date, workType) {
 
   if (existing && existing.type !== 'absent') return;
 
+  const inT = existing?.inT || 600;
+  const outT = existing?.outT || 1140;
+
   await prisma.dailyLog.upsert({
     where: { userId_monthYear_day: { userId, monthYear, day } },
-    update: { type: workType, raw: workType.toUpperCase(), workLocation: workType },
-    create: { userId, monthYear, day, type: workType, raw: workType.toUpperCase(), workLocation: workType },
+    update: { type: workType, raw: workType.toUpperCase(), workLocation: workType, inT, outT },
+    create: { userId, monthYear, day, type: workType, raw: workType.toUpperCase(), workLocation: workType, inT, outT },
   });
 
   await updateMonthRecordCounts(userId, monthYear);

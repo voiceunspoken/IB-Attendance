@@ -260,6 +260,13 @@ export default function DashboardHome() {
                     })}
                   </div>
                 )}
+                {holidays.length > 0 && (
+                  <div style={{ borderTop: '1px solid var(--border)', padding: '8px 0 0', marginTop: '8px', textAlign: 'center' }}>
+                    <button onClick={() => router.push('/settings')} style={{ fontSize: '12px', fontWeight: 500, color: 'var(--blue)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                      View all holidays →
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -56,6 +56,7 @@ export default function LeavesPage({ params }) {
   const computedDays = useMemo(() => {
     if (!leaveForm.fromDate) return 1;
     if (leaveForm.isHalfDay || leaveForm.leaveType === 'sh') return 0.5;
+    if (leaveForm.leaveType === 'rl') return 1;
     const from = new Date(leaveForm.fromDate);
     const to = leaveForm.toDate ? new Date(leaveForm.toDate) : from;
     if (from > to) return 1;
@@ -87,7 +88,7 @@ export default function LeavesPage({ params }) {
   }, [leaveForm.fromDate, leaveForm.toDate]);
 
   const sandwichWarning = useMemo(() => {
-    if (!leaveForm.fromDate || leaveForm.isHalfDay || leaveForm.leaveType === 'sh') return '';
+    if (!leaveForm.fromDate || leaveForm.isHalfDay || leaveForm.leaveType === 'sh' || leaveForm.leaveType === 'rl') return '';
     const from = new Date(leaveForm.fromDate);
     const to = leaveForm.toDate ? new Date(leaveForm.toDate) : from;
     if (from > to) return '';
@@ -103,6 +104,9 @@ export default function LeavesPage({ params }) {
   const leavePreview = useMemo(() => {
     if (!leaveForm.fromDate || totalDays <= 0) return null;
     const type = leaveForm.leaveType;
+    if (type === 'rl') {
+      return { totalDays: 1, weekends: 0, weekdays: 1, paid: 1, unpaid: 0, isHalfOrSH: false, isRL: true };
+    }
     const isHalfOrSH = leaveForm.isHalfDay || type === 'sh';
     if (isHalfOrSH) {
       const remaining = type !== 'ul' && type !== 'sh' && leaveBalanceDetail ? (leaveBalanceDetail[`${type}Remaining`] ?? 0) : null;
@@ -236,17 +240,25 @@ export default function LeavesPage({ params }) {
 
           {leaveForm.leaveType === 'rl' && rlHolidays.length > 0 && (
             <div style={{ background: 'rgba(175,82,222,0.08)', borderRadius: '10px', padding: '12px 14px', fontSize: '12px' }}>
-              <div style={{ fontWeight: 600, color: '#7b2d8b', marginBottom: '6px' }}>Eligible RL Dates</div>
+              <div style={{ fontWeight: 600, color: '#7b2d8b', marginBottom: '6px' }}>Select RL Date (click to pick)</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                {rlHolidays.map((h, i) => (
-                  <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <span style={{ color: 'var(--text2)' }}>
-                      {new Date(2024, h.month - 1, h.day).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                    </span>
-                    <span style={{ fontWeight: 500 }}>{h.name}</span>
-                    {h.isBirthday && <span style={{ fontSize: '10px', background: 'rgba(175,82,222,0.15)', color: '#7b2d8b', padding: '1px 6px', borderRadius: '980px' }}>Birthday</span>}
-                  </div>
-                ))}
+                {rlHolidays.map((h, i) => {
+                  const yr = new Date().getFullYear();
+                  const d = new Date(yr, h.month - 1, h.day);
+                  const isSelected = leaveForm.fromDate && d.toDateString() === leaveForm.fromDate.toDateString();
+                  return (
+                    <div key={i} onClick={() => d >= today && setLeaveForm(f => ({ ...f, fromDate: d }))}
+                      style={{ display: 'flex', gap: '8px', alignItems: 'center', cursor: d >= today ? 'pointer' : 'not-allowed', opacity: d < today ? 0.5 : 1,
+                        background: isSelected ? 'rgba(175,82,222,0.15)' : 'transparent', borderRadius: '6px', padding: '4px 6px' }}>
+                      <span style={{ color: 'var(--text2)' }}>
+                        {d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      </span>
+                      <span style={{ fontWeight: isSelected ? 600 : 500 }}>{h.name}</span>
+                      {h.isBirthday && <span style={{ fontSize: '10px', background: 'rgba(175,82,222,0.15)', color: '#7b2d8b', padding: '1px 6px', borderRadius: '980px' }}>Birthday</span>}
+                      {isSelected && <span style={{ marginLeft: 'auto', fontSize: '10px', color: '#7b2d8b', fontWeight: 600 }}>Selected</span>}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -294,30 +306,43 @@ export default function LeavesPage({ params }) {
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          {leaveForm.leaveType === 'rl' ? (
             <div>
-              <label className="input-label">From Date</label>
+              <label className="input-label">Date</label>
               <DatePickerInput
                 selected={leaveForm.fromDate}
-                onChange={d => setLeaveForm(f => ({ ...f, fromDate: d, toDate: f.toDate || d }))}
+                onChange={d => setLeaveForm(f => ({ ...f, fromDate: d }))}
                 minDate={today}
-                placeholder="Select start date"
+                placeholder="Select RL date"
                 className="input-field"
               />
             </div>
-            <div>
-              <label className="input-label">To Date</label>
-              <DatePickerInput
-                selected={leaveForm.toDate}
-                onChange={d => setLeaveForm(f => ({ ...f, toDate: d }))}
-                minDate={leaveForm.fromDate || today}
-                placeholder="Select end date"
-                className="input-field"
-              />
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div>
+                <label className="input-label">From Date</label>
+                <DatePickerInput
+                  selected={leaveForm.fromDate}
+                  onChange={d => setLeaveForm(f => ({ ...f, fromDate: d, toDate: f.toDate || d }))}
+                  minDate={today}
+                  placeholder="Select start date"
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="input-label">To Date</label>
+                <DatePickerInput
+                  selected={leaveForm.toDate}
+                  onChange={d => setLeaveForm(f => ({ ...f, toDate: d }))}
+                  minDate={leaveForm.fromDate || today}
+                  placeholder="Select end date"
+                  className="input-field"
+                />
+              </div>
             </div>
-          </div>
+          )}
 
-          {leaveForm.leaveType !== 'sh' && computedDays > 0.5 && (
+          {leaveForm.leaveType !== 'sh' && leaveForm.leaveType !== 'rl' && computedDays > 0.5 && (
             <div>
               <label className="input-label">Duration</label>
               <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
