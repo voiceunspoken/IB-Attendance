@@ -258,23 +258,38 @@ export default function LeavesPage() {
   };
 
   const handleReviewReg = async (id, approve) => {
-    await reviewRegularization(id, user.username, approve);
+    const note = !approve ? prompt('Please enter a reason for rejection:') : '';
+    if (!approve && !note) return;
+    const result = await reviewRegularization(id, user.username, approve, note || '');
+    if (result?.error) return toast.error(result.error);
+    toast.success(approve ? 'Regularization approved.' : 'Regularization rejected.');
     setFetchTrigger(t => t + 1);
   };
 
   const handleSuperReviewReg = async (id, approve) => {
-    await reviewRegularizationSuper(id, user.username, approve);
+    const note = !approve ? prompt('Please enter a reason for rejection:') : '';
+    if (!approve && !note) return;
+    const result = await reviewRegularizationSuper(id, user.username, approve, note || '');
+    if (result?.error) return toast.error(result.error);
+    toast.success(approve ? 'Regularization approved.' : 'Regularization rejected.');
     setFetchTrigger(t => t + 1);
   };
 
   const handleReviewAdjustment = async (changeId, approve) => {
-    await reviewAdjustment(changeId, user.username, approve);
+    const note = !approve ? prompt('Please enter a reason for rejection:') : '';
+    if (!approve && !note) return;
+    const result = await reviewAdjustment(changeId, user.username, approve, note || '');
+    if (result?.error) return toast.error(result.error);
+    toast.success(approve ? 'Adjustment approved.' : 'Adjustment rejected.');
     setFetchTrigger(t => t + 1);
   };
 
   const handleReviewDeduction = async (changeId, approve) => {
-    await reviewLeaveDeduction(changeId, user.username, approve);
-    toast.success(approve ? 'Deduction approved' : 'Deduction rejected');
+    const note = !approve ? prompt('Please enter a reason for rejection:') : '';
+    if (!approve && !note) return;
+    const result = await reviewLeaveDeduction(changeId, user.username, approve, note || '');
+    if (result?.error) return toast.error(result.error);
+    toast.success(approve ? 'Deduction approved.' : 'Deduction rejected.');
     setFetchTrigger(t => t + 1);
   };
 
@@ -1433,7 +1448,7 @@ export default function LeavesPage() {
             )}
 
             <div style={{ marginTop: '16px' }}>
-              <label className="input-label" style={{ marginBottom: '6px' }}>Review Note <span style={{ color: 'var(--text3)', fontWeight: 400 }}>(optional)</span></label>
+              <label className="input-label" style={{ marginBottom: '6px' }}>Review Note <span style={{ color: 'var(--red)', fontWeight: 400, fontSize: '10px' }}>(required when rejecting)</span></label>
               <input className="input-field" placeholder="Add a note for the employee…" value={reviewNote}
                 onChange={e => setReviewNote(e.target.value)} style={{ padding: '10px 14px', fontSize: '13px' }} />
             </div>

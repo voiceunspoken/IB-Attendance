@@ -49,6 +49,7 @@ export default function LeaveDetailPage({ params }) {
   }, [id, isAuthenticated]);
 
   const handleReview = async (approve) => {
+    if (!approve && !reviewNote.trim()) return toast.error('A reason is required when rejecting.');
     setSubmitting(true);
     const result = await reviewLeaveRequest(id, user.username, approve, reviewNote);
     setSubmitting(false);
@@ -225,7 +226,7 @@ export default function LeaveDetailPage({ params }) {
           {canReview && (
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: '20px', marginTop: '4px' }}>
               <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '10px' }}>Your Review</div>
-              <input className="input-field" placeholder="Add a note (optional)…"
+              <input className="input-field" placeholder="Add a note (required when rejecting)…"
                 value={reviewNote} onChange={e => setReviewNote(e.target.value)}
                 style={{ width: '100%', padding: '10px 14px', fontSize: '13px', marginBottom: '12px', boxSizing: 'border-box' }} />
               <div style={{ display: 'flex', gap: '10px' }}>

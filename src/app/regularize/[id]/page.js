@@ -36,10 +36,11 @@ export default function RegularizationDetailPage({ params }) {
   }, [id, isAuthenticated]);
 
   const handleReview = async (approve) => {
+    if (!approve && !reviewNote.trim()) return toast.error('A reason is required when rejecting.');
     setSubmitting(true);
     const isSuperAdmin = user?.role === 'super_admin';
     const result = isSuperAdmin
-      ? await reviewRegularizationSuper(id, user.username, approve)
+      ? await reviewRegularizationSuper(id, user.username, approve, reviewNote)
       : await reviewRegularization(id, user.username, approve, reviewNote);
     setSubmitting(false);
     if (result?.error) return toast.error(result.error);
@@ -166,7 +167,7 @@ export default function RegularizationDetailPage({ params }) {
               <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '10px' }}>
                 {canSuperReview ? 'Your Final Review' : 'Your Review'}
               </div>
-              <input className="input-field" placeholder="Add a note (optional)…"
+              <input className="input-field" placeholder="Add a note (required when rejecting)…"
                 value={reviewNote} onChange={e => setReviewNote(e.target.value)}
                 style={{ width: '100%', padding: '10px 14px', fontSize: '13px', marginBottom: '12px', boxSizing: 'border-box' }} />
               <div style={{ display: 'flex', gap: '10px' }}>

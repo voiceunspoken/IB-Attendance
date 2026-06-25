@@ -64,6 +64,7 @@ export async function getPendingPolicies() {
 }
 
 export async function reviewPolicy(policyId, reviewedBy, approve, note = '') {
+  if (!approve && !note) return { error: 'A reason is required when rejecting.' };
   const policy = await prisma.attendancePolicy.update({
     where: { id: policyId },
     data: {

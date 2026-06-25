@@ -300,6 +300,11 @@ export default function RegularizePage({ params }) {
                     <div style={{ fontSize: '12px', color: 'var(--text2)', marginTop: '2px' }}>
                       {isAc ? (payload.reason || r.reason) : r.reason}
                     </div>
+                    {r.status === 'rejected' && r.reviewNote && (
+                      <div style={{ fontSize: '12px', fontStyle: 'italic', color: 'var(--red)', marginTop: '4px', padding: '6px 10px', borderRadius: '8px', background: 'rgba(255,59,48,0.06)' }}>
+                        Rejection note: {r.reviewNote}
+                      </div>
+                    )}
                   </div>
                 );
               })

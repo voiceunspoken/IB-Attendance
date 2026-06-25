@@ -64,7 +64,7 @@ export default function EmployeeDashboard({ params }) {
 
   if (!emp) return null;
 
-  const showClockWidget = !!approvedLocation || emp.employeeType === 'hybrid';
+  const showClockWidget = true;
   const clockLocations = approvedLocation ? [approvedLocation] : null;
 
   const leaveCards = leaveBalance ? [

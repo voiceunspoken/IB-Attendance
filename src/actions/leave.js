@@ -588,6 +588,7 @@ export async function cancelLeaveRequest(requestId, cancelledBy) {
 }
 
 export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = '') {
+  if (!approve && !note) return { error: 'A reason is required when rejecting.' };
   const req = await prisma.leaveRequest.findUnique({
     where: { id: requestId },
     include: { user: { include: { managers: { include: { manager: true }, orderBy: { priority: 'asc' } } } } }
@@ -795,6 +796,7 @@ export async function getAllPendingRegularizations() {
 }
 
 export async function reviewRegularization(requestId, reviewedBy, approve, note = '') {
+  if (!approve && !note) return { error: 'A reason is required when rejecting.' };
   const auth = await requireAdmin(reviewedBy);
   if (auth) return auth;
   const req = await prisma.regularizationRequest.findUnique({
@@ -838,7 +840,8 @@ export async function getPendingSuperRegularizations() {
   });
 }
 
-export async function reviewRegularizationSuper(requestId, superReviewedBy, approve) {
+export async function reviewRegularizationSuper(requestId, superReviewedBy, approve, note = '') {
+  if (!approve && !note) return { error: 'A reason is required when rejecting.' };
   const auth = await requireSuperAdmin(superReviewedBy);
   if (auth) return auth;
   const req = await prisma.regularizationRequest.update({
@@ -846,7 +849,8 @@ export async function reviewRegularizationSuper(requestId, superReviewedBy, appr
     data: {
       superStatus: approve ? 'approved' : 'rejected',
       superReviewedBy,
-      superReviewedAt: new Date()
+      superReviewedAt: new Date(),
+      reviewNote: note || null
     }
   });
 
@@ -928,12 +932,12 @@ export async function reviewRegularizationSuper(requestId, superReviewedBy, appr
   const notifType = approve ? 'regularization_approved' : 'regularization_rejected';
   const notifTitle = approve ? 'Regularization Fully Approved' : 'Regularization Rejected';
   await createNotification(req.userId, notifType, notifTitle,
-    `Your regularization for ${new Date(req.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} has been ${approve ? 'fully approved' : 'rejected'} by super admin.`,
-    { requestId: req.id, date: req.date });
+    `Your regularization for ${new Date(req.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} has been ${approve ? 'fully approved' : 'rejected'} by super admin.${note ? ' Note: ' + note : ''}`,
+    { requestId: req.id, date: req.date, note });
 
   const reqUser = await prisma.user.findUnique({ where: { id: req.userId } });
   if (reqUser) {
-    await sendLeaveStatusNotification(reqUser.code, reqUser.name, 'regularization', approve ? 'approved' : 'rejected', '');
+    await sendLeaveStatusNotification(reqUser.code, reqUser.name, 'regularization', approve ? 'approved' : 'rejected', note);
   }
 
   return { request: req };
@@ -982,7 +986,8 @@ export async function requestLeaveDeduction(employeeCode, leaveType, days, reaso
   return { success: true, change };
 }
 
-export async function reviewLeaveDeduction(changeId, reviewedBy, approve) {
+export async function reviewLeaveDeduction(changeId, reviewedBy, approve, note = '') {
+  if (!approve && !note) return { error: 'A reason is required when rejecting.' };
   const auth = await requireSuperAdmin(reviewedBy);
   if (auth) return auth;
 
@@ -1016,8 +1021,8 @@ export async function reviewLeaveDeduction(changeId, reviewedBy, approve) {
       approve ? 'Leave Deduction Approved' : 'Leave Deduction Rejected',
       approve
         ? `${payload.days} ${payload.leaveType.toUpperCase()} day(s) deducted from your balance.`
-        : `Your ${payload.leaveType.toUpperCase()} deduction request was rejected.`,
-      { ...payload });
+        : `Your ${payload.leaveType.toUpperCase()} deduction request was rejected.${note ? ' Note: ' + note : ''}`,
+      { ...payload, note });
   }
 
   return { success: true };

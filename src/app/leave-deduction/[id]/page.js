@@ -22,6 +22,7 @@ export default function DeductionDetailPage({ params }) {
   const [req, setReq] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [reviewNote, setReviewNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -37,8 +38,9 @@ export default function DeductionDetailPage({ params }) {
   }, [id, isAuthenticated]);
 
   const handleReview = async (approve) => {
+    if (!approve && !reviewNote.trim()) return toast.error('A reason is required when rejecting.');
     setSubmitting(true);
-    const result = await reviewLeaveDeduction(id, user.username, approve);
+    const result = await reviewLeaveDeduction(id, user.username, approve, reviewNote);
     setSubmitting(false);
     if (result?.error) return toast.error(result.error);
     toast.success(approve ? 'Leave deduction approved.' : 'Leave deduction rejected.');
@@ -143,6 +145,9 @@ export default function DeductionDetailPage({ params }) {
           {canReview && (
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: '20px', marginTop: '4px' }}>
               <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '10px' }}>Your Review</div>
+              <input className="input-field" placeholder="Add a note (required when rejecting)…"
+                value={reviewNote} onChange={e => setReviewNote(e.target.value)}
+                style={{ width: '100%', padding: '10px 14px', fontSize: '13px', marginBottom: '12px', boxSizing: 'border-box' }} />
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button className="btn btn-primary" style={{ flex: 1, padding: '12px', fontSize: '14px', background: 'var(--green)', border: 'none', borderRadius: '10px', color: '#fff', cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1, fontFamily: 'inherit', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                   disabled={submitting} onClick={() => handleReview(true)}>

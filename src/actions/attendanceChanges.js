@@ -168,7 +168,8 @@ function recalcTotals(logs) {
   return { present, absent, halfDay, late, lateHD, shortShift: ss, ssHD, shortLeave: sl, rl, holi, maxDay };
 }
 
-export async function reviewAdjustment(changeId, reviewedBy, approve) {
+export async function reviewAdjustment(changeId, reviewedBy, approve, note = '') {
+  if (!approve && !note) return { error: 'A reason is required when rejecting.' };
   const auth = await requireSuperAdmin(reviewedBy);
   if (auth) return auth;
   const change = await prisma.pendingChange.findUnique({ where: { id: changeId } });
@@ -250,8 +251,8 @@ export async function reviewAdjustment(changeId, reviewedBy, approve) {
     const notifType = approve ? 'adjustment_approved' : 'adjustment_rejected';
     const notifTitle = approve ? 'Adjustment Approved' : 'Adjustment Rejected';
     await createNotification(empUser.id, notifType, notifTitle,
-      `Your attendance adjustment for day ${payload.day} (${payload.currentType} → ${payload.newType}) has been ${approve ? 'approved' : 'rejected'}.`,
-      { ...payload });
+      `Your attendance adjustment for day ${payload.day} (${payload.currentType} → ${payload.newType}) has been ${approve ? 'approved' : 'rejected'}.${note ? ' Note: ' + note : ''}`,
+      { ...payload, note });
   }
 
   revalidatePath('/');

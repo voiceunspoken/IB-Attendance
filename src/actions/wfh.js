@@ -186,6 +186,7 @@ export async function getAllWfhRequests() {
 }
 
 export async function reviewWfhRequest(requestId, reviewedBy, approve, note = '') {
+  if (!approve && !note) return { error: 'A reason is required when rejecting.' };
   const req = await prisma.wfhRequest.findUnique({
     where: { id: requestId },
     include: { user: { include: { managers: { include: { manager: true }, orderBy: { priority: 'asc' } } } } }
