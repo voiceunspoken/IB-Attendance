@@ -50,7 +50,60 @@ export async function requestAdjustment(employeeCode, monthYear, day, currentTyp
   await Promise.all(adminIds.map(id => createNotification(id, 'adjustment_submitted',
     `New Adjustment Request`,
     `${user.name} requested an attendance adjustment for day ${day} (${currentType} → ${newType}).`,
-    { employeeCode, day, monthYear, currentType, newType, reason, warning })));
+    { employeeCode, day, monthYear, currentType, newType, reason, warning, requestId: change.id })));
+
+  revalidatePath('/');
+  return { success: true, warning };
+}
+
+export async function requestRegularizationChange(employeeCode, monthYear, day, currentType, newType, reason, requestedBy) {
+  const user = await prisma.user.findUnique({ where: { code: employeeCode } });
+  if (!user) return { error: 'Employee not found' };
+
+  let warning = null;
+
+  if (LEAVE_TYPES.includes(newType)) {
+    const year = parseInt(monthYear.split('_')[1]);
+    const balance = await prisma.leaveBalance.findUnique({
+      where: { userId_year: { userId: user.id, year } }
+    });
+    if (balance) {
+      const usedKey = newType + 'Used';
+      const totalKey = newType + 'Total';
+      const used = balance[usedKey] || 0;
+      const total = balance[totalKey] || 0;
+      if (used >= total) {
+        warning = `${newType.toUpperCase()} balance exhausted (${used}/${total} used).`;
+      } else if (used + 1 > total) {
+        warning = `${newType.toUpperCase()} balance insufficient (${used}/${total} used, need 1 more).`;
+      }
+    }
+  }
+
+  const [mo, yr] = monthYear.split('_');
+  const date = new Date(parseInt(yr), parseInt(mo) - 1, parseInt(day));
+
+  const payload = JSON.stringify({ employeeCode, employeeName: user.name, monthYear, day: parseInt(day), currentType, newType, warning, reason });
+
+  const req = await prisma.regularizationRequest.create({
+    data: {
+      userId: user.id,
+      date,
+      type: 'attendance_change',
+      reason: payload,
+      status: 'pending',
+      superStatus: 'pending'
+    }
+  });
+
+  await logAction(requestedBy, 'attendance_change_requested', 'regularization_request', req.id,
+    `Requested attendance change for ${employeeCode} day ${day} ${monthYear}: ${currentType} \u2192 ${newType}${warning ? ' (warning: ' + warning + ')' : ''}`);
+
+  const adminIds = await getAdminUserIds();
+  await Promise.all(adminIds.map(id => createNotification(id, 'regularization_submitted',
+    `New Attendance Change Request`,
+    `${user.name} requested an attendance change for day ${day} (${currentType} \u2192 ${newType}).`,
+    { employeeCode, day, monthYear, currentType, newType, reason, warning, requestId: req.id })));
 
   revalidatePath('/');
   return { success: true, warning };
@@ -194,4 +247,11 @@ export async function updatePunchTimes(employeeCode, monthYear, day, inTStr, out
 
   revalidatePath('/');
   return { success: true };
+}
+
+export async function getCorrectionById(id) {
+  const change = await prisma.pendingChange.findUnique({ where: { id } });
+  if (!change) return null;
+  const payload = JSON.parse(change.payload);
+  return { ...change, payload };
 }

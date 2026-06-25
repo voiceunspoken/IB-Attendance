@@ -13,7 +13,7 @@ const NAV_CONFIG = {
       { label: 'Dashboard', icon: <FiHome size={14} />, path: '/' },
       { label: 'Attendance', icon: <FiCalendar size={14} />, path: '/attendance' },
       { label: 'Team', icon: <FiUsers size={14} />, path: '/team' },
-      { label: 'Leaves', icon: <FiFileText size={14} />, path: '/leaves' },
+      { label: 'Approvals', icon: <FiFileText size={14} />, path: '/leaves' },
       { label: 'Audit', icon: <FiFileText size={14} />, path: '/audit' },
       { label: 'Notifications', icon: <FiBell size={14} />, path: '/notifications' },
       { label: 'Settings', icon: <FiSettings size={14} />, path: '/settings' },
@@ -25,7 +25,7 @@ const NAV_CONFIG = {
       { label: 'Dashboard', icon: <FiHome size={14} />, path: '/' },
       { label: 'Attendance', icon: <FiCalendar size={14} />, path: '/attendance' },
       { label: 'Team', icon: <FiUsers size={14} />, path: '/team' },
-      { label: 'Leaves', icon: <FiFileText size={14} />, path: '/leaves' },
+      { label: 'Approvals', icon: <FiFileText size={14} />, path: '/leaves' },
       { label: 'Audit', icon: <FiFileText size={14} />, path: '/audit' },
       { label: 'Notifications', icon: <FiBell size={14} />, path: '/notifications' },
       { label: 'Settings', icon: <FiSettings size={14} />, path: '/settings' },
@@ -225,7 +225,7 @@ export default function Sidebar({ open, onClose, isMobile }) {
             {[
               { label: 'Dashboard', icon: <FiHome size={14} />, path: '/' },
               { label: 'My Team', icon: <FiUsers size={14} />, path: '/team/manage' },
-              { label: 'Leaves', icon: <FiFileText size={14} />, path: '/leaves' },
+              { label: 'Approvals', icon: <FiFileText size={14} />, path: '/leaves' },
             ].map(link => (
               <NavLink key={link.path} link={link} pathname={pathname} router={router} isMobile={isMobile} onClose={onClose} />
             ))}

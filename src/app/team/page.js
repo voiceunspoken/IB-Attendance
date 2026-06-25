@@ -3,27 +3,16 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
-import { getUsers, deleteUser, updateUser, toggleDisableUser, promoteToAdmin, getPendingChanges, reviewPendingChange } from '../../actions/auth';
+import { getUsers, deleteUser, updateUser, toggleDisableUser, promoteToAdmin } from '../../actions/auth';
 import { getAllEmployees, addEmployee, deleteEmployee, deleteMonthRecord, getMonths } from '../../actions/attendance';
-import { updateEmployeeDetails, requestNameChange, reviewNameChange } from '../../actions/employees';
-import { reviewAdjustment } from '../../actions/attendanceChanges';
+import { updateEmployeeDetails, requestNameChange } from '../../actions/employees';
 import { getDepartments, addDepartment, deleteDepartment, addSubDepartment, deleteSubDepartment, getDesignations, addDesignation, deleteDesignation, setEmployeeManagers, getEmployeeManagers, setDepartmentManager, setSubDepartmentManager } from '../../actions/departments';
 import Modal from '../../components/Modal';
 import ConfirmModal from '../../components/ConfirmModal';
 import { useToast } from '../../components/Toast';
-import { FiPlus, FiTrash2, FiSearch, FiUser, FiX, FiCheck, FiAlertTriangle } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiSearch, FiUser, FiX, FiCheck } from 'react-icons/fi';
 
-const ATTENDANCE_TYPE_LABELS = {
-  present: 'Present', absent: 'Absent', half: 'Half Day', holiday: 'Holiday', rl: 'Restricted Leave',
-  wfh: 'WFH', wfm: 'WFM', wfo: 'WFO', wos: 'WOS',
-};
 const EMPLOYEE_TYPE_LABELS = { regular: 'Regular', hybrid: 'Hybrid' };
-const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const formatMonthYear = (m) => {
-  if (!m) return '';
-  const [mo, yr] = m.split('_');
-  return `${MONTH_NAMES[parseInt(mo) - 1] || mo} ${yr}`;
-};
 
 const ROLE_STYLES = {
   super_admin: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Super Admin' },
@@ -86,7 +75,7 @@ export default function TeamPage() {
 
   // ── Users / Accounts state ──
   const [users, setUsers] = useState([]);
-  const [pendingChanges, setPendingChanges] = useState([]);
+  // pending tab removed
   const [, setPromotableEmployees] = useState([]);
   const [userSearch, setUserSearch] = useState('');
   const [roleFilter] = useState('all');
@@ -168,20 +157,18 @@ export default function TeamPage() {
     if (!isAdmin && !isSuperAdmin) return;
     (async () => {
       try {
-        const [u, emps, depts, desigs, ms, pending] = await Promise.all([
+        const [u, emps, depts, desigs, ms] = await Promise.all([
           getUsers(),
           getAllEmployees(),
           getDepartments(),
           getDesignations(),
           getMonths(),
-          isSuperAdmin ? getPendingChanges() : Promise.resolve([])
         ]);
         setUsers(u);
         setEmployees(emps);
         setDepartments(depts);
         setDesignations(desigs);
         setMonths(ms);
-        setPendingChanges(pending);
         setPromotableEmployees(u.filter(x => x.code && x.role === 'employee'));
       } catch {
         setUsers([]);
@@ -189,7 +176,6 @@ export default function TeamPage() {
         setDepartments([]);
         setDesignations([]);
         setMonths([]);
-        setPendingChanges([]);
         setPromotableEmployees([]);
       } finally {
         setLoading(false);
@@ -227,19 +213,6 @@ export default function TeamPage() {
       variant: u.disabled ? 'default' : 'danger',
       onConfirm: async () => { await toggleDisableUser(u.id, user.username); setFetchTrigger(t => t + 1); },
     });
-  };
-
-  const handleReview = async (changeId, approve) => {
-    // Find the change's action type from pendingChanges state
-    const ch = pendingChanges.find(c => c.id === changeId);
-    if (ch?.action === 'update_employee_name') {
-      await reviewNameChange(changeId, user.username, approve);
-    } else if (ch?.action === 'attendance_adjustment') {
-      await reviewAdjustment(changeId, user.username, approve);
-    } else {
-      await reviewPendingChange(changeId, user.username, approve);
-    }
-    setFetchTrigger(t => t + 1);
   };
 
   const handleQuickPromote = async (e) => {
@@ -521,7 +494,6 @@ export default function TeamPage() {
 
   const tabs = [
     { key: 'employees', label: 'Employees' },
-    ...(isSuperAdmin ? [{ key: 'pending', label: `Pending${pendingChanges.length > 0 ? ` (${pendingChanges.length})` : ''}` }] : []),
     { key: 'departments', label: 'Departments' },
     { key: 'designations', label: 'Designations' },
     { key: 'tools', label: 'Month Tools' },
@@ -662,82 +634,6 @@ export default function TeamPage() {
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* ── PENDING APPROVALS TAB ── */}
-      {!loading && tab === 'pending' && isSuperAdmin && (
-        <div>
-          {pendingChanges.length === 0 ? (
-            <div style={{ padding: '64px 24px', textAlign: 'center' }}>
-              <div style={{ fontSize: '40px', marginBottom: '16px', opacity: 0.3 }}>✓</div>
-              <div style={{ color: 'var(--text2)', fontSize: 'var(--fs-sm)', fontWeight: 600 }}>All caught up</div>
-              <div style={{ color: 'var(--text3)', fontSize: 'var(--fs-xs)', marginTop: '4px' }}>No pending changes require your approval.</div>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {pendingChanges.map(c => {
-                let payload = {};
-                try { payload = JSON.parse(c.payload); } catch { /* invalid JSON payload */ }
-                const actionColors = {
-                  create_user: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Create User' },
-                  update_user: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3', label: 'Update User' },
-                  delete_user: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Delete User' },
-                  update_employee_name: { bg: 'rgba(255,159,10,0.1)', color: '#b36200', label: 'Name Change' },
-                  attendance_adjustment: { bg: 'rgba(0,113,227,0.1)', color: '#0071e3', label: 'Attendance Adjustment' },
-                  leave_deduction: { bg: 'rgba(255,159,10,0.1)', color: '#b36200', label: 'Leave Deduction' },
-                };
-                const ac = actionColors[c.action] || { bg: 'var(--surface2)', color: 'var(--text2)', label: c.action };
-                const isAdjustment = c.action === 'attendance_adjustment';
-                const isDeduction = c.action === 'leave_deduction';
-                return (
-                  <div key={c.id} className="card" style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
-                        <span style={{ background: ac.bg, color: ac.color, padding: '2px 10px', borderRadius: '6px', fontSize: 'var(--fs-xs)', fontWeight: 600 }}>{ac.label}</span>
-                        <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text2)' }}>by <strong>{c.requestedBy}</strong></span>
-                        <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text3)' }}>· {new Date(c.createdAt).toLocaleString()}</span>
-                      </div>
-                      {(isAdjustment || isDeduction) ? (
-                        <div>
-                              {isDeduction ? (
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
-                                  <span style={{ fontWeight: 600, fontSize: '13px' }}>{payload.employeeName || payload.employeeCode}</span>
-                                  {payload.employeeCode && <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{payload.employeeCode}</span>}
-                                  <span style={{ fontSize: '11px', color: 'var(--orange)', fontWeight: 600 }}>Leave Deduction</span>
-                                  <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{payload.days}d {payload.leaveType?.toUpperCase() || payload.leaveType}</span>
-                                </div>
-                              ) : (
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
-                                  <span style={{ fontWeight: 600, fontSize: '13px' }}>{payload.employeeName || payload.employeeCode}</span>
-                                  {payload.employeeCode && <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{payload.employeeCode}</span>}
-                                  <span style={{ fontSize: '11px', color: 'var(--text2)' }}>Day {payload.day} · {formatMonthYear(payload.monthYear)}</span>
-                                  <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{ATTENDANCE_TYPE_LABELS[payload.currentType] || payload.currentType} → {ATTENDANCE_TYPE_LABELS[payload.newType] || payload.newType}</span>
-                                </div>
-                              )}
-                          {payload.reason && <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '2px' }}>Reason: {payload.reason}</div>}
-                          {payload.warning && <div style={{ fontSize: '11px', color: 'var(--orange)', marginTop: '2px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}><FiAlertTriangle size={12} /> {payload.warning}</div>}
-                        </div>
-                      ) : (
-                        <div style={{ background: 'var(--surface2)', borderRadius: '8px', padding: '8px 12px', fontSize: 'var(--fs-xs)', fontFamily: 'monospace', color: 'var(--text2)', overflowX: 'auto' }}>
-                          {Object.entries(payload).map(([k, v]) => (
-                            <div key={k} style={{ display: 'flex', gap: '8px', marginBottom: '2px' }}>
-                              <span style={{ color: 'var(--text3)', flexShrink: 0 }}>{k}:</span>
-                              <span style={{ color: 'var(--text)', wordBreak: 'break-all' }}>{String(v)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                      <button className="btn btn-primary" style={{ padding: '6px 16px', fontSize: 'var(--fs-sm)', background: 'var(--green)' }} onClick={() => handleReview(c.id, true)}>Approve</button>
-                      <button style={{ padding: '6px 16px', fontSize: 'var(--fs-sm)', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.2)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleReview(c.id, false)}>Reject</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       )}
 

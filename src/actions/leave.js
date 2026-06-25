@@ -692,7 +692,7 @@ export async function getAllPendingRegularizations() {
 }
 
 export async function reviewRegularization(requestId, reviewedBy, approve, note = '') {
-  const auth = await requireAdmin(reviewedBy);
+  const auth = await requireAdminOrSuperAdmin(reviewedBy);
   if (auth) return auth;
   const req = await prisma.regularizationRequest.findUnique({
     where: { id: requestId },
@@ -747,7 +747,63 @@ export async function reviewRegularizationSuper(requestId, superReviewedBy, appr
     }
   });
 
-  if (approve && req.status === 'approved') {
+  if (approve && req.status === 'approved' && req.type === 'attendance_change') {
+    const payload = JSON.parse(req.reason);
+    const user = await prisma.user.findUnique({ where: { id: req.userId } });
+    if (user) {
+      await prisma.dailyLog.upsert({
+        where: { userId_monthYear_day: { userId: req.userId, monthYear: payload.monthYear, day: payload.day } },
+        update: {
+          type: payload.newType,
+          isLate: false,
+          isSS: false,
+          isSL: false,
+          hdReason: null
+        },
+        create: {
+          userId: req.userId, monthYear: payload.monthYear, day: payload.day,
+          type: payload.newType,
+          raw: '',
+          isLate: false, isSS: false, isSL: false
+        }
+      });
+
+      const logs = await prisma.dailyLog.findMany({ where: { userId: req.userId, monthYear: payload.monthYear } });
+      const t = recalcTotals(logs);
+      const numDays = t.maxDay || 31;
+      await prisma.monthRecord.upsert({
+        where: { userId_monthYear: { userId: req.userId, monthYear: payload.monthYear } },
+        update: {
+          present: t.present, absent: t.absent, halfDay: t.halfDay,
+          late: t.late, lateHD: t.lateHD, shortShift: t.shortShift,
+          ssHD: t.ssHD, shortLeave: t.shortLeave, rl: t.rl, holi: t.holi,
+          numDays,
+        },
+        create: {
+          userId: req.userId, monthYear: payload.monthYear,
+          present: t.present, absent: t.absent, halfDay: t.halfDay,
+          late: t.late, lateHD: t.lateHD, shortShift: t.shortShift,
+          ssHD: t.ssHD, shortLeave: t.shortLeave, rl: t.rl, holi: t.holi,
+          numDays,
+        },
+      });
+
+      if (LEAVE_TYPES.includes(payload.newType)) {
+        const year = parseInt(payload.monthYear.split('_')[1]);
+        const usedKey = payload.newType + 'Used';
+        const balance = await prisma.leaveBalance.findUnique({
+          where: { userId_year: { userId: req.userId, year } }
+        });
+        if (balance) {
+          const currentUsed = balance[usedKey] || 0;
+          await prisma.leaveBalance.update({
+            where: { userId_year: { userId: req.userId, year } },
+            data: { [usedKey]: currentUsed + 1 }
+          });
+        }
+      }
+    }
+  } else if (approve && req.status === 'approved') {
     const date = new Date(req.date);
     const monthYear = `${date.getMonth() + 1}_${date.getFullYear()}`;
     const day = date.getDate();
@@ -818,7 +874,7 @@ export async function requestLeaveDeduction(employeeCode, leaveType, days, reaso
   await Promise.all(adminIds.map(id => createNotification(id, 'leave_deduction_submitted',
     `Leave Deduction Request`,
     `${user.name} requested ${days} ${leaveType.toUpperCase()} deduction.`,
-    { employeeCode, leaveType, days, reason, changeId: change.id })));
+    { employeeCode, leaveType, days, reason, requestId: change.id })));
 
   return { success: true, change };
 }
@@ -864,9 +920,41 @@ export async function reviewLeaveDeduction(changeId, reviewedBy, approve) {
   return { success: true };
 }
 
+export async function getDeductionById(id) {
+  const change = await prisma.pendingChange.findUnique({ where: { id } });
+  if (!change) return null;
+  const payload = JSON.parse(change.payload);
+  return { ...change, payload };
+}
+
 function parseTime(t) {
   if (!t) return null;
   const [h, m] = t.split(':').map(Number);
   if (isNaN(h) || isNaN(m)) return null;
   return h * 60 + m;
+}
+
+const LEAVE_TYPES = ['cl', 'sl', 'el', 'rl', 'ul', 'sh'];
+
+function recalcTotals(logs) {
+  let present = 0, absent = 0, halfDay = 0, late = 0, ss = 0, sl = 0, rl = 0, holi = 0;
+  let lateHD = 0, ssHD = 0, maxDay = 0;
+  for (const log of logs) {
+    maxDay = Math.max(maxDay, log.day);
+    if (LEAVE_TYPES.includes(log.type)) {
+      if (log.type === 'rl') rl++;
+      else present++;
+    } else if (log.type === 'absent') absent++;
+    else if (log.type === 'holiday') holi++;
+    else if (log.type === 'half') { halfDay++; if (log.hdReason === 'late') lateHD++; if (log.hdReason === 'ss') ssHD++; }
+    else if (['wfh', 'wos', 'wfm', 'wfo'].includes(log.type)) { present++; }
+    else if (log.type === 'present') {
+      if (log.isHD) { halfDay++; if (log.hdReason === 'late') lateHD++; if (log.hdReason === 'ss') ssHD++; }
+      else { present++; }
+      if (log.isLate) late++;
+      if (log.isSS) ss++;
+      if (log.isSL) sl++;
+    }
+  }
+  return { present, absent, halfDay, late, lateHD, shortShift: ss, ssHD, shortLeave: sl, rl, holi, maxDay };
 }
