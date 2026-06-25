@@ -93,22 +93,12 @@ export default function LeavesPage({ params }) {
     return countWeekdays(from, to, workingSatDays);
   }, [leaveForm.fromDate, leaveForm.toDate, workingSatDays]);
 
-  function weekendCount(from, to) {
-    let c = 0;
-    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-      const day = d.getDay();
-      if (day === 0) c++;
-      else if (day === 6 && workingSatDays[d.getMonth() + 1] !== d.getDate()) c++;
-    }
-    return c;
-  }
-
   const sandwichWarning = useMemo(() => {
     if (!leaveForm.fromDate || leaveForm.isHalfDay || leaveForm.leaveType === 'sh' || leaveForm.leaveType === 'rl') return '';
     const from = new Date(leaveForm.fromDate);
     const to = leaveForm.toDate ? new Date(leaveForm.toDate) : from;
     if (from > to) return '';
-    const wk = weekendCount(from, to);
+    const wk = countWeekends(from, to, workingSatDays);
     if (wk === 0 || (leaveForm.leaveType !== 'cl' && leaveForm.leaveType !== 'el')) return '';
     const usedSoFar = leaveBalanceDetail?.sandwichUsed ?? 0;
     if (usedSoFar > 0) return '';
@@ -120,7 +110,7 @@ export default function LeavesPage({ params }) {
     const from = new Date(leaveForm.fromDate);
     const to = leaveForm.toDate ? new Date(leaveForm.toDate) : from;
     if (from > to) return null;
-    const wk = weekendCount(from, to);
+    const wk = countWeekends(from, to, workingSatDays);
     if (wk === 0) return null;
     const usedSoFar = leaveBalanceDetail?.sandwichUsed ?? 0;
     const isFirst = usedSoFar === 0;

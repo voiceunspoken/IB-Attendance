@@ -78,9 +78,8 @@ export default function RegularizePage({ params }) {
   const [regSuccess, setRegSuccess] = useState('');
   const [submittingReg, setSubmittingReg] = useState(false);
   const [currentLog, setCurrentLog] = useState(null);
-  const [loadingLog, setLoadingLog] = useState(false);
-  const [prescriptionFile, setPrescriptionFile] = useState(null);
-
+  const [fetchedDate, setFetchedDate] = useState(null);
+  const loadingLog = regForm.date && regForm.date !== fetchedDate;
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
     if (!authLoading && isAuthenticated && !isAdmin && !isSuperAdmin && user?.code && user.code !== code) {
@@ -94,12 +93,20 @@ export default function RegularizePage({ params }) {
   }, [code, triggerRefetch]);
 
   useEffect(() => {
-    if (!code || !regForm.date) { setCurrentLog(null); return; }
-    setLoadingLog(true);
+    if (!code || !regForm.date) return;
+    let cancelled = false;
     getDailyLogForDate(code, regForm.date).then(log => {
-      setCurrentLog(log);
-      setLoadingLog(false);
-    }).catch(() => { setCurrentLog(null); setLoadingLog(false); });
+      if (!cancelled) {
+        setCurrentLog(log);
+        setFetchedDate(regForm.date);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setCurrentLog(null);
+        setFetchedDate(regForm.date);
+      }
+    });
+    return () => { cancelled = true; };
   }, [code, regForm.date]);
 
   const isPunchType = ['missing_punch', 'missing_punch_in', 'missing_punch_out'].includes(regForm.type);
@@ -169,7 +176,6 @@ export default function RegularizePage({ params }) {
 
     setRegForm({ date: '', type: 'missing_punch', requestedIn: '', requestedOut: '', reason: '', shiftSlot: '10-12' });
     setCurrentLog(null);
-    setPrescriptionFile(null);
     triggerRefetch();
   };
 
@@ -216,22 +222,6 @@ export default function RegularizePage({ params }) {
                   <input className="input-field" type="time" value={regForm.requestedOut} onChange={e => setRegForm(f => ({ ...f, requestedOut: e.target.value }))} />
                 </div>
               )}
-            </div>
-          )}
-
-          {regForm.type === 'sl' && (
-            <div>
-              <label className="input-label">Prescription (optional)</label>
-              <input className="input-field" type="file" accept="image/*,.pdf"
-                style={{ padding: '8px', fontSize: '12px' }}
-                onChange={e => {
-                  const f = e.target.files?.[0];
-                  if (f) {
-                    const reader = new FileReader();
-                    reader.onload = () => setPrescriptionFile(reader.result);
-                    reader.readAsDataURL(f);
-                  }
-                }} />
             </div>
           )}
 
@@ -286,7 +276,7 @@ export default function RegularizePage({ params }) {
             : regularizations.map(r => {
                 let payload = {};
                 let isAc = false;
-                try { if (r.type === 'attendance_change') { payload = JSON.parse(r.reason); isAc = true; } } catch {}
+                try { if (r.type === 'attendance_change') { payload = JSON.parse(r.reason); isAc = true; } } catch { /* invalid JSON */ }
                 const typeLabel = r.type === 'attendance_change'
                   ? `${TYPE_DISPLAY_LABELS[payload.currentType] || payload.currentType} → ${TYPE_DISPLAY_LABELS[payload.newType] || payload.newType}`
                   : TYPE_DISPLAY_LABELS[r.type] || r.type?.replace(/_/g, ' ') || 'Request';

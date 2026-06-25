@@ -925,7 +925,7 @@ export default function TeamPage() {
               const monthWS = workingSaturdays.filter(s => s.year === wsYear);
               if (monthWS.length === 0) return (
                 <div style={{ fontSize: '13px', color: 'var(--text3)', padding: '12px 0' }}>
-                  No working Saturdays configured for {wsYear}. Click "Seed Defaults" to populate 3rd Saturdays.
+                  No working Saturdays configured for {wsYear}. Click &quot;Seed Defaults&quot; to populate 3rd Saturdays.
                 </div>
               );
               return (

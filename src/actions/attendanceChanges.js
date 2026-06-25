@@ -3,7 +3,7 @@
 import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
-import { createNotification, getAdminUserIds } from './notifications';
+import { createNotification, getAdminUserIds, getSuperAdminUserIds } from './notifications';
 import { requireSuperAdmin } from '../lib/auth-guard';
 
 const LEAVE_TYPES = ['cl', 'sl', 'el', 'rl', 'ul', 'sh'];
