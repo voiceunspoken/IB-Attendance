@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
 import { requireAdmin, requireAdminOrSuperAdmin, requireSuperAdmin } from '../lib/auth-guard';
+import { requireSuperApproval } from '../lib/super-approval';
 import { createNotification, getAdminUserIds, getSuperAdminUserIds, sendLeavePendingNotification, sendLeaveStatusNotification } from './notifications';
 
 export async function getLeavePolicy(year) {
@@ -11,8 +12,8 @@ export async function getLeavePolicy(year) {
 }
 
 export async function upsertLeavePolicy(year, { cl, sl, el, rl }, performedBy = null) {
-  const auth = await requireAdminOrSuperAdmin(performedBy);
-  if (auth) return auth;
+  const pending = await requireSuperApproval(performedBy, 'update_leave_policy', { year, cl, sl, el, rl });
+  if (pending) return pending;
   return prisma.leavePolicy.upsert({
     where: { year },
     update: { cl, sl, el, rl },
@@ -162,8 +163,8 @@ export async function getLeaveBalancesForExport(year, fromMonth = 1, toMonth = 1
 }
 
 export async function adminUpdateLeaveBalance(employeeCode, year, fields, performedBy = null) {
-  const auth = await requireAdminOrSuperAdmin(performedBy);
-  if (auth) return auth;
+  const pending = await requireSuperApproval(performedBy, 'edit_leave_balance', { employeeCode, year, fields });
+  if (pending) return pending;
   const user = await prisma.user.findUnique({ where: { code: employeeCode } });
   if (!user) return { error: 'Employee not found' };
 
@@ -692,7 +693,7 @@ export async function getAllPendingRegularizations() {
 }
 
 export async function reviewRegularization(requestId, reviewedBy, approve, note = '') {
-  const auth = await requireAdminOrSuperAdmin(reviewedBy);
+  const auth = await requireAdmin(reviewedBy);
   if (auth) return auth;
   const req = await prisma.regularizationRequest.findUnique({
     where: { id: requestId },

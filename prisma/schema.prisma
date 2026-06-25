@@ -340,6 +340,15 @@ model AttendancePolicy {
   createdAt       DateTime @default(now())
 }
 
+// Per-action toggle: should admin actions require super admin approval?
+model AdminActionConfig {
+  id                String   @id @default(cuid())
+  actionType        String   @unique
+  requiresApproval  Boolean  @default(true)
+  updatedAt         DateTime @updatedAt
+  createdAt         DateTime @default(now())
+}
+
 // Super admin configuration toggles
 model SuperAdminConfig {
   id                   String   @id @default(cuid())

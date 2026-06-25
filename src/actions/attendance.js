@@ -6,6 +6,7 @@ import { logAction } from './audit';
 import { sendHighAbsenceAlert } from './notifications';
 import bcrypt from 'bcryptjs';
 import { requireAdminOrSuperAdmin } from '../lib/auth-guard';
+import { requireSuperApproval } from '../lib/super-approval';
 
 const ABSENCE_ALERT_THRESHOLD = 3;
 
@@ -247,8 +248,8 @@ export async function getEmployeeHistory(code) {
 }
 
 export async function addEmployee(code, name, performedBy = 'admin', extra = {}) {
-  const auth = await requireAdminOrSuperAdmin(performedBy);
-  if (auth) return auth;
+  const pending = await requireSuperApproval(performedBy, 'create_user', { code, name, ...extra });
+  if (pending) return pending;
   const existing = await prisma.user.findUnique({ where: { code } });
   if (existing) return { error: `Employee code "${code}" already exists.` };
 
@@ -272,8 +273,8 @@ export async function addEmployee(code, name, performedBy = 'admin', extra = {})
 }
 
 export async function deleteEmployee(code, performedBy = 'admin') {
-  const auth = await requireAdminOrSuperAdmin(performedBy);
-  if (auth) return auth;
+  const pending = await requireSuperApproval(performedBy, 'delete_user', { code });
+  if (pending) return pending;
   const user = await prisma.user.findUnique({ where: { code } });
   if (!user) return { error: 'Employee not found.' };
   await prisma.punchLog.deleteMany({ where: { userId: user.id } });
@@ -292,8 +293,8 @@ export async function deleteEmployee(code, performedBy = 'admin') {
 }
 
 export async function deleteMonthRecord(employeeCode, monthYear, performedBy = 'admin') {
-  const auth = await requireAdminOrSuperAdmin(performedBy);
-  if (auth) return auth;
+  const pending = await requireSuperApproval(performedBy, 'delete_month', { employeeCode, monthYear });
+  if (pending) return pending;
   const user = await prisma.user.findUnique({ where: { code: employeeCode } });
   if (!user) return { error: 'Employee not found.' };
   await prisma.monthRecord.deleteMany({ where: { userId: user.id, monthYear } });
@@ -319,8 +320,8 @@ export async function getAllEmployees() {
 }
 
 export async function updateMonthRecord(employeeCode, monthYear, fields, performedBy = 'admin') {
-  const auth = await requireAdminOrSuperAdmin(performedBy);
-  if (auth) return auth;
+  const pending = await requireSuperApproval(performedBy, 'edit_month', { employeeCode, monthYear, fields });
+  if (pending) return pending;
   const user = await prisma.user.findUnique({ where: { code: employeeCode } });
   if (!user) return { error: 'Employee not found.' };
   const allowed = ['present','absent','halfDay','late','lateHD','shortShift','ssHD','shortLeave','rl','holi'];

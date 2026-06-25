@@ -226,6 +226,12 @@ export default function TeamPage() {
       toast.error(result.error);
       return;
     }
+    if (result.pending) {
+      toast.success('Promotion submitted for super admin approval.');
+      setPromoteUserId('');
+      setShowPromoteModal(false);
+      return;
+    }
     toast.success(`"${target?.name || target?.username}" promoted to ${promoteRole === 'super_admin' ? 'Super Admin' : 'Admin'}.`);
     setPromoteUserId('');
     setShowPromoteModal(false);
@@ -244,6 +250,7 @@ export default function TeamPage() {
       designationId: empForm.designationId || undefined,
     });
     if (result.error) return setEmpMsg(result.error);
+    if (result.pending) return setEmpMsg(`Submitted for approval: ${empForm.name}`);
     setEmpMsg(`Added: ${empForm.name}`);
     setEmpForm({ code: '', name: '', employeeType: 'regular', departmentId: '', designationId: '' });
     setShowCreateModal(false);
@@ -254,7 +261,7 @@ export default function TeamPage() {
     if (p.code) {
       setConfirmState({
         show: true, message: `Delete ${p.name} and ALL their attendance data? This cannot be undone.`,
-        onConfirm: async () => { await deleteEmployee(p.code, user.username); setFetchTrigger(t => t + 1); },
+        onConfirm: async () => { const r = await deleteEmployee(p.code, user.username); if (r.pending) toast.success('Deletion submitted for super admin approval.'); setFetchTrigger(t => t + 1); },
       });
     } else {
       const target = users.find(u => u.id === p.id);

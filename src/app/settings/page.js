@@ -11,7 +11,7 @@ import {
 } from '../../actions/holidayAdmin';
 import { getActiveShiftPolicy, saveShiftPolicy, getShiftPolicyHistory, getPendingPolicies, reviewPolicy } from '../../actions/shiftPolicy';
 
-import { getSuperAdminConfig, setRequireSuperApproval } from '../../actions/superAdminConfig';
+import { getSuperAdminConfig, setRequireSuperApproval, getAllAdminActionConfigs, setAdminActionConfig, ACTION_LABELS } from '../../actions/superAdminConfig';
 import { getMonths } from '../../actions/attendance';
 import { changePassword } from '../../actions/auth';
 import { sendAllMonthlyReports } from '../../actions/notifications';
@@ -19,6 +19,25 @@ import ConfirmModal from '../../components/ConfirmModal';
 import { FiSun, FiClock, FiPlus } from 'react-icons/fi';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function ToggleSwitch({ checked, onChange }) {
+  return (
+    <label style={{ position: 'relative', display: 'inline-block', width: '44px', height: '24px', cursor: 'pointer', flexShrink: 0 }}>
+      <input type="checkbox" style={{ opacity: 0, width: 0, height: 0 }} checked={checked}
+        onChange={e => onChange(e.target.checked)} />
+      <span style={{
+        position: 'absolute', inset: 0, borderRadius: '12px', transition: '0.2s',
+        background: checked ? 'var(--green)' : 'var(--border)',
+      }}>
+        <span style={{
+          position: 'absolute', top: '2px', left: checked ? '22px' : '2px',
+          width: '20px', height: '20px', borderRadius: '50%', background: '#fff', transition: '0.2s',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+        }} />
+      </span>
+    </label>
+  );
+}
 
 export default function SettingsPage() {
   const { role, isAuthenticated, user, loading: authLoading } = useAuth();
@@ -55,7 +74,7 @@ export default function SettingsPage() {
   const [notifMsg, setNotifMsg] = useState('');
 
   const [approvalConfig, setApprovalConfig] = useState(null);
-  const [approvalMsg, setApprovalMsg] = useState('');
+  const [actionToggles, setActionToggles] = useState({});
 
   const [confirmState, setConfirmState] = useState({ show: false, message: '', confirmLabel: 'Delete', confirmLoadingLabel: 'Deleting…', variant: 'danger', onConfirm: null });
 
@@ -90,6 +109,10 @@ export default function SettingsPage() {
           setPendingPolicies(pp);
           const ac = await getSuperAdminConfig();
           setApprovalConfig(ac);
+          const allActions = await getAllAdminActionConfigs();
+          const toggleMap = {};
+          allActions.forEach(a => { toggleMap[a.actionType] = a.requiresApproval; });
+          setActionToggles(toggleMap);
         }
       } catch {
         setHolidays([]);
@@ -503,42 +526,55 @@ export default function SettingsPage() {
 
       {/* ── APPROVALS (super_admin only) ── */}
       {!loading && tab === 'approvals' && isSuperAdmin && (
-        <div className="flex-col gap-16" style={{ maxWidth: '560px' }}>
+        <div className="flex-col gap-16" style={{ maxWidth: '700px' }}>
+          {/* Leave approval toggle */}
           <div className="card card-body">
             <div className="text-md text-bold mb-6">Super Admin Approval</div>
             <div className="text-sm text-muted mb-20">
-              Controls whether leave requests and other items require final approval from a Super Admin after manager approval.
+              Controls whether leave requests require final approval from a Super Admin after manager approval.
             </div>
             <div className="flex-between gap-16" style={{ padding: '14px 0', borderTop: '1px solid var(--border)' }}>
               <div>
-                <div className="text-sm text-semibold">Require Super Admin Approval</div>
+                <div className="text-sm text-semibold">Leave Requests — Require Super Admin</div>
                 <div className="text-xs text-muted" style={{ marginTop: '2px' }}>
                   {approvalConfig?.requireSuperApproval
                     ? 'Leave requests need super admin final approval after managers approve.'
-                    : 'Leave requests are fully approved once managers approve; no super admin step.'}
+                    : 'Leave requests are fully approved once managers approve.'}
                 </div>
               </div>
-              <label style={{ position: 'relative', display: 'inline-block', width: '44px', height: '24px', cursor: 'pointer' }}>
-                <input type="checkbox" style={{ opacity: 0, width: 0, height: 0 }} checked={!!approvalConfig?.requireSuperApproval}
-                  onChange={async (e) => {
-                    const val = e.target.checked;
-                    setApprovalConfig(c => c ? { ...c, requireSuperApproval: val } : { requireSuperApproval: val, id: '' });
-                    await setRequireSuperApproval(val, user.username);
-                    setApprovalMsg(val ? 'Super admin approval required.' : 'Super admin approval not required.');
-                  }} />
-                <span style={{
-                  position: 'absolute', inset: 0, borderRadius: '12px', transition: '0.2s',
-                  background: approvalConfig?.requireSuperApproval ? 'var(--green)' : 'var(--border)',
-                }}>
-                  <span style={{
-                    position: 'absolute', top: '2px', left: approvalConfig?.requireSuperApproval ? '22px' : '2px',
-                    width: '20px', height: '20px', borderRadius: '50%', background: '#fff', transition: '0.2s',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                  }} />
-                </span>
-              </label>
+              <ToggleSwitch checked={!!approvalConfig?.requireSuperApproval}
+                onChange={async (val) => {
+                  setApprovalConfig(c => c ? { ...c, requireSuperApproval: val } : { requireSuperApproval: val, id: '' });
+                  await setRequireSuperApproval(val, user.username);
+                }} />
             </div>
-            {approvalMsg && <div className="text-sm" style={{ color: 'var(--green)', marginTop: '8px' }}>{approvalMsg}</div>}
+          </div>
+
+          {/* Per-action toggles */}
+          <div className="card card-body">
+            <div className="text-md text-bold mb-2">Admin Actions — Require Super Admin Approval</div>
+            <div className="text-sm text-muted mb-16">
+              When ON, the listed action creates a pending request for super admin approval. When OFF, the admin can perform it directly.
+              Super admin actions are always final.
+            </div>
+            {Object.entries(ACTION_LABELS).map(([key, label]) => {
+              const isOn = actionToggles[key] !== false;
+              return (
+                <div key={key} className="flex-between gap-16" style={{ padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
+                  <div>
+                    <div className="text-sm text-semibold">{label}</div>
+                    <div className="text-xs text-muted" style={{ marginTop: '2px' }}>
+                      {isOn ? 'Admin submits → Super admin approves' : 'Admin can do this directly'}
+                    </div>
+                  </div>
+                  <ToggleSwitch checked={isOn}
+                    onChange={async (val) => {
+                      setActionToggles(t => ({ ...t, [key]: val }));
+                      await setAdminActionConfig(key, val);
+                    }} />
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

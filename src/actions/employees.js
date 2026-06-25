@@ -2,6 +2,7 @@
 
 import { prisma } from '../lib/prisma';
 import { requireAdminOrSuperAdmin, requireSuperAdmin } from '../lib/auth-guard';
+import { requireSuperApproval } from '../lib/super-approval';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
 import { createNotification } from './notifications';
@@ -28,8 +29,8 @@ export async function updateEmployeeDetails(code, fields, performedBy) {
   const sensitiveFields = ['employeeType', 'departmentId', 'subDepartmentId', 'designationId', 'email'];
   const hasSensitiveChanges = sensitiveFields.some(f => fields[f] !== undefined);
   if (hasSensitiveChanges) {
-    const auth = await requireAdminOrSuperAdmin(performedBy);
-    if (auth) return auth;
+    const pending = await requireSuperApproval(performedBy, 'update_user', { code, fields });
+    if (pending) return pending;
   }
 
   const data = {};

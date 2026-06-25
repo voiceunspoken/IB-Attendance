@@ -3,7 +3,7 @@
 import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
-import { createNotification, getAdminUserIds } from './notifications';
+import { createNotification, getAdminUserIds, getSuperAdminUserIds } from './notifications';
 import { requireSuperAdmin } from '../lib/auth-guard';
 
 const LEAVE_TYPES = ['cl', 'sl', 'el', 'rl', 'ul', 'sh'];
@@ -60,6 +60,10 @@ export async function requestRegularizationChange(employeeCode, monthYear, day, 
   const user = await prisma.user.findUnique({ where: { code: employeeCode } });
   if (!user) return { error: 'Employee not found' };
 
+  const requester = await prisma.user.findUnique({ where: { username: requestedBy } });
+  const isSuper = requester?.role === 'super_admin';
+  const isAdmin = requester?.role === 'admin';
+
   let warning = null;
 
   if (LEAVE_TYPES.includes(newType)) {
@@ -91,22 +95,54 @@ export async function requestRegularizationChange(employeeCode, monthYear, day, 
       date,
       type: 'attendance_change',
       reason: payload,
-      status: 'pending',
-      superStatus: 'pending'
+      status: isSuper || isAdmin ? 'approved' : 'pending',
+      superStatus: isSuper ? 'approved' : 'pending'
     }
   });
 
-  await logAction(requestedBy, 'attendance_change_requested', 'regularization_request', req.id,
-    `Requested attendance change for ${employeeCode} day ${day} ${monthYear}: ${currentType} \u2192 ${newType}${warning ? ' (warning: ' + warning + ')' : ''}`);
+  if (isSuper) {
+    const logs = await prisma.dailyLog.findMany({ where: { userId: user.id, monthYear } });
+    const t = recalcTotals(logs);
+    const numDays = t.maxDay || 31;
+    await prisma.monthRecord.upsert({
+      where: { userId_monthYear: { userId: user.id, monthYear } },
+      update: { present: t.present, absent: t.absent, halfDay: t.halfDay, late: t.late, lateHD: t.lateHD, shortShift: t.shortShift, ssHD: t.ssHD, shortLeave: t.shortLeave, rl: t.rl, holi: t.holi, numDays },
+      create: { userId: user.id, monthYear, present: t.present, absent: t.absent, halfDay: t.halfDay, late: t.late, lateHD: t.lateHD, shortShift: t.shortShift, ssHD: t.ssHD, shortLeave: t.shortLeave, rl: t.rl, holi: t.holi, numDays },
+    });
+    if (LEAVE_TYPES.includes(newType)) {
+      const year = parseInt(monthYear.split('_')[1]);
+      const usedKey = newType + 'Used';
+      const balance = await prisma.leaveBalance.findUnique({ where: { userId_year: { userId: user.id, year } } });
+      if (balance) {
+        const currentUsed = balance[usedKey] || 0;
+        await prisma.leaveBalance.update({ where: { userId_year: { userId: user.id, year } }, data: { [usedKey]: currentUsed + 1 } });
+      }
+    }
+  }
 
-  const adminIds = await getAdminUserIds();
-  await Promise.all(adminIds.map(id => createNotification(id, 'regularization_submitted',
-    `New Attendance Change Request`,
-    `${user.name} requested an attendance change for day ${day} (${currentType} \u2192 ${newType}).`,
-    { employeeCode, day, monthYear, currentType, newType, reason, warning, requestId: req.id })));
+  await logAction(requestedBy, 'attendance_change_requested', 'regularization_request', req.id,
+    `Requested attendance change for ${employeeCode} day ${day} ${monthYear}: ${currentType} \u2192 ${newType}${warning ? ' (warning: ' + warning + ')' : ''}${isSuper ? ' [final]' : isAdmin ? ' [admin → super]' : ''}`);
+
+  if (isSuper || isAdmin) {
+    const superIds = await getSuperAdminUserIds();
+    if (superIds.length) {
+      const msg = isSuper
+        ? `Super admin ${requester.name} directly applied an attendance change for ${user.name} day ${day}: ${currentType} → ${newType}.`
+        : `${requester.name} requested an attendance change for ${user.name} day ${day} (${currentType} → ${newType}) — pending your final approval.`;
+      await Promise.all(superIds.map(id => createNotification(id, isSuper ? 'adjustment_approved' : 'regularization_submitted',
+        isSuper ? 'Attendance Change Applied' : 'Attendance Change Pending Final Approval', msg,
+        { employeeCode, day, monthYear, currentType, newType, reason, requestId: req.id })));
+    }
+  } else {
+    const adminIds = await getAdminUserIds();
+    await Promise.all(adminIds.map(id => createNotification(id, 'regularization_submitted',
+      `New Attendance Change Request`,
+      `${user.name} requested an attendance change for day ${day} (${currentType} → ${newType}).`,
+      { employeeCode, day, monthYear, currentType, newType, reason, warning, requestId: req.id })));
+  }
 
   revalidatePath('/');
-  return { success: true, warning };
+  return { success: true, warning, direct: isSuper };
 }
 
 function recalcTotals(logs) {

@@ -3,6 +3,7 @@
 import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { requireAdminOrSuperAdmin } from '../lib/auth-guard';
+import { requireSuperApproval } from '../lib/super-approval';
 
 // ─── DEPARTMENT ──────────────────────────────────────────────
 
@@ -17,8 +18,8 @@ export async function getDepartments() {
 }
 
 export async function addDepartment(name, performedBy = null) {
-  const auth = await requireAdminOrSuperAdmin(performedBy);
-  if (auth) return auth;
+  const pending = await requireSuperApproval(performedBy, 'manage_org', { action: 'add_department', name });
+  if (pending) return pending;
   const existing = await prisma.department.findUnique({ where: { name } });
   if (existing) return { error: 'Department already exists.' };
   const dept = await prisma.department.create({ data: { name } });
@@ -27,8 +28,8 @@ export async function addDepartment(name, performedBy = null) {
 }
 
 export async function deleteDepartment(id, performedBy = null) {
-  const auth = await requireAdminOrSuperAdmin(performedBy);
-  if (auth) return auth;
+  const pending = await requireSuperApproval(performedBy, 'manage_org', { action: 'delete_department', id });
+  if (pending) return pending;
   await prisma.user.updateMany({ where: { departmentId: id }, data: { departmentId: null } });
   await prisma.subDepartment.deleteMany({ where: { departmentId: id } });
   await prisma.department.delete({ where: { id } });
@@ -39,8 +40,8 @@ export async function deleteDepartment(id, performedBy = null) {
 // ─── SUB DEPARTMENT ──────────────────────────────────────────
 
 export async function addSubDepartment(name, departmentId, performedBy = null) {
-  const auth = await requireAdminOrSuperAdmin(performedBy);
-  if (auth) return auth;
+  const pending = await requireSuperApproval(performedBy, 'manage_org', { action: 'add_sub_department', name, departmentId });
+  if (pending) return pending;
   const dept = await prisma.department.findUnique({ where: { id: departmentId } });
   if (!dept) return { error: 'Department not found.' };
   const sub = await prisma.subDepartment.create({ data: { name, departmentId } });
@@ -49,8 +50,8 @@ export async function addSubDepartment(name, departmentId, performedBy = null) {
 }
 
 export async function deleteSubDepartment(id, performedBy = null) {
-  const auth = await requireAdminOrSuperAdmin(performedBy);
-  if (auth) return auth;
+  const pending = await requireSuperApproval(performedBy, 'manage_org', { action: 'delete_sub_department', id });
+  if (pending) return pending;
   await prisma.user.updateMany({ where: { subDepartmentId: id }, data: { subDepartmentId: null } });
   await prisma.subDepartment.delete({ where: { id } });
   revalidatePath('/');
@@ -64,8 +65,8 @@ export async function getDesignations() {
 }
 
 export async function addDesignation(name, performedBy = null) {
-  const auth = await requireAdminOrSuperAdmin(performedBy);
-  if (auth) return auth;
+  const pending = await requireSuperApproval(performedBy, 'manage_org', { action: 'add_designation', name });
+  if (pending) return pending;
   const existing = await prisma.designation.findUnique({ where: { name } });
   if (existing) return { error: 'Designation already exists.' };
   const desig = await prisma.designation.create({ data: { name } });
@@ -74,8 +75,8 @@ export async function addDesignation(name, performedBy = null) {
 }
 
 export async function deleteDesignation(id, performedBy = null) {
-  const auth = await requireAdminOrSuperAdmin(performedBy);
-  if (auth) return auth;
+  const pending = await requireSuperApproval(performedBy, 'manage_org', { action: 'delete_designation', id });
+  if (pending) return pending;
   await prisma.user.updateMany({ where: { designationId: id }, data: { designationId: null } });
   await prisma.designation.delete({ where: { id } });
   revalidatePath('/');

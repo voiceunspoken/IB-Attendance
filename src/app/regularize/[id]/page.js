@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../components/AuthProvider';
 import { getRegularizationById, reviewRegularization, reviewRegularizationSuper } from '../../../actions/leave';
 import { useToast } from '../../../components/Toast';
-import { FiArrowLeft, FiCalendar, FiClock, FiAlertTriangle, FiCheck, FiX } from 'react-icons/fi';
+import { FiArrowLeft, FiCalendar, FiClock, FiAlertTriangle, FiCheck, FiX, FiRepeat } from 'react-icons/fi';
 
 export default function RegularizationDetailPage({ params }) {
   const unwrappedParams = use(params);
@@ -66,6 +66,11 @@ export default function RegularizationDetailPage({ params }) {
 
   if (!req) return null;
 
+  const AC_TYPE_LABELS = { present: 'Present', absent: 'Absent', wfh: 'WFH', wfo: 'WFO', halfday: 'Half Day', late: 'Late', 'paid-leave': 'Paid Leave', 'casual-leave': 'Casual Leave', 'sick-leave': 'Sick Leave', holiday: 'Holiday', weekoff: 'Week Off' };
+  let acPayload = {};
+  const isAc = req.type === 'attendance_change';
+  try { if (isAc) acPayload = JSON.parse(req.reason); } catch { /* */ }
+
   const isPending = req.status === 'pending';
   const canAdminReview = isAdmin && isPending && req.superStatus !== 'approved';
   const canSuperReview = isSuperAdmin && (req.superStatus === 'pending');
@@ -106,19 +111,18 @@ export default function RegularizationDetailPage({ params }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
             <div className="card" style={{ padding: '14px 16px', margin: 0, border: '1px solid var(--border)', borderRadius: '10px' }}>
               <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <FiCalendar size={11} /> Date
+                <FiCalendar size={11} /> {isAc ? 'Attendance Date' : 'Date'}
               </div>
               <div style={{ fontSize: '14px', fontWeight: 600 }}>
-                {new Date(req.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                {isAc ? `Day ${acPayload.day} · ${acPayload.monthYear}` : new Date(req.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
               </div>
             </div>
             <div className="card" style={{ padding: '14px 16px', margin: 0, border: '1px solid var(--border)', borderRadius: '10px' }}>
               <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <FiClock size={11} /> Requested Times
+                {isAc ? <FiRepeat size={11} /> : <FiClock size={11} />} {isAc ? 'Change' : 'Requested Times'}
               </div>
               <div style={{ fontSize: '14px', fontWeight: 600 }}>
-                {req.requestedIn && `In: ${req.requestedIn}`}{req.requestedIn && req.requestedOut && ' · '}{req.requestedOut && `Out: ${req.requestedOut}`}
-                {!req.requestedIn && !req.requestedOut && <span style={{ color: 'var(--text3)' }}>N/A</span>}
+                {isAc ? <>{AC_TYPE_LABELS[acPayload.currentType] || acPayload.currentType} → {AC_TYPE_LABELS[acPayload.newType] || acPayload.newType}{acPayload.warning === 'marked_absent' && <span style={{ color: 'var(--orange)', fontSize: '12px', marginLeft: '8px' }}>(was absent)</span>}</> : <>{req.requestedIn && `In: ${req.requestedIn}`}{req.requestedIn && req.requestedOut && ' · '}{req.requestedOut && `Out: ${req.requestedOut}`}{!req.requestedIn && !req.requestedOut && <span style={{ color: 'var(--text3)' }}>N/A</span>}</>}
               </div>
             </div>
             <div className="card" style={{ padding: '14px 16px', margin: 0, border: '1px solid var(--border)', borderRadius: '10px' }}>
@@ -140,7 +144,7 @@ export default function RegularizationDetailPage({ params }) {
           </div>
 
           <div style={{ fontSize: '13px', lineHeight: 1.6, color: 'var(--text2)', marginBottom: '16px', padding: '14px 16px', background: 'var(--surface2)', borderRadius: '10px', border: '1px solid var(--border)' }}>
-            <span style={{ fontWeight: 600, color: 'var(--text)' }}>Reason:</span> {req.reason || 'No reason provided'}
+            <span style={{ fontWeight: 600, color: 'var(--text)' }}>Reason:</span> {isAc ? (acPayload.reason || 'No reason provided') : (req.reason || 'No reason provided')}
           </div>
 
           {req.status === 'rejected' && req.reviewNote && (

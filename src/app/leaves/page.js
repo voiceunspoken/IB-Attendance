@@ -16,7 +16,7 @@ import {
   requestLeaveDeduction, reviewLeaveDeduction
 } from '../../actions/leave';
 import { getManagedEmployees } from '../../actions/departments';
-import { getPendingChanges, getPendingChangesHistory } from '../../actions/auth';
+import { getPendingChanges, getPendingChangesHistory, reviewAdminAction } from '../../actions/auth';
 import { reviewAdjustment } from '../../actions/attendanceChanges';
 import { getManagerWfhRequests, getAllWfhRequests, reviewWfhRequest, getWfhRequestsByStage } from '../../actions/wfh';
 
@@ -27,6 +27,19 @@ const ATTENDANCE_TYPE_LABELS = {
   wfh: 'WFH', wfm: 'WFM', wfo: 'WFO', wos: 'WOS',
 };
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const ADMIN_ACTION_LABELS = {
+  create_user: 'Create Employee',
+  delete_user: 'Delete Employee',
+  update_user: 'Edit Employee (dept/designation/type/email)',
+  toggle_user: 'Disable/Enable Employee',
+  promote_user: 'Promote to Admin',
+  upload_month: 'Upload Attendance CSV',
+  delete_month: 'Delete Month Record',
+  edit_month: 'Edit Month Record',
+  edit_leave_balance: 'Edit Leave Balance',
+  update_leave_policy: 'Save Leave Policy',
+  manage_org: 'Manage Departments / Designations',
+};
 const formatMonthYear = (m) => {
   if (!m) return '';
   const [mo, yr] = m.split('_');
@@ -47,7 +60,6 @@ export default function LeavesPage() {
   const [managerLeaves, setManagerLeaves] = useState([]);
   const [regularizations, setRegularizations] = useState([]);
   const [superRegularizations, setSuperRegularizations] = useState([]);
-  const [pendingRegularizations, setPendingRegularizations] = useState([]);
   const [balances, setBalances] = useState([]);
   const [balancePage, setBalancePage] = useState(1);
   const balancePageSize = 20;
@@ -60,6 +72,7 @@ export default function LeavesPage() {
   const [reviewNote, setReviewNote] = useState('');
   const [exporting, setExporting] = useState(false);
   const [pendingChanges, setPendingChanges] = useState([]);
+  const [pendingAdminActions, setPendingAdminActions] = useState([]);
   const [allRegularizations, setAllRegularizations] = useState([]);
   const [historyChanges, setHistoryChanges] = useState([]);
   const [collapsed, setCollapsed] = useState({ leaves: false, regs: false, adjustments: false, wfh: false });
@@ -201,14 +214,13 @@ export default function LeavesPage() {
         setManagerWfhRequests(mgrWfh);
         setSuperWfhRequests(supWfh);
         if (isSuperAdmin) {
-          const [supRegs, pcs, pendRegs] = await Promise.all([
+          const [supRegs, pcs] = await Promise.all([
             getPendingSuperRegularizations(),
-            getPendingChanges(),
-            getAllPendingRegularizations()
+            getPendingChanges()
           ]);
           setSuperRegularizations(supRegs);
-          setPendingRegularizations(pendRegs);
           setPendingChanges(pcs.filter(c => c.action === 'attendance_adjustment' || c.action === 'leave_deduction'));
+          setPendingAdminActions(pcs.filter(c => c.action !== 'attendance_adjustment' && c.action !== 'leave_deduction' && c.action !== 'update_employee_name'));
         }
         if (role === 'admin') {
           const [regs, allRegs, allChanges] = await Promise.all([
@@ -227,7 +239,6 @@ export default function LeavesPage() {
         setRegularizations([]);
         setBalances([]);
         setSuperRegularizations([]);
-        setPendingRegularizations([]);
         setPendingChanges([]);
         setWfhRequests([]);
         setManagerWfhRequests([]);
@@ -248,13 +259,6 @@ export default function LeavesPage() {
 
   const handleReviewReg = async (id, approve) => {
     await reviewRegularization(id, user.username, approve);
-    setFetchTrigger(t => t + 1);
-  };
-
-  const handleReviewRegAdmin = async (id, approve) => {
-    const result = await reviewRegularization(id, user.username, approve);
-    if (result?.error) return toast.error(result.error);
-    toast.success(approve ? 'Attendance change approved.' : 'Attendance change rejected.');
     setFetchTrigger(t => t + 1);
   };
 
@@ -357,7 +361,8 @@ export default function LeavesPage() {
           { key: 'policy', label: 'Policy' },
         ] : isSuperAdmin ? [
           { key: 'overview', label: `Pending Approvals` },
-          { key: 'regularize', label: `Regularizations${(pendingRegularizations.length + superRegularizations.length) > 0 ? ` (${pendingRegularizations.length + superRegularizations.length})` : ''}` },
+          { key: 'admin-actions', label: `Admin Actions${pendingAdminActions.length > 0 ? ` (${pendingAdminActions.length})` : ''}` },
+          { key: 'regularize', label: `Regularizations${superRegularizations.length > 0 ? ` (${superRegularizations.length})` : ''}` },
           { key: 'wfh', label: `Work Mode${superWfhRequests.length > 0 ? ` (${superWfhRequests.length})` : ''}` },
           { key: 'history', label: 'History' },
           { key: 'balances', label: 'Leave Balances' },
@@ -569,25 +574,36 @@ export default function LeavesPage() {
                   ({superRegularizations.length})
                 </span>
               </div>
-              {superRegularizations.map(r => (
-                <div key={r.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
-                  <div>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px' }}>
-                      <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user.name}</span>
-                      <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user.code}</span>
-                      <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+              {superRegularizations.map(r => {
+                let acPayload = {};
+                const isAc = r.type === 'attendance_change';
+                try { if (isAc) acPayload = JSON.parse(r.reason); } catch { /* */ }
+                return (
+                  <div key={r.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
+                    <div>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px' }}>
+                        <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user.name}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user.code}</span>
+                        {isAc ? (
+                          <span style={{ fontSize: '11px', color: 'var(--orange)', fontWeight: 600, padding: '2px 8px', borderRadius: '980px', background: 'rgba(255,159,10,0.1)' }}>Attendance Change</span>
+                        ) : (
+                          <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                        {isAc ? (
+                          <>{ATTENDANCE_TYPE_LABELS[acPayload.currentType] || acPayload.currentType} → {ATTENDANCE_TYPE_LABELS[acPayload.newType] || acPayload.newType} · Day {acPayload.day} · {formatMonthYear(acPayload.monthYear)}{acPayload.reason ? ` · ${acPayload.reason}` : ''}</>
+                        ) : (
+                          <>{r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`} · {r.reason}</>
+                        )}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
-                      {r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`}
-                      {' · '}{r.reason}
+                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                      <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '11px', background: 'var(--green)' }} onClick={() => handleSuperReviewReg(r.id, true)}>Final Approve</button>
+                      <button style={{ padding: '5px 12px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleSuperReviewReg(r.id, false)}>Reject</button>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                    <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '11px', background: 'var(--green)' }} onClick={() => handleSuperReviewReg(r.id, true)}>Final Approve</button>
-                    <button style={{ padding: '5px 12px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleSuperReviewReg(r.id, false)}>Reject</button>
-                  </div>
-                </div>
-              ))}
+                );})}
             </div>
           )}
 
@@ -635,15 +651,15 @@ export default function LeavesPage() {
             </div>
           )}
 
-          {/* ── Section 3: Attendance Adjustments & Changes (super_admin only) ── */}
+          {/* ── Section 3: Attendance Adjustments (super_admin only) ── */}
           {isSuperAdmin && (
             <div className="card overflow-hidden p-0">
               <div className="card-header" style={{ cursor: 'pointer', userSelect: 'none' }}
                 onClick={() => setCollapsed(c => ({ ...c, adjustments: !c.adjustments }))}>
-                <span>Adjustments & Changes</span>
+                <span>Adjustments & Deductions</span>
                 <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400, display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span style={{ background: 'var(--surface3)', padding: '1px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, color: 'var(--text3)' }}>
-                    {pendingChanges.length + pendingRegularizations.filter(r => r.type === 'attendance_change' && r.status === 'pending').length}
+                    {pendingChanges.length}
                   </span>
                   <span style={{ color: 'var(--text3)', fontSize: '10px', fontWeight: 500 }}>
                     {collapsed.adjustments ? 'Show' : 'Hide'}
@@ -651,84 +667,46 @@ export default function LeavesPage() {
                 </span>
               </div>
               {!collapsed.adjustments && (
-                (() => {
-                  const pendingChangesList = pendingChanges.map(c => ({ kind: 'pendingChange', c }));
-                  const attendanceChanges = pendingRegularizations
-                    .filter(r => r.type === 'attendance_change' && r.status === 'pending')
-                    .map(r => ({ kind: 'attendanceChange', r }));
-                  const combined = [...pendingChangesList, ...attendanceChanges];
-                  return combined.length === 0
-                    ? <div className="p-32 text-center text-muted2 text-sm">No pending approvals.</div>
-                    : combined.map(item => {
-                        if (item.kind === 'pendingChange') {
-                          const c = item.c;
-                          let payload = {};
-                          try { payload = JSON.parse(c.payload); } catch { /* */ }
-                          const isDeduction = c.action === 'leave_deduction';
-                          return (
-                            <div key={c.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
-                              <div>
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
-                                  <span style={{ fontWeight: 600, fontSize: '13px' }}>{payload.employeeName || payload.employeeCode}</span>
-                                  {payload.employeeCode && <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{payload.employeeCode}</span>}
-                                  {isDeduction ? (
-                                    <>
-                                      <span style={{ fontSize: '11px', color: 'var(--orange)', fontWeight: 600 }}>Leave Deduction</span>
-                                      <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{payload.days}d {LEAVE_LABELS[payload.leaveType] || payload.leaveType?.toUpperCase() || payload.leaveType}</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <span style={{ fontSize: '11px', color: 'var(--text2)' }}>Day {payload.day} · {formatMonthYear(payload.monthYear)}</span>
-                                      <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{ATTENDANCE_TYPE_LABELS[payload.currentType] || payload.currentType} → {ATTENDANCE_TYPE_LABELS[payload.newType] || payload.newType}</span>
-                                    </>
-                                  )}
-                                </div>
-                                <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
-                                  <span style={{ color: 'var(--text3)' }}>by </span><strong>{c.requestedBy}</strong>
-                                  <span style={{ color: 'var(--text3)' }}> · {new Date(c.createdAt).toLocaleString()}</span>
-                                </div>
-                                {payload.reason && <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '2px' }}>Reason: {payload.reason}</div>}
-                                {payload.warning && <div style={{ fontSize: '11px', color: 'var(--orange)', marginTop: '2px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}><FiAlertTriangle size={12} /> {payload.warning}</div>}
-                              </div>
-                              <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                                <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '11px', background: 'var(--green)' }}
-                                  onClick={() => isDeduction ? handleReviewDeduction(c.id, true) : handleReviewAdjustment(c.id, true)}>Approve</button>
-                                <button style={{ padding: '5px 12px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
-                                  onClick={() => isDeduction ? handleReviewDeduction(c.id, false) : handleReviewAdjustment(c.id, false)}>Reject</button>
-                              </div>
-                            </div>
-                          );
-                        } else {
-                          const r = item.r;
-                          let payload = {};
-                          try { payload = JSON.parse(r.reason); } catch { /* */ }
-                          return (
-                            <div key={r.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
-                              <div>
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
-                                  <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user?.name || payload.employeeName || payload.employeeCode}</span>
-                                  {payload.employeeCode && <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{payload.employeeCode}</span>}
+                pendingChanges.length === 0
+                  ? <div className="p-32 text-center text-muted2 text-sm">No pending approvals.</div>
+                  : pendingChanges.map(c => {
+                      let payload = {};
+                      try { payload = JSON.parse(c.payload); } catch { /* */ }
+                      const isDeduction = c.action === 'leave_deduction';
+                      return (
+                        <div key={c.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
+                          <div>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px', flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 600, fontSize: '13px' }}>{payload.employeeName || payload.employeeCode}</span>
+                              {payload.employeeCode && <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{payload.employeeCode}</span>}
+                              {isDeduction ? (
+                                <>
+                                  <span style={{ fontSize: '11px', color: 'var(--orange)', fontWeight: 600 }}>Leave Deduction</span>
+                                  <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{payload.days}d {LEAVE_LABELS[payload.leaveType] || payload.leaveType?.toUpperCase() || payload.leaveType}</span>
+                                </>
+                              ) : (
+                                <>
                                   <span style={{ fontSize: '11px', color: 'var(--text2)' }}>Day {payload.day} · {formatMonthYear(payload.monthYear)}</span>
                                   <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{ATTENDANCE_TYPE_LABELS[payload.currentType] || payload.currentType} → {ATTENDANCE_TYPE_LABELS[payload.newType] || payload.newType}</span>
-                                </div>
-                                <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
-                                  <span style={{ color: 'var(--text3)' }}>by employee</span>
-                                  <span style={{ color: 'var(--text3)' }}> · {new Date(r.createdAt).toLocaleString()}</span>
-                                </div>
-                                {payload.reason && <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '2px' }}>Reason: {payload.reason}</div>}
-                                {payload.warning && <div style={{ fontSize: '11px', color: 'var(--orange)', marginTop: '2px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}><FiAlertTriangle size={12} /> {payload.warning}</div>}
-                              </div>
-                              <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                                <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '11px', background: 'var(--green)' }}
-                                  onClick={() => { handleReviewRegAdmin(r.id, true); }}>Approve</button>
-                                <button style={{ padding: '5px 12px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
-                                  onClick={() => { handleReviewRegAdmin(r.id, false); }}>Reject</button>
-                              </div>
+                                </>
+                              )}
                             </div>
-                          );
-                        }
-                      });
-                })()
+                            <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                              <span style={{ color: 'var(--text3)' }}>by </span><strong>{c.requestedBy}</strong>
+                              <span style={{ color: 'var(--text3)' }}> · {new Date(c.createdAt).toLocaleString()}</span>
+                            </div>
+                            {payload.reason && <div style={{ fontSize: '11px', color: 'var(--text2)', marginTop: '2px' }}>Reason: {payload.reason}</div>}
+                            {payload.warning && <div style={{ fontSize: '11px', color: 'var(--orange)', marginTop: '2px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}><FiAlertTriangle size={12} /> {payload.warning}</div>}
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                            <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '11px', background: 'var(--green)' }}
+                              onClick={() => isDeduction ? handleReviewDeduction(c.id, true) : handleReviewAdjustment(c.id, true)}>Approve</button>
+                            <button style={{ padding: '5px 12px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
+                              onClick={() => isDeduction ? handleReviewDeduction(c.id, false) : handleReviewAdjustment(c.id, false)}>Reject</button>
+                          </div>
+                        </div>
+                      );
+                    })
               )}
             </div>
           )}
@@ -851,31 +829,71 @@ export default function LeavesPage() {
         </div>
       )}
 
+      {/* ── ADMIN ACTIONS (super_admin only) ── */}
+      {!loading && tab === 'admin-actions' && isSuperAdmin && (
+        <div className="card overflow-hidden p-0">
+          <div className="card-header">
+            Pending Admin Actions ({pendingAdminActions.length})
+          </div>
+          {pendingAdminActions.length === 0
+            ? <div className="p-32 text-center text-muted2 text-sm">No pending admin actions requiring your approval.</div>
+            : pendingAdminActions.map(c => (
+              <div key={c.id} className="flex-between border-bottom gap-12" style={{ padding: '14px 20px' }}>
+                <div>
+                  <div className="text-sm text-semibold">
+                    {ADMIN_ACTION_LABELS[c.action] || c.action.replace(/_/g, ' ')}
+                  </div>
+                  <div className="text-xs text-muted2" style={{ marginTop: '2px' }}>
+                    By {c.requestedBy} · {new Date(c.createdAt).toLocaleString()}
+                  </div>
+                </div>
+                <div className="flex gap-6">
+                  <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: '12px', background: 'var(--green)' }}
+                    onClick={async () => {
+                      await reviewAdminAction(c.id, user.username, true);
+                      const pcs = await getPendingChanges();
+                      setPendingAdminActions(pcs.filter(p => p.action !== 'attendance_adjustment' && p.action !== 'leave_deduction' && p.action !== 'update_employee_name'));
+                      toast.success('Action approved.');
+                    }}>Approve</button>
+                  <button className="btn border-none" style={{ padding: '6px 14px', fontSize: '12px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
+                    onClick={async () => {
+                      await reviewAdminAction(c.id, user.username, false);
+                      const pcs = await getPendingChanges();
+                      setPendingAdminActions(pcs.filter(p => p.action !== 'attendance_adjustment' && p.action !== 'leave_deduction' && p.action !== 'update_employee_name'));
+                      toast.success('Action rejected.');
+                    }}>Reject</button>
+                </div>
+              </div>
+            ))
+          }
+        </div>
+      )}
+
       {/* ── REGULARIZATIONS ── */}
       {!loading && tab === 'regularize' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Pending Admin Review (for both admin and super_admin) */}
-          {(role === 'admin' || isSuperAdmin) && (
+          {/* Admin review — only admin sees this */}
+          {role === 'admin' && (
           <div className="card overflow-hidden p-0">
             <div className="card-header">
               Pending Admin Review
                 <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 400, marginLeft: '8px' }}>
-                  ({isSuperAdmin ? pendingRegularizations.length : regularizations.length})
+                  ({regularizations.length})
                 </span>
               </div>
-              {(isSuperAdmin ? pendingRegularizations : regularizations).length === 0
+              {regularizations.length === 0
                 ? <div className="p-32 text-center text-muted2 text-sm">No pending regularizations.</div>
-              : (isSuperAdmin ? pendingRegularizations : regularizations).map(r => {
-                let payload = {};
-                try { if (r.type === 'attendance_change') payload = JSON.parse(r.reason); } catch { /* */ }
-                const isAttendanceChange = r.type === 'attendance_change';
+              : regularizations.map(r => {
+                let acPayload = {};
+                const isAc = r.type === 'attendance_change';
+                try { if (isAc) acPayload = JSON.parse(r.reason); } catch { /* */ }
                 return (
                 <div key={r.id} className="p-16-20 border-bottom flex-between" style={{ gap: '16px' }}>
                   <div>
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px' }}>
-                      <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user?.name || payload.employeeName || 'Unknown'}</span>
-                      <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user?.code || payload.employeeCode}</span>
-                      {isAttendanceChange ? (
+                      <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user.name}</span>
+                      <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user.code}</span>
+                      {isAc ? (
                         <span style={{ fontSize: '11px', color: 'var(--orange)', fontWeight: 600, padding: '2px 8px', borderRadius: '980px', background: 'rgba(255,159,10,0.1)' }}>
                           Attendance Change
                         </span>
@@ -886,18 +904,16 @@ export default function LeavesPage() {
                       )}
                     </div>
                     <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
-                      {isAttendanceChange ? (
-                        <>{ATTENDANCE_TYPE_LABELS[payload.currentType] || payload.currentType} → {ATTENDANCE_TYPE_LABELS[payload.newType] || payload.newType} · Day {payload.day} · {formatMonthYear(payload.monthYear)}{payload.reason ? ` · ${payload.reason}` : ''}</>
+                      {isAc ? (
+                        <>{ATTENDANCE_TYPE_LABELS[acPayload.currentType] || acPayload.currentType} → {ATTENDANCE_TYPE_LABELS[acPayload.newType] || acPayload.newType} · Day {acPayload.day} · {formatMonthYear(acPayload.monthYear)}{acPayload.reason ? ` · ${acPayload.reason}` : ''}</>
                       ) : (
                         <>{r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`} · {r.reason}</>
                       )}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '6px' }}>
-                    <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: '12px', background: 'var(--green)' }}
-                      onClick={() => isSuperAdmin ? handleReviewRegAdmin(r.id, true) : handleReviewReg(r.id, true)}>Approve</button>
-                    <button style={{ padding: '6px 14px', fontSize: '12px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
-                      onClick={() => isSuperAdmin ? handleReviewRegAdmin(r.id, false) : handleReviewReg(r.id, false)}>Reject</button>
+                    <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: '12px', background: 'var(--green)' }} onClick={() => handleReviewReg(r.id, true)}>Approve</button>
+                    <button style={{ padding: '6px 14px', fontSize: '12px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleReviewReg(r.id, false)}>Reject</button>
                   </div>
                 </div>
               );})
@@ -905,7 +921,7 @@ export default function LeavesPage() {
           </div>
           )}
 
-          {/* Super admin final approval */}
+          {/* Super admin final approval — only super admin sees this */}
           {isSuperAdmin && (
             <div className="card overflow-hidden p-0">
               <div className="card-header">
@@ -916,17 +932,28 @@ export default function LeavesPage() {
               </div>
               {superRegularizations.length === 0
                 ? <div className="p-32 text-center text-muted2 text-sm">No regularizations awaiting final approval.</div>
-              : superRegularizations.map(r => (
+              : superRegularizations.map(r => {
+                let acPayload = {};
+                const isAc = r.type === 'attendance_change';
+                try { if (isAc) acPayload = JSON.parse(r.reason); } catch { /* */ }
+                return (
                   <div key={r.id} className="p-16-20 border-bottom flex-between" style={{ gap: '16px' }}>
                     <div>
                       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px' }}>
                         <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user.name}</span>
                         <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user.code}</span>
-                        <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        {isAc ? (
+                          <span style={{ fontSize: '11px', color: 'var(--orange)', fontWeight: 600, padding: '2px 8px', borderRadius: '980px', background: 'rgba(255,159,10,0.1)' }}>Attendance Change</span>
+                        ) : (
+                          <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        )}
                       </div>
                       <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
-                        {r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`}
-                        {' · '}{r.reason}
+                        {isAc ? (
+                          <>{ATTENDANCE_TYPE_LABELS[acPayload.currentType] || acPayload.currentType} → {ATTENDANCE_TYPE_LABELS[acPayload.newType] || acPayload.newType} · Day {acPayload.day} · {formatMonthYear(acPayload.monthYear)}{acPayload.reason ? ` · ${acPayload.reason}` : ''}</>
+                        ) : (
+                          <>{r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`} · {r.reason}</>
+                        )}
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '6px' }}>
@@ -934,7 +961,7 @@ export default function LeavesPage() {
                       <button style={{ padding: '6px 14px', fontSize: '12px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleSuperReviewReg(r.id, false)}>Reject</button>
                     </div>
                   </div>
-                ))
+                );})
               }
             </div>
           )}
