@@ -319,6 +319,18 @@ export async function getAllEmployees() {
   });
 }
 
+export async function getDailyLogForDate(employeeCode, dateStr) {
+  const user = await prisma.user.findUnique({ where: { code: employeeCode } });
+  if (!user) return null;
+  const d = new Date(dateStr);
+  const monthYear = `${d.getMonth() + 1}_${d.getFullYear()}`;
+  const day = d.getDate();
+  const log = await prisma.dailyLog.findUnique({
+    where: { userId_monthYear_day: { userId: user.id, monthYear, day } }
+  });
+  return log;
+}
+
 export async function updateMonthRecord(employeeCode, monthYear, fields, performedBy = 'admin') {
   const pending = await requireSuperApproval(performedBy, 'edit_month', { employeeCode, monthYear, fields });
   if (pending) return pending;
