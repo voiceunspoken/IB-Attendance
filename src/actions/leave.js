@@ -176,11 +176,26 @@ export async function adminUpdateLeaveBalance(employeeCode, year, fields, perfor
   return { success: true };
 }
 
-function countWeekends(from, to) {
+function getThirdSaturday(year, month) {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const saturdays = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    if (new Date(year, month - 1, d).getDay() === 6) saturdays.push(d);
+  }
+  return saturdays[2] || null;
+}
+
+function countWeekends(from, to, workingSatMap = {}) {
   let c = 0;
   for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
     const day = d.getDay();
-    if (day === 0 || day === 6) c++;
+    if (day === 0) c++;
+    else if (day === 6) {
+      const month = d.getMonth() + 1;
+      const year = d.getFullYear();
+      const wsDay = workingSatMap[month] !== undefined ? workingSatMap[month] : getThirdSaturday(year, month);
+      if (d.getDate() !== wsDay) c++;
+    }
   }
   return c;
 }
@@ -295,10 +310,16 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
     if (existingSH) return { error: 'You can only take 1 Short Leave per 2-month window. Your next window opens after ' + (windowEnd % 12 + 1) + '/' + from.getFullYear() + '.' };
   }
 
+  const workingSats = await prisma.workingSaturday.findMany({
+    where: { year: from.getFullYear(), month: { gte: from.getMonth() + 1, lte: to.getMonth() + 1 } }
+  });
+  const workingSatMap = {};
+  workingSats.forEach(s => { workingSatMap[s.month] = s.day; });
+
   let sandwichCount = 0;
   let sandwichMessage = '';
   let sandwichDaysCount = computedDays;
-  const weekendDays = countWeekends(from, to);
+  const weekendDays = countWeekends(from, to, workingSatMap);
   if (!isHalfDay && (leaveType === 'cl' || leaveType === 'el') && computedDays >= 1 && weekendDays > 0) {
     const balance = await prisma.leaveBalance.findUnique({
       where: { userId_year: { userId: user.id, year: from.getFullYear() } }

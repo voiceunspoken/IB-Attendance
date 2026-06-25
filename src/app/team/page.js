@@ -11,6 +11,7 @@ import Modal from '../../components/Modal';
 import ConfirmModal from '../../components/ConfirmModal';
 import { useToast } from '../../components/Toast';
 import { FiPlus, FiTrash2, FiSearch, FiUser, FiX, FiCheck } from 'react-icons/fi';
+import { getWorkingSaturdays, upsertWorkingSaturday, removeWorkingSaturday, seedWorkingSaturdays } from '../../actions/workingSaturdays';
 
 const EMPLOYEE_TYPE_LABELS = { regular: 'Regular', hybrid: 'Hybrid' };
 
@@ -100,6 +101,10 @@ export default function TeamPage() {
   const [departments, setDepartments] = useState([]);
   const [designations, setDesignations] = useState([]);
   const [months, setMonths] = useState([]);
+  const [workingSaturdays, setWorkingSaturdays] = useState([]);
+  const [wsMonth, setWsMonth] = useState(new Date().getMonth() + 1);
+  const [wsYear, setWsYear] = useState(new Date().getFullYear());
+  const [wsDay, setWsDay] = useState('');
   const [empForm, setEmpForm] = useState({ code: '', name: '', email: '', employeeType: 'regular', departmentId: '', designationId: '' });
   const [empMsg, setEmpMsg] = useState('');
 
@@ -157,18 +162,20 @@ export default function TeamPage() {
     if (!isAdmin && !isSuperAdmin) return;
     (async () => {
       try {
-        const [u, emps, depts, desigs, ms] = await Promise.all([
+        const [u, emps, depts, desigs, ms, wss] = await Promise.all([
           getUsers(),
           getAllEmployees(),
           getDepartments(),
           getDesignations(),
           getMonths(),
+          getWorkingSaturdays(new Date().getFullYear()),
         ]);
         setUsers(u);
         setEmployees(emps);
         setDepartments(depts);
         setDesignations(desigs);
         setMonths(ms);
+        setWorkingSaturdays(wss);
         setPromotableEmployees(u.filter(x => x.code && x.role === 'employee'));
       } catch {
         setUsers([]);
@@ -849,6 +856,98 @@ export default function TeamPage() {
                 Delete Month
               </button>
             </div>
+          </div>
+
+          {/* ── WORKING SATURDAYS ── */}
+          <div className="card" style={{ padding: '22px 24px' }}>
+            <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '6px' }}>Working Saturday</div>
+            <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '16px' }}>
+              Exactly one Saturday per month is a working day. Admin can reassign which Saturday is working.
+            </div>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: '14px' }}>
+              <div>
+                <label className="input-label">Year</label>
+                <select className="input-field" value={wsYear} onChange={e => setWsYear(parseInt(e.target.value))} style={{ width: '100px' }}>
+                  {[new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1].map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="input-label">Month</label>
+                <select className="input-field" value={wsMonth} onChange={e => setWsMonth(parseInt(e.target.value))} style={{ width: '140px' }}>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                    <option key={m} value={m}>{new Date(2000, m - 1).toLocaleString('default', { month: 'long' })}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="input-label">Saturday</label>
+                <select className="input-field" value={wsDay} onChange={e => setWsDay(e.target.value)} style={{ width: '120px' }}>
+                  <option value="">— Select day —</option>
+                  {(() => {
+                    const daysInMonth = new Date(wsYear, wsMonth, 0).getDate();
+                    const saturdayOptions = [];
+                    for (let d = 1; d <= daysInMonth; d++) {
+                      if (new Date(wsYear, wsMonth - 1, d).getDay() === 6) {
+                        saturdayOptions.push(d);
+                      }
+                    }
+                    return saturdayOptions.map(d => (
+                      <option key={d} value={d}>
+                        {d} {new Date(wsYear, wsMonth - 1, d).toLocaleDateString('en-IN', { weekday: 'short' })}
+                      </option>
+                    ));
+                  })()}
+                </select>
+              </div>
+              <button className="btn btn-primary" style={{ padding: '9px 16px', fontSize: '13px' }}
+                onClick={async () => {
+                  if (!wsDay) return toast.error('Select a Saturday day.');
+                  const r = await upsertWorkingSaturday(wsYear, wsMonth, parseInt(wsDay));
+                  if (r.error) return toast.error(r.error);
+                  toast.success('Working Saturday updated.');
+                  setWorkingSaturdays(await getWorkingSaturdays(wsYear));
+                }}>
+                Save
+              </button>
+              <button className="btn btn-secondary" style={{ padding: '9px 16px', fontSize: '13px' }}
+                onClick={async () => {
+                  const r = await seedWorkingSaturdays(wsYear);
+                  if (r.error) return toast.error(r.error);
+                  toast.success(`Seeded ${r.count} working Saturdays.`);
+                  setWorkingSaturdays(await getWorkingSaturdays(wsYear));
+                }}>
+                Seed Defaults
+              </button>
+            </div>
+            {(() => {
+              const monthWS = workingSaturdays.filter(s => s.year === wsYear);
+              if (monthWS.length === 0) return (
+                <div style={{ fontSize: '13px', color: 'var(--text3)', padding: '12px 0' }}>
+                  No working Saturdays configured for {wsYear}. Click "Seed Defaults" to populate 3rd Saturdays.
+                </div>
+              );
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {monthWS.map(s => (
+                    <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--surface2)', borderRadius: '10px', fontSize: '13px' }}>
+                      <div>
+                        <span style={{ fontWeight: 600 }}>{new Date(wsYear, s.month - 1, s.day).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })}</span>
+                        {s.note && <span style={{ color: 'var(--text3)', marginLeft: '8px' }}>({s.note})</span>}
+                      </div>
+                      <button onClick={async () => {
+                        await removeWorkingSaturday(s.id);
+                        toast.success('Working Saturday removed.');
+                        setWorkingSaturdays(await getWorkingSaturdays(wsYear));
+                      }} style={{ padding: '5px 10px', borderRadius: '8px', border: '1px solid rgba(255,59,48,0.2)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 500 }}>
+                        <FiTrash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

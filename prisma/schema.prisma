@@ -275,6 +275,21 @@ model RegularizationRequest {
   createdAt    DateTime @default(now())
 }
 
+// Working Saturdays — exactly one per month; admin can reassign which Saturday is working
+model WorkingSaturday {
+  id        String   @id @default(cuid())
+  date      DateTime
+  year      Int
+  month     Int
+  day       Int
+  note      String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([year, month])
+  @@map("working_saturdays")
+}
+
 // Company holiday calendar
 model Holiday {
   id         String   @id @default(cuid())

@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../../../components/AuthProvider';
 import { getLeaveRequests, submitLeaveRequest } from '../../../../actions/leave';
+import { getWorkingSaturdays } from '../../../../actions/workingSaturdays';
+import { buildWorkingSatMap } from '../../../../utils/workingDays';
 import { FiSun, FiAlertTriangle } from 'react-icons/fi';
 import { useEmployeeData } from '../context';
 import DatePickerInput from '../../../../components/DatePicker';
@@ -16,20 +18,22 @@ function daysBetween(from, to) {
   return Math.round((to - from) / (1000 * 60 * 60 * 24)) + 1;
 }
 
-function countWeekends(from, to) {
+function countWeekends(from, to, workingSatDays = {}) {
   let c = 0;
   for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
     const day = d.getDay();
-    if (day === 0 || day === 6) c++;
+    if (day === 0) c++;
+    else if (day === 6 && workingSatDays[d.getMonth() + 1] !== d.getDate()) c++;
   }
   return c;
 }
 
-function countWeekdays(from, to) {
+function countWeekdays(from, to, workingSatDays = {}) {
   let c = 0;
   for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
     const day = d.getDay();
     if (day >= 1 && day <= 5) c++;
+    else if (day === 6 && workingSatDays[d.getMonth() + 1] === d.getDate()) c++;
   }
   return c;
 }
@@ -53,6 +57,7 @@ export default function LeavesPage({ params }) {
   const [submittingLeave, setSubmittingLeave] = useState(false);
   const [prescriptionFile, setPrescriptionFile] = useState(null);
   const [submitResult, setSubmitResult] = useState(null);
+  const [workingSatDays, setWorkingSatDays] = useState({});
 
   const computedDays = useMemo(() => {
     if (!leaveForm.fromDate) return 1;
@@ -77,22 +82,23 @@ export default function LeavesPage({ params }) {
     const from = new Date(leaveForm.fromDate);
     const to = leaveForm.toDate ? new Date(leaveForm.toDate) : from;
     if (from > to) return 0;
-    return countWeekends(from, to);
-  }, [leaveForm.fromDate, leaveForm.toDate]);
+    return countWeekends(from, to, workingSatDays);
+  }, [leaveForm.fromDate, leaveForm.toDate, workingSatDays]);
 
   const weekdays = useMemo(() => {
     if (!leaveForm.fromDate) return 0;
     const from = new Date(leaveForm.fromDate);
     const to = leaveForm.toDate ? new Date(leaveForm.toDate) : from;
     if (from > to) return 0;
-    return countWeekdays(from, to);
-  }, [leaveForm.fromDate, leaveForm.toDate]);
+    return countWeekdays(from, to, workingSatDays);
+  }, [leaveForm.fromDate, leaveForm.toDate, workingSatDays]);
 
   function weekendCount(from, to) {
     let c = 0;
     for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
       const day = d.getDay();
-      if (day === 0 || day === 6) c++;
+      if (day === 0) c++;
+      else if (day === 6 && workingSatDays[d.getMonth() + 1] !== d.getDate()) c++;
     }
     return c;
   }
@@ -107,7 +113,7 @@ export default function LeavesPage({ params }) {
     const usedSoFar = leaveBalanceDetail?.sandwichUsed ?? 0;
     if (usedSoFar > 0) return '';
     return `First leave spanning weekends — 2 weekend days free. Remaining weekends (if any) will be counted as sandwich leave.`;
-  }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.leaveType, leaveForm.isHalfDay, leaveBalanceDetail]);
+  }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.leaveType, leaveForm.isHalfDay, leaveBalanceDetail, workingSatDays]);
 
   const sandwichInfo = useMemo(() => {
     if (!leaveForm.fromDate || leaveForm.isHalfDay || leaveForm.leaveType === 'sh' || leaveForm.leaveType === 'rl' || leaveForm.leaveType === 'ul') return null;
@@ -128,7 +134,7 @@ export default function LeavesPage({ params }) {
         ? `1st leave spanning weekends — ${freeDays} weekend day${freeDays !== 1 ? 's' : ''} excluded`
         : `${usedSoFar + 1} leave spanning weekends — all ${Math.round(computedDays)} days counted`
     };
-  }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.leaveType, leaveForm.isHalfDay, computedDays, leaveBalanceDetail]);
+  }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.leaveType, leaveForm.isHalfDay, computedDays, leaveBalanceDetail, workingSatDays]);
 
   const leavePreview = useMemo(() => {
     if (!leaveForm.fromDate || totalDays <= 0) return null;
@@ -179,6 +185,13 @@ export default function LeavesPage({ params }) {
     if (!code) return;
     getLeaveRequests(code).then(setLeaveRequests).catch(() => setLeaveRequests([]));
   }, [code, triggerRefetch]);
+
+  useEffect(() => {
+    const year = new Date().getFullYear();
+    getWorkingSaturdays(year).then(sats => {
+      setWorkingSatDays(buildWorkingSatMap(sats));
+    }).catch(() => {});
+  }, [triggerRefetch]);
 
   const handleSubmitLeave = async (e) => {
     e.preventDefault();
@@ -375,7 +388,7 @@ export default function LeavesPage({ params }) {
             </div>
           )}
 
-          {leaveForm.leaveType !== 'sh' && leaveForm.leaveType !== 'rl' && computedDays > 0.5 && (
+          {leaveForm.leaveType !== 'sh' && leaveForm.leaveType !== 'rl' && (computedDays > 0.5 || leaveForm.isHalfDay) && (
             <div>
               <label className="input-label">Duration</label>
               <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
@@ -387,7 +400,7 @@ export default function LeavesPage({ params }) {
                     fontWeight: (opt === 'Half Day') === leaveForm.isHalfDay ? 600 : 400, fontSize: '13px', transition: 'all 0.15s'
                   }}>
                     <input type="radio" name="duration" checked={(opt === 'Half Day') === leaveForm.isHalfDay}
-                      onChange={() => setLeaveForm(f => ({ ...f, isHalfDay: opt === 'Half Day', toDate: opt === 'Half Day' ? null : f.toDate }))} style={{ display: 'none' }} />
+                      onChange={() => setLeaveForm(f => ({ ...f, isHalfDay: opt === 'Half Day', toDate: opt === 'Half Day' ? null : (f.toDate || f.fromDate) }))} style={{ display: 'none' }} />
                     {opt}
                   </label>
                 ))}

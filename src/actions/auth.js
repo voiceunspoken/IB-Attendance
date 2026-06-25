@@ -3,7 +3,7 @@
 import { prisma } from '../lib/prisma';
 import bcrypt from 'bcryptjs';
 import { logAction } from './audit';
-import { requireSuperAdmin } from '../lib/auth-guard';
+import { requireAdminOrSuperAdmin, requireSuperAdmin } from '../lib/auth-guard';
 import { requireSuperApproval } from '../lib/super-approval';
 
 export async function loginUser(email, password) {

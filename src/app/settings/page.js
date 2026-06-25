@@ -74,6 +74,7 @@ export default function SettingsPage() {
   const [notifMsg, setNotifMsg] = useState('');
 
   const [approvalConfig, setApprovalConfig] = useState(null);
+  const [approvalMsg, setApprovalMsg] = useState('');
   const [actionToggles, setActionToggles] = useState({});
 
   const [confirmState, setConfirmState] = useState({ show: false, message: '', confirmLabel: 'Delete', confirmLoadingLabel: 'Deleting…', variant: 'danger', onConfirm: null });
