@@ -506,6 +506,87 @@ export async function getAllLeaveRequests() {
   return attachApproverName(requests);
 }
 
+export async function cancelLeaveRequest(requestId, cancelledBy) {
+  const req = await prisma.leaveRequest.findUnique({
+    where: { id: requestId },
+    include: { user: { select: { id: true, code: true, name: true } } }
+  });
+  if (!req) return { error: 'Leave request not found' };
+  if (req.status !== 'approved') return { error: 'Only approved leaves can be cancelled.' };
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (req.fromDate <= today) return { error: 'Cannot cancel a leave that has already started.' };
+
+  const canceller = await prisma.user.findUnique({ where: { username: cancelledBy } });
+  if (!canceller) return { error: 'User not found' };
+  const isSelf = canceller.id === req.userId;
+  const isAdmin = canceller.role === 'admin';
+  const isSuperAdmin = canceller.role === 'super_admin';
+  if (!isSelf && !isAdmin && !isSuperAdmin) return { error: 'Not authorized to cancel this leave.' };
+
+  const from = new Date(req.fromDate);
+  const to = new Date(req.toDate);
+  const leaveTypeUpper = req.leaveType.toUpperCase();
+
+  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+    const monthYear = `${d.getMonth() + 1}_${d.getFullYear()}`;
+    const day = d.getDate();
+    const existing = await prisma.dailyLog.findUnique({
+      where: { userId_monthYear_day: { userId: req.userId, monthYear, day } }
+    });
+    if (existing && existing.raw === leaveTypeUpper && ['present', 'half', 'rl'].includes(existing.type)) {
+      await prisma.dailyLog.update({
+        where: { userId_monthYear_day: { userId: req.userId, monthYear, day } },
+        data: { type: 'absent', raw: '', inT: null, outT: null, isLate: false, isSS: false, isSL: false, isHD: false, hdReason: null, workLocation: null }
+      });
+    }
+  }
+
+  const affectedMonths = new Set();
+  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+    affectedMonths.add(`${d.getMonth() + 1}_${d.getFullYear()}`);
+  }
+  for (const monthYear of affectedMonths) {
+    const logs = await prisma.dailyLog.findMany({ where: { userId: req.userId, monthYear } });
+    const t = recalcTotals(logs);
+    const numDays = t.maxDay || 31;
+    await prisma.monthRecord.upsert({
+      where: { userId_monthYear: { userId: req.userId, monthYear } },
+      update: { present: t.present, absent: t.absent, halfDay: t.halfDay, late: t.late, lateHD: t.lateHD, shortShift: t.shortShift, ssHD: t.ssHD, shortLeave: t.shortLeave, rl: t.rl, holi: t.holi, numDays },
+      create: { userId: req.userId, monthYear, present: t.present, absent: t.absent, halfDay: t.halfDay, late: t.late, lateHD: t.lateHD, shortShift: t.shortShift, ssHD: t.ssHD, shortLeave: t.shortLeave, rl: t.rl, holi: t.holi, numDays },
+    });
+  }
+
+  if (req.sandwichCount > 0) {
+    await prisma.leaveBalance.updateMany({
+      where: { userId: req.userId, year: from.getFullYear() },
+      data: { sandwichUsed: { decrement: 1 } }
+    });
+  }
+
+  await prisma.leaveRequest.update({
+    where: { id: requestId },
+    data: { status: 'cancelled', approvalStage: 'cancelled', currentApproverId: null }
+  });
+
+  await logAction(cancelledBy, 'leave_cancelled', 'leave_request', req.id,
+    `Cancelled ${req.leaveType.toUpperCase()} leave (${req.days}d) for ${req.user.name}`);
+
+  await createNotification(req.userId, 'leave_cancelled',
+    `Leave Cancelled`,
+    `Your ${req.leaveType.toUpperCase()} leave for ${req.days} day(s) has been cancelled.`,
+    { requestId: req.id, leaveType: req.leaveType, days: req.days });
+
+  const adminIds = await getAdminUserIds();
+  await Promise.all(adminIds.map(id => createNotification(id, 'leave_cancelled',
+    `Leave Cancelled`,
+    `${req.user.name}'s ${req.leaveType.toUpperCase()} leave was cancelled by ${canceller.name || cancelledBy}.`,
+    { requestId: req.id, employeeCode: req.user.code, leaveType: req.leaveType, days: req.days })));
+
+  return { success: true };
+}
+
 export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = '') {
   const req = await prisma.leaveRequest.findUnique({
     where: { id: requestId },

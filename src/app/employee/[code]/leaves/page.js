@@ -4,7 +4,7 @@ import { useEffect, useState, use, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../../../components/AuthProvider';
-import { getLeaveRequests, submitLeaveRequest } from '../../../../actions/leave';
+import { getLeaveRequests, submitLeaveRequest, cancelLeaveRequest } from '../../../../actions/leave';
 import { getWorkingSaturdays } from '../../../../actions/workingSaturdays';
 import { buildWorkingSatMap } from '../../../../utils/workingDays';
 import { FiSun, FiAlertTriangle } from 'react-icons/fi';
@@ -227,7 +227,8 @@ export default function LeavesPage({ params }) {
     const map = {
       pending: { bg: 'rgba(255,159,10,0.1)', color: '#b36200', label: 'Pending' },
       approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Approved' },
-      rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' }
+      rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' },
+      cancelled: { bg: 'rgba(142,142,147,0.1)', color: '#8e8e93', label: 'Cancelled' },
     };
     const s = map[status] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)', label: status.charAt(0).toUpperCase() + status.slice(1) };
     return <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: '980px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.color }}>{s.label}</span>;
@@ -241,6 +242,7 @@ export default function LeavesPage({ params }) {
       pending_super: { bg: 'rgba(175,82,222,0.1)', color: '#7b2d8b', label: 'Awaiting Super Admin' },
       approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Approved' },
       rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' },
+      cancelled: { bg: 'rgba(142,142,147,0.1)', color: '#8e8e93', label: 'Cancelled' },
     };
     const s = map[stage] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)' };
     let label;
@@ -539,9 +541,23 @@ export default function LeavesPage({ params }) {
                       <FiAlertTriangle size={11} style={{ marginRight: '2px', verticalAlign: 'middle' }} /> {r.sandwichCount === 1 ? '1st sandwich' : `${r.sandwichCount} sandwich`} leave
                     </div>
                   )}
-                  <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
-                    {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                    {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
+                      {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
+                    </div>
+                    {r.status === 'approved' && new Date(r.fromDate) > today && (
+                      <button onClick={async (e) => {
+                        e.preventDefault();
+                        if (!confirm('Cancel this approved leave?')) return;
+                        const result = await cancelLeaveRequest(r.id, user?.username);
+                        if (result.error) return setLeaveError(result.error);
+                        setLeaveSuccess('Leave cancelled.');
+                        triggerRefetch();
+                      }} style={{ padding: '4px 10px', borderRadius: '8px', border: '1px solid rgba(255,59,48,0.2)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '11px', fontWeight: 500 }}>
+                        Cancel
+                      </button>
+                    )}
                   </div>
                   <div style={{ fontSize: '12px', color: 'var(--text2)', marginTop: '2px' }}>{r.reason}</div>
                   {r.prescriptionFile && <div style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '2px' }}>Prescription attached</div>}

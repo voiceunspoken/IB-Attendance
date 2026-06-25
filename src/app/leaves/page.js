@@ -317,6 +317,7 @@ export default function LeavesPage() {
       pending_super: { bg: 'rgba(175,82,222,0.1)', color: '#7b2d8b', label: 'Awaiting Super Admin' },
       approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Approved' },
       rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' },
+      cancelled: { bg: 'rgba(142,142,147,0.1)', color: '#8e8e93', label: 'Cancelled' },
     };
     const s = map[stage] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)' };
     let label;
@@ -332,6 +333,7 @@ export default function LeavesPage() {
       pending: { bg: 'rgba(255,159,10,0.1)', color: '#b36200', label: 'Pending' },
       approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Approved' },
       rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' },
+      cancelled: { bg: 'rgba(142,142,147,0.1)', color: '#8e8e93', label: 'Cancelled' },
     };
     const s = map[status] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)', label: status.charAt(0).toUpperCase() + status.slice(1) };
     return <span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, background: s.bg, color: s.color }}>{s.label}</span>;
