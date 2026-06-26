@@ -11,8 +11,8 @@ import { FiSun, FiAlertTriangle } from 'react-icons/fi';
 import { useEmployeeData } from '../context';
 import DatePickerInput from '../../../../components/DatePicker';
 
-const LEAVE_LABELS = { cl: 'Casual Leave', sl: 'Sick Leave', el: 'Earned Leave', rl: 'Restricted Leave', sh: 'Short Leave', ul: 'Unpaid Leave' };
-const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b', ul: '#8e8e93' };
+const LEAVE_LABELS = { cl: 'Casual Leave', sl: 'Sick Leave', el: 'Earned Leave', rl: 'Restricted Leave', sh: 'Short Leave', ul: 'Unpaid Leave', ewl: 'Extra Working Leave' };
+const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b', ul: '#8e8e93', ewl: '#7b2d8b' };
 
 function daysBetween(from, to) {
   return Math.round((to - from) / (1000 * 60 * 60 * 24)) + 1;
@@ -106,7 +106,7 @@ export default function LeavesPage({ params }) {
   }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.leaveType, leaveForm.isHalfDay, leaveBalanceDetail, workingSatDays]);
 
   const sandwichInfo = useMemo(() => {
-    if (!leaveForm.fromDate || leaveForm.isHalfDay || leaveForm.leaveType === 'sh' || leaveForm.leaveType === 'rl' || leaveForm.leaveType === 'ul') return null;
+    if (!leaveForm.fromDate || leaveForm.isHalfDay || leaveForm.leaveType === 'sh' || leaveForm.leaveType === 'rl' || leaveForm.leaveType === 'ul' || leaveForm.leaveType === 'ewl') return null;
     const from = new Date(leaveForm.fromDate);
     const to = leaveForm.toDate ? new Date(leaveForm.toDate) : from;
     if (from > to) return null;
@@ -161,8 +161,9 @@ export default function LeavesPage({ params }) {
       types.push('el');
     }
     types.push('rl', 'sh');
+    if (leaveBalanceDetail?.ewlTotal > 0) types.push('ewl');
     return types;
-  }, [emp]);
+  }, [emp, leaveBalanceDetail?.ewlTotal]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
@@ -344,7 +345,7 @@ export default function LeavesPage({ params }) {
             </div>
           )}
 
-          {leaveForm.leaveType === 'rl' || leaveForm.isHalfDay || leaveForm.leaveType === 'sh' ? (
+          {leaveForm.leaveType === 'rl' || leaveForm.isHalfDay || leaveForm.leaveType === 'sh' || leaveForm.leaveType === 'ewl' ? (
             <div>
               <label className="input-label">Date</label>
               <DatePickerInput
@@ -380,7 +381,7 @@ export default function LeavesPage({ params }) {
             </div>
           )}
 
-          {leaveForm.leaveType !== 'sh' && leaveForm.leaveType !== 'rl' && (computedDays > 0.5 || leaveForm.isHalfDay) && (
+          {leaveForm.leaveType !== 'sh' && leaveForm.leaveType !== 'rl' && leaveForm.leaveType !== 'ewl' && (computedDays > 0.5 || leaveForm.isHalfDay) && (
             <div>
               <label className="input-label">Duration</label>
               <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>

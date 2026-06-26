@@ -20,8 +20,8 @@ import { getPendingChanges, getPendingChangesHistory, reviewAdminAction } from '
 import { reviewAdjustment } from '../../actions/attendanceChanges';
 import { getManagerWfhRequests, getAllWfhRequests, reviewWfhRequest, getWfhRequestsByStage } from '../../actions/wfh';
 
-const LEAVE_LABELS = { cl: 'CL', sl: 'SL', el: 'EL', rl: 'RL', sh: 'SH' };
-const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b' };
+const LEAVE_LABELS = { cl: 'CL', sl: 'SL', el: 'EL', rl: 'RL', sh: 'SH', ewl: 'EWL' };
+const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b', ewl: '#7b2d8b' };
 const ATTENDANCE_TYPE_LABELS = {
   present: 'Present', absent: 'Absent', half: 'Half Day', holiday: 'Holiday', rl: 'Restricted Leave',
   wfh: 'WFH', wfm: 'WFM', wfo: 'WFO', wos: 'WOS',
@@ -65,7 +65,7 @@ export default function LeavesPage() {
   const balancePageSize = 20;
   const paginatedBalances = balances.slice((balancePage - 1) * balancePageSize, balancePage * balancePageSize);
   const totalBalancePages = Math.ceil(balances.length / balancePageSize);
-  const [policy, setPolicy] = useState({ cl: 12, sl: 6, el: 4, rl: 2, sh: 6 });
+  const [policy, setPolicy] = useState({ cl: 12, sl: 6, el: 4, rl: 2, sh: 6, ewl: 0 });
   const [loading, setLoading] = useState(true);
   const [managerLoading, setManagerLoading] = useState(true);
   const [reviewModal, setReviewModal] = useState(null);
@@ -80,7 +80,7 @@ export default function LeavesPage() {
   const [managerWfhRequests, setManagerWfhRequests] = useState([]);
   const [superWfhRequests, setSuperWfhRequests] = useState([]);
   const [editBalanceTarget, setEditBalanceTarget] = useState(null);
-  const [editBalanceForm, setEditBalanceForm] = useState({ clTotal: 0, slTotal: 0, elTotal: 0, rlTotal: 0, shTotal: 0 });
+  const [editBalanceForm, setEditBalanceForm] = useState({ clTotal: 0, slTotal: 0, elTotal: 0, rlTotal: 0, shTotal: 0, ewlTotal: 0 });
   const [deductModal, setDeductModal] = useState(false);
   const [deductForm, setDeductForm] = useState({ employeeCode: '', leaveType: 'cl', days: 1, reason: '' });
   const year = new Date().getFullYear();
@@ -122,12 +122,16 @@ export default function LeavesPage() {
         'SH Total': balance?.shTotal ?? 0,
         'SH Used (Period)': rangeUsed.sh,
         'SH Remaining': balance?.shRemaining ?? 0,
+        'EWL Total': balance?.ewlTotal ?? 0,
+        'EWL Used (Period)': rangeUsed.ewl ?? 0,
+        'EWL Remaining': balance?.ewlRemaining ?? 0,
         'Leave Details': leaveDetail,
       }));
 
       const ws = XLSX.utils.json_to_sheet(rows);
       ws['!cols'] = [
         { wch: 10 }, { wch: 24 },
+        { wch: 9 }, { wch: 16 }, { wch: 13 },
         { wch: 9 }, { wch: 16 }, { wch: 13 },
         { wch: 9 }, { wch: 16 }, { wch: 13 },
         { wch: 9 }, { wch: 16 }, { wch: 13 },
@@ -163,6 +167,7 @@ export default function LeavesPage() {
       elTotal: b.elTotal ?? 4,
       rlTotal: b.rlTotal ?? 2,
       shTotal: b.shTotal ?? 6,
+      ewlTotal: b.ewlTotal ?? 0,
     });
     setEditBalanceTarget(entry);
   };
@@ -232,7 +237,7 @@ export default function LeavesPage() {
           setAllRegularizations(allRegs);
           setHistoryChanges(allChanges.filter(c => c.action === 'attendance_adjustment' || c.action === 'update_employee_name' || c.action === 'leave_deduction'));
         }
-        if (pol) setPolicy({ cl: pol.cl, sl: pol.sl, el: pol.el, rl: pol.rl, sh: pol.sh ?? 6 });
+        if (pol) setPolicy({ cl: pol.cl, sl: pol.sl, el: pol.el, rl: pol.rl, sh: pol.sh ?? 6, ewl: pol.ewl ?? 0 });
       } catch {
         setLeaveRequests([]);
         setManagerLeaves([]);
@@ -1148,7 +1153,7 @@ export default function LeavesPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
                 <tr>
-                  {['Employee', 'CL Remaining', 'SL Remaining', 'EL Remaining', 'RL Remaining', 'SH Remaining', 'CL Used', 'SL Used', 'EL Used', 'RL Used', 'SH Used', 'Actions'].map(h => (
+                  {['Employee', 'CL Remaining', 'SL Remaining', 'EL Remaining', 'RL Remaining', 'SH Remaining', 'EWL Remaining', 'CL Used', 'SL Used', 'EL Used', 'RL Used', 'SH Used', 'EWL Used', 'Actions'].map(h => (
                     <th key={h} style={{ background: 'var(--surface2)', padding: '10px 14px', textAlign: 'left', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text2)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
@@ -1160,12 +1165,12 @@ export default function LeavesPage() {
                   return (
                     <tr key={code} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td style={{ padding: '11px 14px', fontWeight: 500 }}>{name} <span style={{ color: 'var(--text3)', fontSize: '11px' }}>#{code}</span></td>
-                      {['cl', 'sl', 'el', 'rl', 'sh'].map(t => (
+                      {['cl', 'sl', 'el', 'rl', 'sh', 'ewl'].map(t => (
                         <td key={t} style={{ padding: '11px 14px', color: (balance[`${t}Remaining`] ?? 0) <= 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>
                           {balance[`${t}Remaining`] ?? 0}
                         </td>
                       ))}
-                      {['cl', 'sl', 'el', 'rl', 'sh'].map(t => (
+                      {['cl', 'sl', 'el', 'rl', 'sh', 'ewl'].map(t => (
                         <td key={t} style={{ padding: '11px 14px', color: 'var(--text2)' }}>
                           {balance[`${t}Used`] ?? 0}
                         </td>
@@ -1210,6 +1215,7 @@ export default function LeavesPage() {
               { key: 'el', label: 'Earned Leave (EL)', hint: '4 days/yr · quarterly after 1 yr service' },
               { key: 'rl', label: 'Restricted Holiday (RH)', hint: '2 days/yr · 1 per month · 1 month advance notice' },
               { key: 'sh', label: 'Short Leave (SH)', hint: '6/yr · 2 hrs each · 1 per 2-month window' },
+              { key: 'ewl', label: 'Extra Working Leave (EWL)', hint: 'Accrued via extra work approvals' },
             ].map(({ key, label, hint }) => (
               <div key={key}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
@@ -1472,8 +1478,8 @@ export default function LeavesPage() {
         {editBalanceTarget && (
           <form onSubmit={handleEditBalance}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
-              {['clTotal', 'slTotal', 'elTotal', 'rlTotal', 'shTotal'].map(k => {
-                const labels = { clTotal: 'CL (Casual Leave)', slTotal: 'SL (Sick Leave)', elTotal: 'EL (Earned Leave)', rlTotal: 'RL (Restricted Holiday)', shTotal: 'SH (Short Leave)' };
+              {['clTotal', 'slTotal', 'elTotal', 'rlTotal', 'shTotal', 'ewlTotal'].map(k => {
+                const labels = { clTotal: 'CL (Casual Leave)', slTotal: 'SL (Sick Leave)', elTotal: 'EL (Earned Leave)', rlTotal: 'RL (Restricted Holiday)', shTotal: 'SH (Short Leave)', ewlTotal: 'EWL (Extra Working Leave)' };
                 return (
                   <div key={k}>
                     <label className="input-label">{labels[k]}</label>

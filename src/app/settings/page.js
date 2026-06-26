@@ -15,6 +15,7 @@ import { getSuperAdminConfig, setRequireSuperApproval, getAllAdminActionConfigs,
 import { getMonths } from '../../actions/attendance';
 import { changePassword } from '../../actions/auth';
 import { sendAllMonthlyReports } from '../../actions/notifications';
+import { getAllEwlBalances, resetAllEwl } from '../../actions/extraWork';
 import ConfirmModal from '../../components/ConfirmModal';
 import { FiSun, FiClock, FiPlus } from 'react-icons/fi';
 
@@ -63,6 +64,11 @@ export default function SettingsPage() {
   const [policyMsg, setPolicyMsg] = useState('');
 
   const [months, setMonths] = useState([]);
+
+  // Extra Working Leave
+  const [ewlBalances, setEwlBalances] = useState([]);
+  const [ewlLoading, setEwlLoading] = useState(false);
+  const [ewlMsg, setEwlMsg] = useState('');
 
   // Change password
   const [pwForm, setPwForm] = useState({ current: '', newPw: '', confirm: '' });
@@ -223,6 +229,7 @@ export default function SettingsPage() {
   const tabs = [
     { key: 'holidays', label: 'Holidays' },
     { key: 'shift', label: 'Shift Policy' },
+    { key: 'ewl', label: 'Extra Working Leave' },
     { key: 'notifications', label: 'Notifications' },
     { key: 'password', label: 'Change Password' },
     ...(isSuperAdmin ? [{ key: 'approvals', label: 'Approvals' }] : []),
@@ -476,6 +483,77 @@ export default function SettingsPage() {
             ))}
           </div>
         )}
+
+      {/* ── EXTRA WORKING LEAVE ── */}
+      {!loading && tab === 'ewl' && (
+        <div className="flex-col gap-16" style={{ maxWidth: '800px' }}>
+          <div className="card card-body">
+            <div className="text-md text-bold mb-6">EWL Balance Viewer</div>
+            <div className="text-sm text-muted mb-20">
+              View and manage Extra Working Leave balances for all employees.
+              {isSuperAdmin && ' Super admins can also reset all EWL balances.'}
+            </div>
+
+            {isSuperAdmin && (
+              <div style={{ marginBottom: '16px' }}>
+                <button className="btn btn-outline" style={{ color: 'var(--red)', borderColor: 'rgba(255,59,48,0.25)' }}
+                  onClick={() => setConfirmState({
+                    show: true,
+                    message: `Reset ALL EWL balances for ${year}? This cannot be undone.`,
+                    confirmLabel: 'Reset All',
+                    confirmLoadingLabel: 'Resetting…',
+                    variant: 'danger',
+                    onConfirm: async () => {
+                      await resetAllEwl(year, user.username);
+                      setEwlMsg('All EWL balances reset to 0.');
+                      const b = await getAllEwlBalances(year);
+                      setEwlBalances(b);
+                    },
+                  })}>
+                  Reset All EWL
+                </button>
+              </div>
+            )}
+
+            {ewlMsg && <div style={{ fontSize: '13px', marginBottom: '12px', color: ewlMsg.includes('error') ? 'var(--red)' : 'var(--green)' }}>{ewlMsg}</div>}
+
+            <button className="btn btn-secondary" style={{ marginBottom: '16px' }}
+              onClick={async () => {
+                setEwlLoading(true);
+                const b = await getAllEwlBalances(year);
+                setEwlBalances(b);
+                setEwlLoading(false);
+              }}>
+              {ewlLoading ? 'Loading…' : 'Load Balances'}
+            </button>
+
+            {ewlBalances.length > 0 && (
+              <div style={{ maxHeight: '500px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '12px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      {['Employee', 'Code', 'EWL Total', 'EWL Used', 'EWL Remaining'].map(h => (
+                        <th key={h} style={{ background: 'var(--surface2)', padding: '10px 14px', textAlign: 'left', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text2)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ewlBalances.map(b => (
+                      <tr key={b.code} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '11px 14px', fontWeight: 500 }}>{b.name}</td>
+                        <td style={{ padding: '11px 14px', color: 'var(--text3)', fontSize: '12px' }}>#{b.code}</td>
+                        <td style={{ padding: '11px 14px', fontWeight: 600 }}>{b.ewlTotal}</td>
+                        <td style={{ padding: '11px 14px', color: 'var(--text2)' }}>{b.ewlUsed}</td>
+                        <td style={{ padding: '11px 14px', color: (b.ewlRemaining ?? 0) <= 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>{b.ewlRemaining}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── NOTIFICATIONS ── */}
       {!loading && tab === 'notifications' && (

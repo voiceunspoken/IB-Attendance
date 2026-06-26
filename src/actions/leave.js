@@ -11,13 +11,13 @@ export async function getLeavePolicy(year) {
   return prisma.leavePolicy.findUnique({ where: { year } });
 }
 
-export async function upsertLeavePolicy(year, { cl, sl, el, rl }, performedBy = null) {
-  const pending = await requireSuperApproval(performedBy, 'update_leave_policy', { year, cl, sl, el, rl });
+export async function upsertLeavePolicy(year, { cl, sl, el, rl, sh, ewl }, performedBy = null) {
+  const pending = await requireSuperApproval(performedBy, 'update_leave_policy', { year, cl, sl, el, rl, sh, ewl });
   if (pending) return pending;
   return prisma.leavePolicy.upsert({
     where: { year },
-    update: { cl, sl, el, rl },
-    create: { year, cl, sl, el, rl }
+    update: { cl, sl, el, rl, sh, ewl },
+    create: { year, cl, sl, el, rl, sh, ewl }
   });
 }
 
@@ -52,13 +52,13 @@ export async function getLeaveBalance(employeeCode, year) {
     }
   });
 
-  const used = { cl: 0, sl: 0, el: 0, rl: 0, sh: 0 };
+  const used = { cl: 0, sl: 0, el: 0, rl: 0, sh: 0, ewl: 0 };
   approved.forEach(r => {
     const paidDays = r.days - (r.unpaidDays || 0);
     used[r.leaveType] = (used[r.leaveType] || 0) + Math.max(0, paidDays);
   });
 
-  const leaveTypes = ['cl', 'sl', 'el', 'rl', 'sh'];
+  const leaveTypes = ['cl', 'sl', 'el', 'rl', 'sh', 'ewl'];
   const dailyLeaveLogs = await prisma.dailyLog.findMany({
     where: {
       userId: user.id,
@@ -101,6 +101,9 @@ export async function getLeaveBalance(employeeCode, year) {
     shTotal: balance.shTotal,
     shUsed: used.sh,
     shRemaining: balance.shTotal - used.sh,
+    ewlTotal: balance.ewlTotal,
+    ewlUsed: used.ewl || 0,
+    ewlRemaining: balance.ewlTotal - (used.ewl || 0),
   };
 }
 
@@ -140,7 +143,7 @@ export async function getLeaveBalancesForExport(year, fromMonth = 1, toMonth = 1
         orderBy: { fromDate: 'asc' }
       });
 
-      const rangeUsed = { cl: 0, sl: 0, el: 0, rl: 0, sh: 0 };
+      const rangeUsed = { cl: 0, sl: 0, el: 0, rl: 0, sh: 0, ewl: 0 };
       approved.forEach(r => {
         rangeUsed[r.leaveType] = (rangeUsed[r.leaveType] || 0) + Number(r.days);
       });
@@ -337,7 +340,16 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
   }
 
   let unpaidDays = 0;
-  if (leaveType !== 'ul' && leaveType !== 'sh' && computedDays >= 0.5) {
+  if (leaveType === 'ewl') {
+    const bal = await getLeaveBalance(employeeCode, from.getFullYear());
+    if (bal.ewlRemaining <= 0) {
+      return { error: 'You have no Extra Working Leave (EWL) balance remaining.' };
+    }
+    if (computedDays > bal.ewlRemaining) {
+      return { error: `You only have ${bal.ewlRemaining} EWL day(s) remaining, but requested ${computedDays}.` };
+    }
+  }
+  if (leaveType !== 'ul' && leaveType !== 'sh' && leaveType !== 'ewl' && computedDays >= 0.5) {
     const bal = await getLeaveBalance(employeeCode, from.getFullYear());
     const remaining = bal[`${leaveType}Remaining`] ?? 0;
     if (remaining <= 0) {
@@ -1042,7 +1054,7 @@ function parseTime(t) {
   return h * 60 + m;
 }
 
-const LEAVE_TYPES = ['cl', 'sl', 'el', 'rl', 'ul', 'sh'];
+const LEAVE_TYPES = ['cl', 'sl', 'el', 'rl', 'ul', 'sh', 'ewl'];
 
 function recalcTotals(logs) {
   let present = 0, absent = 0, halfDay = 0, late = 0, ss = 0, sl = 0, rl = 0, holi = 0;
