@@ -11,14 +11,34 @@ import {
 } from '../../actions/holidayAdmin';
 import { getActiveShiftPolicy, saveShiftPolicy, getShiftPolicyHistory, getPendingPolicies, reviewPolicy } from '../../actions/shiftPolicy';
 
-import { getSuperAdminConfig, setRequireSuperApproval } from '../../actions/superAdminConfig';
+import { getSuperAdminConfig, setRequireSuperApproval, getAllAdminActionConfigs, setAdminActionConfig, ACTION_LABELS } from '../../actions/superAdminConfig';
 import { getMonths } from '../../actions/attendance';
 import { changePassword } from '../../actions/auth';
 import { sendAllMonthlyReports } from '../../actions/notifications';
+import { getAllEwlBalances, resetAllEwl } from '../../actions/extraWork';
 import ConfirmModal from '../../components/ConfirmModal';
 import { FiSun, FiClock, FiPlus } from 'react-icons/fi';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function ToggleSwitch({ checked, onChange }) {
+  return (
+    <label style={{ position: 'relative', display: 'inline-block', width: '44px', height: '24px', cursor: 'pointer', flexShrink: 0 }}>
+      <input type="checkbox" style={{ opacity: 0, width: 0, height: 0 }} checked={checked}
+        onChange={e => onChange(e.target.checked)} />
+      <span style={{
+        position: 'absolute', inset: 0, borderRadius: '12px', transition: '0.2s',
+        background: checked ? 'var(--green)' : 'var(--border)',
+      }}>
+        <span style={{
+          position: 'absolute', top: '2px', left: checked ? '22px' : '2px',
+          width: '20px', height: '20px', borderRadius: '50%', background: '#fff', transition: '0.2s',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+        }} />
+      </span>
+    </label>
+  );
+}
 
 export default function SettingsPage() {
   const { role, isAuthenticated, user, loading: authLoading } = useAuth();
@@ -45,6 +65,11 @@ export default function SettingsPage() {
 
   const [months, setMonths] = useState([]);
 
+  // Extra Working Leave
+  const [ewlBalances, setEwlBalances] = useState([]);
+  const [ewlLoading, setEwlLoading] = useState(false);
+  const [ewlMsg, setEwlMsg] = useState('');
+
   // Change password
   const [pwForm, setPwForm] = useState({ current: '', newPw: '', confirm: '' });
   const [pwMsg, setPwMsg] = useState('');
@@ -55,7 +80,7 @@ export default function SettingsPage() {
   const [notifMsg, setNotifMsg] = useState('');
 
   const [approvalConfig, setApprovalConfig] = useState(null);
-  const [approvalMsg, setApprovalMsg] = useState('');
+  const [actionToggles, setActionToggles] = useState({});
 
   const [confirmState, setConfirmState] = useState({ show: false, message: '', confirmLabel: 'Delete', confirmLoadingLabel: 'Deleting…', variant: 'danger', onConfirm: null });
 
@@ -90,6 +115,10 @@ export default function SettingsPage() {
           setPendingPolicies(pp);
           const ac = await getSuperAdminConfig();
           setApprovalConfig(ac);
+          const allActions = await getAllAdminActionConfigs();
+          const toggleMap = {};
+          allActions.forEach(a => { toggleMap[a.actionType] = a.requiresApproval; });
+          setActionToggles(toggleMap);
         }
       } catch {
         setHolidays([]);
@@ -200,6 +229,7 @@ export default function SettingsPage() {
   const tabs = [
     { key: 'holidays', label: 'Holidays' },
     { key: 'shift', label: 'Shift Policy' },
+    { key: 'ewl', label: 'Extra Working Leave' },
     { key: 'notifications', label: 'Notifications' },
     { key: 'password', label: 'Change Password' },
     ...(isSuperAdmin ? [{ key: 'approvals', label: 'Approvals' }] : []),
@@ -454,6 +484,77 @@ export default function SettingsPage() {
           </div>
         )}
 
+      {/* ── EXTRA WORKING LEAVE ── */}
+      {!loading && tab === 'ewl' && (
+        <div className="flex-col gap-16" style={{ maxWidth: '800px' }}>
+          <div className="card card-body">
+            <div className="text-md text-bold mb-6">EWL Balance Viewer</div>
+            <div className="text-sm text-muted mb-20">
+              View and manage Extra Working Leave balances for all employees.
+              {isSuperAdmin && ' Super admins can also reset all EWL balances.'}
+            </div>
+
+            {isSuperAdmin && (
+              <div style={{ marginBottom: '16px' }}>
+                <button className="btn btn-outline" style={{ color: 'var(--red)', borderColor: 'rgba(255,59,48,0.25)' }}
+                  onClick={() => setConfirmState({
+                    show: true,
+                    message: `Reset ALL EWL balances for ${year}? This cannot be undone.`,
+                    confirmLabel: 'Reset All',
+                    confirmLoadingLabel: 'Resetting…',
+                    variant: 'danger',
+                    onConfirm: async () => {
+                      await resetAllEwl(year, user.username);
+                      setEwlMsg('All EWL balances reset to 0.');
+                      const b = await getAllEwlBalances(year);
+                      setEwlBalances(b);
+                    },
+                  })}>
+                  Reset All EWL
+                </button>
+              </div>
+            )}
+
+            {ewlMsg && <div style={{ fontSize: '13px', marginBottom: '12px', color: ewlMsg.includes('error') ? 'var(--red)' : 'var(--green)' }}>{ewlMsg}</div>}
+
+            <button className="btn btn-secondary" style={{ marginBottom: '16px' }}
+              onClick={async () => {
+                setEwlLoading(true);
+                const b = await getAllEwlBalances(year);
+                setEwlBalances(b);
+                setEwlLoading(false);
+              }}>
+              {ewlLoading ? 'Loading…' : 'Load Balances'}
+            </button>
+
+            {ewlBalances.length > 0 && (
+              <div style={{ maxHeight: '500px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '12px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      {['Employee', 'Code', 'EWL Total', 'EWL Used', 'EWL Remaining'].map(h => (
+                        <th key={h} style={{ background: 'var(--surface2)', padding: '10px 14px', textAlign: 'left', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text2)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ewlBalances.map(b => (
+                      <tr key={b.code} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '11px 14px', fontWeight: 500 }}>{b.name}</td>
+                        <td style={{ padding: '11px 14px', color: 'var(--text3)', fontSize: '12px' }}>#{b.code}</td>
+                        <td style={{ padding: '11px 14px', fontWeight: 600 }}>{b.ewlTotal}</td>
+                        <td style={{ padding: '11px 14px', color: 'var(--text2)' }}>{b.ewlUsed}</td>
+                        <td style={{ padding: '11px 14px', color: (b.ewlRemaining ?? 0) <= 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>{b.ewlRemaining}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── NOTIFICATIONS ── */}
       {!loading && tab === 'notifications' && (
         <div className="flex-col gap-16" style={{ maxWidth: '560px' }}>
@@ -503,42 +604,55 @@ export default function SettingsPage() {
 
       {/* ── APPROVALS (super_admin only) ── */}
       {!loading && tab === 'approvals' && isSuperAdmin && (
-        <div className="flex-col gap-16" style={{ maxWidth: '560px' }}>
+        <div className="flex-col gap-16" style={{ maxWidth: '700px' }}>
+          {/* Leave approval toggle */}
           <div className="card card-body">
             <div className="text-md text-bold mb-6">Super Admin Approval</div>
             <div className="text-sm text-muted mb-20">
-              Controls whether leave requests and other items require final approval from a Super Admin after manager approval.
+              Controls whether leave requests require final approval from a Super Admin after manager approval.
             </div>
             <div className="flex-between gap-16" style={{ padding: '14px 0', borderTop: '1px solid var(--border)' }}>
               <div>
-                <div className="text-sm text-semibold">Require Super Admin Approval</div>
+                <div className="text-sm text-semibold">Leave Requests — Require Super Admin</div>
                 <div className="text-xs text-muted" style={{ marginTop: '2px' }}>
                   {approvalConfig?.requireSuperApproval
                     ? 'Leave requests need super admin final approval after managers approve.'
-                    : 'Leave requests are fully approved once managers approve; no super admin step.'}
+                    : 'Leave requests are fully approved once managers approve.'}
                 </div>
               </div>
-              <label style={{ position: 'relative', display: 'inline-block', width: '44px', height: '24px', cursor: 'pointer' }}>
-                <input type="checkbox" style={{ opacity: 0, width: 0, height: 0 }} checked={!!approvalConfig?.requireSuperApproval}
-                  onChange={async (e) => {
-                    const val = e.target.checked;
-                    setApprovalConfig(c => c ? { ...c, requireSuperApproval: val } : { requireSuperApproval: val, id: '' });
-                    await setRequireSuperApproval(val, user.username);
-                    setApprovalMsg(val ? 'Super admin approval required.' : 'Super admin approval not required.');
-                  }} />
-                <span style={{
-                  position: 'absolute', inset: 0, borderRadius: '12px', transition: '0.2s',
-                  background: approvalConfig?.requireSuperApproval ? 'var(--green)' : 'var(--border)',
-                }}>
-                  <span style={{
-                    position: 'absolute', top: '2px', left: approvalConfig?.requireSuperApproval ? '22px' : '2px',
-                    width: '20px', height: '20px', borderRadius: '50%', background: '#fff', transition: '0.2s',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                  }} />
-                </span>
-              </label>
+              <ToggleSwitch checked={!!approvalConfig?.requireSuperApproval}
+                onChange={async (val) => {
+                  setApprovalConfig(c => c ? { ...c, requireSuperApproval: val } : { requireSuperApproval: val, id: '' });
+                  await setRequireSuperApproval(val, user.username);
+                }} />
             </div>
-            {approvalMsg && <div className="text-sm" style={{ color: 'var(--green)', marginTop: '8px' }}>{approvalMsg}</div>}
+          </div>
+
+          {/* Per-action toggles */}
+          <div className="card card-body">
+            <div className="text-md text-bold mb-2">Admin Actions — Require Super Admin Approval</div>
+            <div className="text-sm text-muted mb-16">
+              When ON, the listed action creates a pending request for super admin approval. When OFF, the admin can perform it directly.
+              Super admin actions are always final.
+            </div>
+            {Object.entries(ACTION_LABELS).map(([key, label]) => {
+              const isOn = actionToggles[key] !== false;
+              return (
+                <div key={key} className="flex-between gap-16" style={{ padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
+                  <div>
+                    <div className="text-sm text-semibold">{label}</div>
+                    <div className="text-xs text-muted" style={{ marginTop: '2px' }}>
+                      {isOn ? 'Admin submits → Super admin approves' : 'Admin can do this directly'}
+                    </div>
+                  </div>
+                  <ToggleSwitch checked={isOn}
+                    onChange={async (val) => {
+                      setActionToggles(t => ({ ...t, [key]: val }));
+                      await setAdminActionConfig(key, val);
+                    }} />
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

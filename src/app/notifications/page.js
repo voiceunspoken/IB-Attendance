@@ -53,7 +53,7 @@ const TYPE_COLORS = {
 };
 
 function isActionable(type) {
-  return type.includes('pending_super') || type.includes('mgr_pending') || type === 'leave_pending' || type === 'wfh_pending' || type === 'regularization_submitted' || type === 'adjustment_submitted';
+  return type.includes('pending_super') || type.includes('mgr_pending') || type === 'leave_pending' || type === 'wfh_pending' || type === 'regularization_submitted' || type === 'adjustment_submitted' || type === 'leave_deduction_submitted';
 }
 
 function getActionLabel(type) {
@@ -67,6 +67,7 @@ function getCategory(type) {
   if (type.startsWith('wfh_') || type === 'wfh_pending') return 'wfh';
   if (type.startsWith('regularization_')) return 'regularization';
   if (type.startsWith('adjustment_')) return 'adjustment';
+  if (type.startsWith('leave_deduction_')) return 'leave_deduction';
   if (type.startsWith('name_change_')) return 'name_change';
   return 'other';
 }
@@ -135,7 +136,11 @@ function getNavTarget(n) {
     return '/leaves';
   }
   if (cat === 'adjustment') {
-    if (isActionable(n.type)) return '/leaves';
+    if (isActionable(n.type) && p.requestId) return `/correction/${p.requestId}`;
+    return '/leaves';
+  }
+  if (cat === 'leave_deduction') {
+    if (isActionable(n.type) && p.requestId) return `/leave-deduction/${p.requestId}`;
     return '/leaves';
   }
   if (cat === 'name_change') return '/team?tab=pending';

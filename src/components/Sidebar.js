@@ -3,7 +3,7 @@
 import { useAuth } from './AuthProvider';
 import { useRouter, usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { FiCalendar, FiFileText, FiTool, FiUser, FiHome, FiUsers, FiSettings, FiBell } from 'react-icons/fi';
+import { FiCalendar, FiFileText, FiTool, FiUser, FiHome, FiUsers, FiSettings, FiBell, FiClock } from 'react-icons/fi';
 import { checkIsManager } from '../actions/manager';
 import { useNotifications } from './NotificationProvider';
 
@@ -13,7 +13,8 @@ const NAV_CONFIG = {
       { label: 'Dashboard', icon: <FiHome size={14} />, path: '/' },
       { label: 'Attendance', icon: <FiCalendar size={14} />, path: '/attendance' },
       { label: 'Team', icon: <FiUsers size={14} />, path: '/team' },
-      { label: 'Leaves', icon: <FiFileText size={14} />, path: '/leaves' },
+      { label: 'Approvals', icon: <FiFileText size={14} />, path: '/leaves' },
+      { label: 'Extra Work', icon: <FiClock size={14} />, path: '/extra-work' },
       { label: 'Audit', icon: <FiFileText size={14} />, path: '/audit' },
       { label: 'Notifications', icon: <FiBell size={14} />, path: '/notifications' },
       { label: 'Settings', icon: <FiSettings size={14} />, path: '/settings' },
@@ -25,13 +26,15 @@ const NAV_CONFIG = {
       { label: 'Dashboard', icon: <FiHome size={14} />, path: '/' },
       { label: 'Attendance', icon: <FiCalendar size={14} />, path: '/attendance' },
       { label: 'Team', icon: <FiUsers size={14} />, path: '/team' },
-      { label: 'Leaves', icon: <FiFileText size={14} />, path: '/leaves' },
+      { label: 'Approvals', icon: <FiFileText size={14} />, path: '/leaves' },
+      { label: 'Extra Work', icon: <FiClock size={14} />, path: '/extra-work' },
       { label: 'Audit', icon: <FiFileText size={14} />, path: '/audit' },
       { label: 'Notifications', icon: <FiBell size={14} />, path: '/notifications' },
       { label: 'Settings', icon: <FiSettings size={14} />, path: '/settings' },
     ]},
     { section: 'Employee', links: [
       { label: 'Attendance', icon: <FiCalendar size={14} />, path: (code) => `/employee/${code}` },
+      { label: 'Extra Work', icon: <FiClock size={14} />, path: (code) => `/employee/${code}/extra-work` },
       { label: 'Leave Requests', icon: <FiFileText size={14} />, path: (code) => `/employee/${code}/leaves` },
       { label: 'Work Mode', icon: <FiHome size={14} />, path: (code) => `/employee/${code}/wfh` },
       { label: 'Regularization', icon: <FiTool size={14} />, path: (code) => `/employee/${code}/regularize` },
@@ -43,6 +46,7 @@ const NAV_CONFIG = {
     { section: 'Employee', links: [
       { label: 'Dashboard', icon: <FiHome size={14} />, path: (code) => `/employee/${code}/dashboard` },
       { label: 'Attendance', icon: <FiCalendar size={14} />, path: (code) => `/employee/${code}` },
+      { label: 'Extra Work', icon: <FiClock size={14} />, path: (code) => `/employee/${code}/extra-work` },
       { label: 'Leave Requests', icon: <FiFileText size={14} />, path: (code) => `/employee/${code}/leaves` },
       { label: 'Work Mode', icon: <FiHome size={14} />, path: (code) => `/employee/${code}/wfh` },
       { label: 'Regularization', icon: <FiTool size={14} />, path: (code) => `/employee/${code}/regularize` },
@@ -225,7 +229,7 @@ export default function Sidebar({ open, onClose, isMobile }) {
             {[
               { label: 'Dashboard', icon: <FiHome size={14} />, path: '/' },
               { label: 'My Team', icon: <FiUsers size={14} />, path: '/team/manage' },
-              { label: 'Leaves', icon: <FiFileText size={14} />, path: '/leaves' },
+              { label: 'Approvals', icon: <FiFileText size={14} />, path: '/leaves' },
             ].map(link => (
               <NavLink key={link.path} link={link} pathname={pathname} router={router} isMobile={isMobile} onClose={onClose} />
             ))}

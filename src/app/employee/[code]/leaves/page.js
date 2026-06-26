@@ -4,32 +4,36 @@ import { useEffect, useState, use, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../../../components/AuthProvider';
-import { getLeaveRequests, submitLeaveRequest } from '../../../../actions/leave';
+import { getLeaveRequests, submitLeaveRequest, cancelLeaveRequest } from '../../../../actions/leave';
+import { getWorkingSaturdays } from '../../../../actions/workingSaturdays';
+import { buildWorkingSatMap } from '../../../../utils/workingDays';
 import { FiSun, FiAlertTriangle } from 'react-icons/fi';
 import { useEmployeeData } from '../context';
 import DatePickerInput from '../../../../components/DatePicker';
 
-const LEAVE_LABELS = { cl: 'Casual Leave', sl: 'Sick Leave', el: 'Earned Leave', rl: 'Restricted Leave', sh: 'Short Leave', ul: 'Unpaid Leave' };
-const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b', ul: '#8e8e93' };
+const LEAVE_LABELS = { cl: 'Casual Leave', sl: 'Sick Leave', el: 'Earned Leave', rl: 'Restricted Leave', sh: 'Short Leave', ul: 'Unpaid Leave', ewl: 'Extra Working Leave' };
+const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b', ul: '#8e8e93', ewl: '#7b2d8b' };
 
 function daysBetween(from, to) {
   return Math.round((to - from) / (1000 * 60 * 60 * 24)) + 1;
 }
 
-function countWeekends(from, to) {
+function countWeekends(from, to, workingSatDays = {}) {
   let c = 0;
   for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
     const day = d.getDay();
-    if (day === 0 || day === 6) c++;
+    if (day === 0) c++;
+    else if (day === 6 && workingSatDays[d.getMonth() + 1] !== d.getDate()) c++;
   }
   return c;
 }
 
-function countWeekdays(from, to) {
+function countWeekdays(from, to, workingSatDays = {}) {
   let c = 0;
   for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
     const day = d.getDay();
     if (day >= 1 && day <= 5) c++;
+    else if (day === 6 && workingSatDays[d.getMonth() + 1] === d.getDate()) c++;
   }
   return c;
 }
@@ -53,6 +57,7 @@ export default function LeavesPage({ params }) {
   const [submittingLeave, setSubmittingLeave] = useState(false);
   const [prescriptionFile, setPrescriptionFile] = useState(null);
   const [submitResult, setSubmitResult] = useState(null);
+  const [workingSatDays, setWorkingSatDays] = useState({});
 
   const computedDays = useMemo(() => {
     if (!leaveForm.fromDate) return 1;
@@ -77,44 +82,35 @@ export default function LeavesPage({ params }) {
     const from = new Date(leaveForm.fromDate);
     const to = leaveForm.toDate ? new Date(leaveForm.toDate) : from;
     if (from > to) return 0;
-    return countWeekends(from, to);
-  }, [leaveForm.fromDate, leaveForm.toDate]);
+    return countWeekends(from, to, workingSatDays);
+  }, [leaveForm.fromDate, leaveForm.toDate, workingSatDays]);
 
   const weekdays = useMemo(() => {
     if (!leaveForm.fromDate) return 0;
     const from = new Date(leaveForm.fromDate);
     const to = leaveForm.toDate ? new Date(leaveForm.toDate) : from;
     if (from > to) return 0;
-    return countWeekdays(from, to);
-  }, [leaveForm.fromDate, leaveForm.toDate]);
-
-  function weekendCount(from, to) {
-    let c = 0;
-    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-      const day = d.getDay();
-      if (day === 0 || day === 6) c++;
-    }
-    return c;
-  }
+    return countWeekdays(from, to, workingSatDays);
+  }, [leaveForm.fromDate, leaveForm.toDate, workingSatDays]);
 
   const sandwichWarning = useMemo(() => {
     if (!leaveForm.fromDate || leaveForm.isHalfDay || leaveForm.leaveType === 'sh' || leaveForm.leaveType === 'rl') return '';
     const from = new Date(leaveForm.fromDate);
     const to = leaveForm.toDate ? new Date(leaveForm.toDate) : from;
     if (from > to) return '';
-    const wk = weekendCount(from, to);
+    const wk = countWeekends(from, to, workingSatDays);
     if (wk === 0 || (leaveForm.leaveType !== 'cl' && leaveForm.leaveType !== 'el')) return '';
     const usedSoFar = leaveBalanceDetail?.sandwichUsed ?? 0;
     if (usedSoFar > 0) return '';
     return `First leave spanning weekends — 2 weekend days free. Remaining weekends (if any) will be counted as sandwich leave.`;
-  }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.leaveType, leaveForm.isHalfDay, leaveBalanceDetail]);
+  }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.leaveType, leaveForm.isHalfDay, leaveBalanceDetail, workingSatDays]);
 
   const sandwichInfo = useMemo(() => {
-    if (!leaveForm.fromDate || leaveForm.isHalfDay || leaveForm.leaveType === 'sh' || leaveForm.leaveType === 'rl' || leaveForm.leaveType === 'ul') return null;
+    if (!leaveForm.fromDate || leaveForm.isHalfDay || leaveForm.leaveType === 'sh' || leaveForm.leaveType === 'rl' || leaveForm.leaveType === 'ul' || leaveForm.leaveType === 'ewl') return null;
     const from = new Date(leaveForm.fromDate);
     const to = leaveForm.toDate ? new Date(leaveForm.toDate) : from;
     if (from > to) return null;
-    const wk = weekendCount(from, to);
+    const wk = countWeekends(from, to, workingSatDays);
     if (wk === 0) return null;
     const usedSoFar = leaveBalanceDetail?.sandwichUsed ?? 0;
     const isFirst = usedSoFar === 0;
@@ -128,7 +124,7 @@ export default function LeavesPage({ params }) {
         ? `1st leave spanning weekends — ${freeDays} weekend day${freeDays !== 1 ? 's' : ''} excluded`
         : `${usedSoFar + 1} leave spanning weekends — all ${Math.round(computedDays)} days counted`
     };
-  }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.leaveType, leaveForm.isHalfDay, computedDays, leaveBalanceDetail]);
+  }, [leaveForm.fromDate, leaveForm.toDate, leaveForm.leaveType, leaveForm.isHalfDay, computedDays, leaveBalanceDetail, workingSatDays]);
 
   const leavePreview = useMemo(() => {
     if (!leaveForm.fromDate || totalDays <= 0) return null;
@@ -165,8 +161,9 @@ export default function LeavesPage({ params }) {
       types.push('el');
     }
     types.push('rl', 'sh');
+    if (leaveBalanceDetail?.ewlTotal > 0) types.push('ewl');
     return types;
-  }, [emp]);
+  }, [emp, leaveBalanceDetail?.ewlTotal]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
@@ -179,6 +176,13 @@ export default function LeavesPage({ params }) {
     if (!code) return;
     getLeaveRequests(code).then(setLeaveRequests).catch(() => setLeaveRequests([]));
   }, [code, triggerRefetch]);
+
+  useEffect(() => {
+    const year = new Date().getFullYear();
+    getWorkingSaturdays(year).then(sats => {
+      setWorkingSatDays(buildWorkingSatMap(sats));
+    }).catch(() => {});
+  }, [triggerRefetch]);
 
   const handleSubmitLeave = async (e) => {
     e.preventDefault();
@@ -214,7 +218,8 @@ export default function LeavesPage({ params }) {
     const map = {
       pending: { bg: 'rgba(255,159,10,0.1)', color: '#b36200', label: 'Pending' },
       approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Approved' },
-      rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' }
+      rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' },
+      cancelled: { bg: 'rgba(142,142,147,0.1)', color: '#8e8e93', label: 'Cancelled' },
     };
     const s = map[status] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)', label: status.charAt(0).toUpperCase() + status.slice(1) };
     return <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: '980px', fontSize: '11px', fontWeight: 600, background: s.bg, color: s.color }}>{s.label}</span>;
@@ -228,6 +233,7 @@ export default function LeavesPage({ params }) {
       pending_super: { bg: 'rgba(175,82,222,0.1)', color: '#7b2d8b', label: 'Awaiting Super Admin' },
       approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Approved' },
       rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' },
+      cancelled: { bg: 'rgba(142,142,147,0.1)', color: '#8e8e93', label: 'Cancelled' },
     };
     const s = map[stage] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)' };
     let label;
@@ -339,7 +345,7 @@ export default function LeavesPage({ params }) {
             </div>
           )}
 
-          {leaveForm.leaveType === 'rl' || leaveForm.isHalfDay || leaveForm.leaveType === 'sh' ? (
+          {leaveForm.leaveType === 'rl' || leaveForm.isHalfDay || leaveForm.leaveType === 'sh' || leaveForm.leaveType === 'ewl' ? (
             <div>
               <label className="input-label">Date</label>
               <DatePickerInput
@@ -375,7 +381,7 @@ export default function LeavesPage({ params }) {
             </div>
           )}
 
-          {leaveForm.leaveType !== 'sh' && leaveForm.leaveType !== 'rl' && computedDays > 0.5 && (
+          {leaveForm.leaveType !== 'sh' && leaveForm.leaveType !== 'rl' && leaveForm.leaveType !== 'ewl' && (computedDays > 0.5 || leaveForm.isHalfDay) && (
             <div>
               <label className="input-label">Duration</label>
               <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
@@ -387,7 +393,7 @@ export default function LeavesPage({ params }) {
                     fontWeight: (opt === 'Half Day') === leaveForm.isHalfDay ? 600 : 400, fontSize: '13px', transition: 'all 0.15s'
                   }}>
                     <input type="radio" name="duration" checked={(opt === 'Half Day') === leaveForm.isHalfDay}
-                      onChange={() => setLeaveForm(f => ({ ...f, isHalfDay: opt === 'Half Day', toDate: opt === 'Half Day' ? null : f.toDate }))} style={{ display: 'none' }} />
+                      onChange={() => setLeaveForm(f => ({ ...f, isHalfDay: opt === 'Half Day', toDate: opt === 'Half Day' ? null : (f.toDate || f.fromDate) }))} style={{ display: 'none' }} />
                     {opt}
                   </label>
                 ))}
@@ -526,9 +532,23 @@ export default function LeavesPage({ params }) {
                       <FiAlertTriangle size={11} style={{ marginRight: '2px', verticalAlign: 'middle' }} /> {r.sandwichCount === 1 ? '1st sandwich' : `${r.sandwichCount} sandwich`} leave
                     </div>
                   )}
-                  <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
-                    {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                    {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
+                      {new Date(r.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      {r.fromDate !== r.toDate && ` – ${new Date(r.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
+                    </div>
+                    {r.status === 'approved' && new Date(r.fromDate) > today && (
+                      <button onClick={async (e) => {
+                        e.preventDefault();
+                        if (!confirm('Cancel this approved leave?')) return;
+                        const result = await cancelLeaveRequest(r.id, user?.username);
+                        if (result.error) return setLeaveError(result.error);
+                        setLeaveSuccess('Leave cancelled.');
+                        triggerRefetch();
+                      }} style={{ padding: '4px 10px', borderRadius: '8px', border: '1px solid rgba(255,59,48,0.2)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '11px', fontWeight: 500 }}>
+                        Cancel
+                      </button>
+                    )}
                   </div>
                   <div style={{ fontSize: '12px', color: 'var(--text2)', marginTop: '2px' }}>{r.reason}</div>
                   {r.prescriptionFile && <div style={{ fontSize: '11px', color: 'var(--blue)', marginTop: '2px' }}>Prescription attached</div>}

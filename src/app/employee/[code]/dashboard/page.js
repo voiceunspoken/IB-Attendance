@@ -64,7 +64,7 @@ export default function EmployeeDashboard({ params }) {
 
   if (!emp) return null;
 
-  const showClockWidget = !!approvedLocation || emp.employeeType === 'hybrid';
+  const showClockWidget = true;
   const clockLocations = approvedLocation ? [approvedLocation] : null;
 
   const leaveCards = leaveBalance ? [
@@ -73,7 +73,8 @@ export default function EmployeeDashboard({ params }) {
     { label: 'EL', remaining: leaveBalance.elRemaining, total: leaveBalance.elTotal, color: '#af52de' },
     { label: 'RL', remaining: leaveBalance.rlRemaining, total: leaveBalance.rlTotal, color: '#ff9f0a' },
     { label: 'SH', remaining: leaveBalance.shRemaining, total: leaveBalance.shTotal, color: '#ff6b35' },
-  ] : [];
+    { label: 'EWL', remaining: leaveBalance.ewlRemaining, total: leaveBalance.ewlTotal, color: '#7b2d8b' },
+  ].filter(c => c.total > 0 || c.remaining > 0) : [];
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>

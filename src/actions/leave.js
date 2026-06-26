@@ -4,19 +4,20 @@ import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
 import { requireAdmin, requireAdminOrSuperAdmin, requireSuperAdmin } from '../lib/auth-guard';
+import { requireSuperApproval } from '../lib/super-approval';
 import { createNotification, getAdminUserIds, getSuperAdminUserIds, sendLeavePendingNotification, sendLeaveStatusNotification } from './notifications';
 
 export async function getLeavePolicy(year) {
   return prisma.leavePolicy.findUnique({ where: { year } });
 }
 
-export async function upsertLeavePolicy(year, { cl, sl, el, rl }, performedBy = null) {
-  const auth = await requireAdminOrSuperAdmin(performedBy);
-  if (auth) return auth;
+export async function upsertLeavePolicy(year, { cl, sl, el, rl, sh, ewl }, performedBy = null) {
+  const pending = await requireSuperApproval(performedBy, 'update_leave_policy', { year, cl, sl, el, rl, sh, ewl });
+  if (pending) return pending;
   return prisma.leavePolicy.upsert({
     where: { year },
-    update: { cl, sl, el, rl },
-    create: { year, cl, sl, el, rl }
+    update: { cl, sl, el, rl, sh, ewl },
+    create: { year, cl, sl, el, rl, sh, ewl }
   });
 }
 
@@ -51,13 +52,13 @@ export async function getLeaveBalance(employeeCode, year) {
     }
   });
 
-  const used = { cl: 0, sl: 0, el: 0, rl: 0, sh: 0 };
+  const used = { cl: 0, sl: 0, el: 0, rl: 0, sh: 0, ewl: 0 };
   approved.forEach(r => {
     const paidDays = r.days - (r.unpaidDays || 0);
     used[r.leaveType] = (used[r.leaveType] || 0) + Math.max(0, paidDays);
   });
 
-  const leaveTypes = ['cl', 'sl', 'el', 'rl', 'sh'];
+  const leaveTypes = ['cl', 'sl', 'el', 'rl', 'sh', 'ewl'];
   const dailyLeaveLogs = await prisma.dailyLog.findMany({
     where: {
       userId: user.id,
@@ -100,6 +101,9 @@ export async function getLeaveBalance(employeeCode, year) {
     shTotal: balance.shTotal,
     shUsed: used.sh,
     shRemaining: balance.shTotal - used.sh,
+    ewlTotal: balance.ewlTotal,
+    ewlUsed: used.ewl || 0,
+    ewlRemaining: balance.ewlTotal - (used.ewl || 0),
   };
 }
 
@@ -139,7 +143,7 @@ export async function getLeaveBalancesForExport(year, fromMonth = 1, toMonth = 1
         orderBy: { fromDate: 'asc' }
       });
 
-      const rangeUsed = { cl: 0, sl: 0, el: 0, rl: 0, sh: 0 };
+      const rangeUsed = { cl: 0, sl: 0, el: 0, rl: 0, sh: 0, ewl: 0 };
       approved.forEach(r => {
         rangeUsed[r.leaveType] = (rangeUsed[r.leaveType] || 0) + Number(r.days);
       });
@@ -162,8 +166,8 @@ export async function getLeaveBalancesForExport(year, fromMonth = 1, toMonth = 1
 }
 
 export async function adminUpdateLeaveBalance(employeeCode, year, fields, performedBy = null) {
-  const auth = await requireAdminOrSuperAdmin(performedBy);
-  if (auth) return auth;
+  const pending = await requireSuperApproval(performedBy, 'edit_leave_balance', { employeeCode, year, fields });
+  if (pending) return pending;
   const user = await prisma.user.findUnique({ where: { code: employeeCode } });
   if (!user) return { error: 'Employee not found' };
 
@@ -175,11 +179,26 @@ export async function adminUpdateLeaveBalance(employeeCode, year, fields, perfor
   return { success: true };
 }
 
-function countWeekends(from, to) {
+function getThirdSaturday(year, month) {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const saturdays = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    if (new Date(year, month - 1, d).getDay() === 6) saturdays.push(d);
+  }
+  return saturdays[2] || null;
+}
+
+function countWeekends(from, to, workingSatMap = {}) {
   let c = 0;
   for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
     const day = d.getDay();
-    if (day === 0 || day === 6) c++;
+    if (day === 0) c++;
+    else if (day === 6) {
+      const month = d.getMonth() + 1;
+      const year = d.getFullYear();
+      const wsDay = workingSatMap[month] !== undefined ? workingSatMap[month] : getThirdSaturday(year, month);
+      if (d.getDate() !== wsDay) c++;
+    }
   }
   return c;
 }
@@ -294,10 +313,16 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
     if (existingSH) return { error: 'You can only take 1 Short Leave per 2-month window. Your next window opens after ' + (windowEnd % 12 + 1) + '/' + from.getFullYear() + '.' };
   }
 
+  const workingSats = await prisma.workingSaturday.findMany({
+    where: { year: from.getFullYear(), month: { gte: from.getMonth() + 1, lte: to.getMonth() + 1 } }
+  });
+  const workingSatMap = {};
+  workingSats.forEach(s => { workingSatMap[s.month] = s.day; });
+
   let sandwichCount = 0;
   let sandwichMessage = '';
   let sandwichDaysCount = computedDays;
-  const weekendDays = countWeekends(from, to);
+  const weekendDays = countWeekends(from, to, workingSatMap);
   if (!isHalfDay && (leaveType === 'cl' || leaveType === 'el') && computedDays >= 1 && weekendDays > 0) {
     const balance = await prisma.leaveBalance.findUnique({
       where: { userId_year: { userId: user.id, year: from.getFullYear() } }
@@ -315,7 +340,16 @@ export async function submitLeaveRequest(employeeCode, { leaveType, fromDate, to
   }
 
   let unpaidDays = 0;
-  if (leaveType !== 'ul' && leaveType !== 'sh' && computedDays >= 0.5) {
+  if (leaveType === 'ewl') {
+    const bal = await getLeaveBalance(employeeCode, from.getFullYear());
+    if (bal.ewlRemaining <= 0) {
+      return { error: 'You have no Extra Working Leave (EWL) balance remaining.' };
+    }
+    if (computedDays > bal.ewlRemaining) {
+      return { error: `You only have ${bal.ewlRemaining} EWL day(s) remaining, but requested ${computedDays}.` };
+    }
+  }
+  if (leaveType !== 'ul' && leaveType !== 'sh' && leaveType !== 'ewl' && computedDays >= 0.5) {
     const bal = await getLeaveBalance(employeeCode, from.getFullYear());
     const remaining = bal[`${leaveType}Remaining`] ?? 0;
     if (remaining <= 0) {
@@ -484,7 +518,89 @@ export async function getAllLeaveRequests() {
   return attachApproverName(requests);
 }
 
+export async function cancelLeaveRequest(requestId, cancelledBy) {
+  const req = await prisma.leaveRequest.findUnique({
+    where: { id: requestId },
+    include: { user: { select: { id: true, code: true, name: true } } }
+  });
+  if (!req) return { error: 'Leave request not found' };
+  if (req.status !== 'approved') return { error: 'Only approved leaves can be cancelled.' };
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (req.fromDate <= today) return { error: 'Cannot cancel a leave that has already started.' };
+
+  const canceller = await prisma.user.findUnique({ where: { username: cancelledBy } });
+  if (!canceller) return { error: 'User not found' };
+  const isSelf = canceller.id === req.userId;
+  const isAdmin = canceller.role === 'admin';
+  const isSuperAdmin = canceller.role === 'super_admin';
+  if (!isSelf && !isAdmin && !isSuperAdmin) return { error: 'Not authorized to cancel this leave.' };
+
+  const from = new Date(req.fromDate);
+  const to = new Date(req.toDate);
+  const leaveTypeUpper = req.leaveType.toUpperCase();
+
+  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+    const monthYear = `${d.getMonth() + 1}_${d.getFullYear()}`;
+    const day = d.getDate();
+    const existing = await prisma.dailyLog.findUnique({
+      where: { userId_monthYear_day: { userId: req.userId, monthYear, day } }
+    });
+    if (existing && existing.raw === leaveTypeUpper && ['present', 'half', 'rl'].includes(existing.type)) {
+      await prisma.dailyLog.update({
+        where: { userId_monthYear_day: { userId: req.userId, monthYear, day } },
+        data: { type: 'absent', raw: '', inT: null, outT: null, isLate: false, isSS: false, isSL: false, isHD: false, hdReason: null, workLocation: null }
+      });
+    }
+  }
+
+  const affectedMonths = new Set();
+  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+    affectedMonths.add(`${d.getMonth() + 1}_${d.getFullYear()}`);
+  }
+  for (const monthYear of affectedMonths) {
+    const logs = await prisma.dailyLog.findMany({ where: { userId: req.userId, monthYear } });
+    const t = recalcTotals(logs);
+    const numDays = t.maxDay || 31;
+    await prisma.monthRecord.upsert({
+      where: { userId_monthYear: { userId: req.userId, monthYear } },
+      update: { present: t.present, absent: t.absent, halfDay: t.halfDay, late: t.late, lateHD: t.lateHD, shortShift: t.shortShift, ssHD: t.ssHD, shortLeave: t.shortLeave, rl: t.rl, holi: t.holi, numDays },
+      create: { userId: req.userId, monthYear, present: t.present, absent: t.absent, halfDay: t.halfDay, late: t.late, lateHD: t.lateHD, shortShift: t.shortShift, ssHD: t.ssHD, shortLeave: t.shortLeave, rl: t.rl, holi: t.holi, numDays },
+    });
+  }
+
+  if (req.sandwichCount > 0) {
+    await prisma.leaveBalance.updateMany({
+      where: { userId: req.userId, year: from.getFullYear() },
+      data: { sandwichUsed: { decrement: 1 } }
+    });
+  }
+
+  await prisma.leaveRequest.update({
+    where: { id: requestId },
+    data: { status: 'cancelled', approvalStage: 'cancelled', currentApproverId: null }
+  });
+
+  await logAction(cancelledBy, 'leave_cancelled', 'leave_request', req.id,
+    `Cancelled ${req.leaveType.toUpperCase()} leave (${req.days}d) for ${req.user.name}`);
+
+  await createNotification(req.userId, 'leave_cancelled',
+    `Leave Cancelled`,
+    `Your ${req.leaveType.toUpperCase()} leave for ${req.days} day(s) has been cancelled.`,
+    { requestId: req.id, leaveType: req.leaveType, days: req.days });
+
+  const adminIds = await getAdminUserIds();
+  await Promise.all(adminIds.map(id => createNotification(id, 'leave_cancelled',
+    `Leave Cancelled`,
+    `${req.user.name}'s ${req.leaveType.toUpperCase()} leave was cancelled by ${canceller.name || cancelledBy}.`,
+    { requestId: req.id, employeeCode: req.user.code, leaveType: req.leaveType, days: req.days })));
+
+  return { success: true };
+}
+
 export async function reviewLeaveRequest(requestId, reviewedBy, approve, note = '') {
+  if (!approve && !note) return { error: 'A reason is required when rejecting.' };
   const req = await prisma.leaveRequest.findUnique({
     where: { id: requestId },
     include: { user: { include: { managers: { include: { manager: true }, orderBy: { priority: 'asc' } } } } }
@@ -692,6 +808,7 @@ export async function getAllPendingRegularizations() {
 }
 
 export async function reviewRegularization(requestId, reviewedBy, approve, note = '') {
+  if (!approve && !note) return { error: 'A reason is required when rejecting.' };
   const auth = await requireAdmin(reviewedBy);
   if (auth) return auth;
   const req = await prisma.regularizationRequest.findUnique({
@@ -735,7 +852,8 @@ export async function getPendingSuperRegularizations() {
   });
 }
 
-export async function reviewRegularizationSuper(requestId, superReviewedBy, approve) {
+export async function reviewRegularizationSuper(requestId, superReviewedBy, approve, note = '') {
+  if (!approve && !note) return { error: 'A reason is required when rejecting.' };
   const auth = await requireSuperAdmin(superReviewedBy);
   if (auth) return auth;
   const req = await prisma.regularizationRequest.update({
@@ -743,11 +861,68 @@ export async function reviewRegularizationSuper(requestId, superReviewedBy, appr
     data: {
       superStatus: approve ? 'approved' : 'rejected',
       superReviewedBy,
-      superReviewedAt: new Date()
+      superReviewedAt: new Date(),
+      reviewNote: note || null
     }
   });
 
-  if (approve && req.status === 'approved') {
+  if (approve && req.status === 'approved' && req.type === 'attendance_change') {
+    const payload = JSON.parse(req.reason);
+    const user = await prisma.user.findUnique({ where: { id: req.userId } });
+    if (user) {
+      await prisma.dailyLog.upsert({
+        where: { userId_monthYear_day: { userId: req.userId, monthYear: payload.monthYear, day: payload.day } },
+        update: {
+          type: payload.newType,
+          isLate: false,
+          isSS: false,
+          isSL: false,
+          hdReason: null
+        },
+        create: {
+          userId: req.userId, monthYear: payload.monthYear, day: payload.day,
+          type: payload.newType,
+          raw: '',
+          isLate: false, isSS: false, isSL: false
+        }
+      });
+
+      const logs = await prisma.dailyLog.findMany({ where: { userId: req.userId, monthYear: payload.monthYear } });
+      const t = recalcTotals(logs);
+      const numDays = t.maxDay || 31;
+      await prisma.monthRecord.upsert({
+        where: { userId_monthYear: { userId: req.userId, monthYear: payload.monthYear } },
+        update: {
+          present: t.present, absent: t.absent, halfDay: t.halfDay,
+          late: t.late, lateHD: t.lateHD, shortShift: t.shortShift,
+          ssHD: t.ssHD, shortLeave: t.shortLeave, rl: t.rl, holi: t.holi,
+          numDays,
+        },
+        create: {
+          userId: req.userId, monthYear: payload.monthYear,
+          present: t.present, absent: t.absent, halfDay: t.halfDay,
+          late: t.late, lateHD: t.lateHD, shortShift: t.shortShift,
+          ssHD: t.ssHD, shortLeave: t.shortLeave, rl: t.rl, holi: t.holi,
+          numDays,
+        },
+      });
+
+      if (LEAVE_TYPES.includes(payload.newType)) {
+        const year = parseInt(payload.monthYear.split('_')[1]);
+        const usedKey = payload.newType + 'Used';
+        const balance = await prisma.leaveBalance.findUnique({
+          where: { userId_year: { userId: req.userId, year } }
+        });
+        if (balance) {
+          const currentUsed = balance[usedKey] || 0;
+          await prisma.leaveBalance.update({
+            where: { userId_year: { userId: req.userId, year } },
+            data: { [usedKey]: currentUsed + 1 }
+          });
+        }
+      }
+    }
+  } else if (approve && req.status === 'approved') {
     const date = new Date(req.date);
     const monthYear = `${date.getMonth() + 1}_${date.getFullYear()}`;
     const day = date.getDate();
@@ -769,12 +944,12 @@ export async function reviewRegularizationSuper(requestId, superReviewedBy, appr
   const notifType = approve ? 'regularization_approved' : 'regularization_rejected';
   const notifTitle = approve ? 'Regularization Fully Approved' : 'Regularization Rejected';
   await createNotification(req.userId, notifType, notifTitle,
-    `Your regularization for ${new Date(req.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} has been ${approve ? 'fully approved' : 'rejected'} by super admin.`,
-    { requestId: req.id, date: req.date });
+    `Your regularization for ${new Date(req.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} has been ${approve ? 'fully approved' : 'rejected'} by super admin.${note ? ' Note: ' + note : ''}`,
+    { requestId: req.id, date: req.date, note });
 
   const reqUser = await prisma.user.findUnique({ where: { id: req.userId } });
   if (reqUser) {
-    await sendLeaveStatusNotification(reqUser.code, reqUser.name, 'regularization', approve ? 'approved' : 'rejected', '');
+    await sendLeaveStatusNotification(reqUser.code, reqUser.name, 'regularization', approve ? 'approved' : 'rejected', note);
   }
 
   return { request: req };
@@ -818,12 +993,13 @@ export async function requestLeaveDeduction(employeeCode, leaveType, days, reaso
   await Promise.all(adminIds.map(id => createNotification(id, 'leave_deduction_submitted',
     `Leave Deduction Request`,
     `${user.name} requested ${days} ${leaveType.toUpperCase()} deduction.`,
-    { employeeCode, leaveType, days, reason, changeId: change.id })));
+    { employeeCode, leaveType, days, reason, requestId: change.id })));
 
   return { success: true, change };
 }
 
-export async function reviewLeaveDeduction(changeId, reviewedBy, approve) {
+export async function reviewLeaveDeduction(changeId, reviewedBy, approve, note = '') {
+  if (!approve && !note) return { error: 'A reason is required when rejecting.' };
   const auth = await requireSuperAdmin(reviewedBy);
   if (auth) return auth;
 
@@ -857,11 +1033,18 @@ export async function reviewLeaveDeduction(changeId, reviewedBy, approve) {
       approve ? 'Leave Deduction Approved' : 'Leave Deduction Rejected',
       approve
         ? `${payload.days} ${payload.leaveType.toUpperCase()} day(s) deducted from your balance.`
-        : `Your ${payload.leaveType.toUpperCase()} deduction request was rejected.`,
-      { ...payload });
+        : `Your ${payload.leaveType.toUpperCase()} deduction request was rejected.${note ? ' Note: ' + note : ''}`,
+      { ...payload, note });
   }
 
   return { success: true };
+}
+
+export async function getDeductionById(id) {
+  const change = await prisma.pendingChange.findUnique({ where: { id } });
+  if (!change) return null;
+  const payload = JSON.parse(change.payload);
+  return { ...change, payload };
 }
 
 function parseTime(t) {
@@ -869,4 +1052,29 @@ function parseTime(t) {
   const [h, m] = t.split(':').map(Number);
   if (isNaN(h) || isNaN(m)) return null;
   return h * 60 + m;
+}
+
+const LEAVE_TYPES = ['cl', 'sl', 'el', 'rl', 'ul', 'sh', 'ewl'];
+
+function recalcTotals(logs) {
+  let present = 0, absent = 0, halfDay = 0, late = 0, ss = 0, sl = 0, rl = 0, holi = 0;
+  let lateHD = 0, ssHD = 0, maxDay = 0;
+  for (const log of logs) {
+    maxDay = Math.max(maxDay, log.day);
+    if (LEAVE_TYPES.includes(log.type)) {
+      if (log.type === 'rl') rl++;
+      else present++;
+    } else if (log.type === 'absent') absent++;
+    else if (log.type === 'holiday') holi++;
+    else if (log.type === 'half') { halfDay++; if (log.hdReason === 'late') lateHD++; if (log.hdReason === 'ss') ssHD++; }
+    else if (['wfh', 'wos', 'wfm', 'wfo'].includes(log.type)) { present++; }
+    else if (log.type === 'present') {
+      if (log.isHD) { halfDay++; if (log.hdReason === 'late') lateHD++; if (log.hdReason === 'ss') ssHD++; }
+      else { present++; }
+      if (log.isLate) late++;
+      if (log.isSS) ss++;
+      if (log.isSL) sl++;
+    }
+  }
+  return { present, absent, halfDay, late, lateHD, shortShift: ss, ssHD, shortLeave: sl, rl, holi, maxDay };
 }

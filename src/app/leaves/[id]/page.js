@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../components/AuthProvider';
-import { getLeaveRequestById, reviewLeaveRequest } from '../../../actions/leave';
+import { getLeaveRequestById, reviewLeaveRequest, cancelLeaveRequest } from '../../../actions/leave';
 import { useToast } from '../../../components/Toast';
 import { FiArrowLeft, FiCalendar, FiClock, FiAlertTriangle, FiCheck, FiX, FiUser } from 'react-icons/fi';
 
@@ -16,6 +16,7 @@ const STAGE_CONFIG = {
   pending_super: { bg: 'rgba(175,82,222,0.1)', color: '#7b2d8b', label: 'Awaiting Super Admin' },
   approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Approved' },
   rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' },
+  cancelled: { bg: 'rgba(142,142,147,0.1)', color: '#8e8e93', label: 'Cancelled' },
 };
 
 export default function LeaveDetailPage({ params }) {
@@ -33,6 +34,7 @@ export default function LeaveDetailPage({ params }) {
   const [notFound, setNotFound] = useState(false);
   const [reviewNote, setReviewNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
@@ -47,6 +49,7 @@ export default function LeaveDetailPage({ params }) {
   }, [id, isAuthenticated]);
 
   const handleReview = async (approve) => {
+    if (!approve && !reviewNote.trim()) return toast.error('A reason is required when rejecting.');
     setSubmitting(true);
     const result = await reviewLeaveRequest(id, user.username, approve, reviewNote);
     setSubmitting(false);
@@ -74,7 +77,8 @@ export default function LeaveDetailPage({ params }) {
 
   if (!req) return null;
 
-  const canReview = (isAdmin || isSuperAdmin) && req.status === 'pending';
+      const canReview = (isAdmin || isSuperAdmin) && req.status === 'pending';
+  const canCancel = req.status === 'approved' && new Date(req.fromDate) > new Date() && (isAdmin || isSuperAdmin || user?.id === req.userId);
   const stageCfg = STAGE_CONFIG[req.approvalStage] || { bg: 'var(--surface2)', color: 'var(--text2)', label: req.approvalStage };
   const leaveColor = LEAVE_COLORS[req.leaveType] || 'var(--text2)';
   const leaveLabel = LEAVE_LABELS[req.leaveType] || req.leaveType.toUpperCase();
@@ -222,7 +226,7 @@ export default function LeaveDetailPage({ params }) {
           {canReview && (
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: '20px', marginTop: '4px' }}>
               <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '10px' }}>Your Review</div>
-              <input className="input-field" placeholder="Add a note (optional)…"
+              <input className="input-field" placeholder="Add a note (required when rejecting)…"
                 value={reviewNote} onChange={e => setReviewNote(e.target.value)}
                 style={{ width: '100%', padding: '10px 14px', fontSize: '13px', marginBottom: '12px', boxSizing: 'border-box' }} />
               <div style={{ display: 'flex', gap: '10px' }}>
@@ -235,6 +239,24 @@ export default function LeaveDetailPage({ params }) {
                   <FiX size={16} /> Reject
                 </button>
               </div>
+            </div>
+          )}
+
+          {canCancel && (
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '20px', marginTop: '4px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '10px' }}>Cancel Leave</div>
+              <button style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '10px', border: '1px solid rgba(255,59,48,0.3)', background: 'rgba(255,59,48,0.08)', color: 'var(--red)', cursor: cancelling ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontWeight: 600, opacity: cancelling ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                disabled={cancelling} onClick={async () => {
+                  if (!confirm('Cancel this approved leave?')) return;
+                  setCancelling(true);
+                  const result = await cancelLeaveRequest(req.id, user?.username);
+                  setCancelling(false);
+                  if (result.error) return toast.error(result.error);
+                  toast.success('Leave cancelled.');
+                  setReq(prev => prev ? { ...prev, status: 'cancelled', approvalStage: 'cancelled' } : prev);
+                }}>
+                <FiX size={16} /> {cancelling ? 'Cancelling…' : 'Cancel Leave'}
+              </button>
             </div>
           )}
         </div>

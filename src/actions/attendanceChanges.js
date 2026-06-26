@@ -3,7 +3,7 @@
 import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
-import { createNotification, getAdminUserIds } from './notifications';
+import { createNotification, getAdminUserIds, getSuperAdminUserIds } from './notifications';
 import { requireSuperAdmin } from '../lib/auth-guard';
 
 const LEAVE_TYPES = ['cl', 'sl', 'el', 'rl', 'ul', 'sh'];
@@ -50,10 +50,99 @@ export async function requestAdjustment(employeeCode, monthYear, day, currentTyp
   await Promise.all(adminIds.map(id => createNotification(id, 'adjustment_submitted',
     `New Adjustment Request`,
     `${user.name} requested an attendance adjustment for day ${day} (${currentType} → ${newType}).`,
-    { employeeCode, day, monthYear, currentType, newType, reason, warning })));
+    { employeeCode, day, monthYear, currentType, newType, reason, warning, requestId: change.id })));
 
   revalidatePath('/');
   return { success: true, warning };
+}
+
+export async function requestRegularizationChange(employeeCode, monthYear, day, currentType, newType, reason, requestedBy) {
+  const user = await prisma.user.findUnique({ where: { code: employeeCode } });
+  if (!user) return { error: 'Employee not found' };
+
+  const requester = await prisma.user.findUnique({ where: { username: requestedBy } });
+  const isSuper = requester?.role === 'super_admin';
+  const isAdmin = requester?.role === 'admin';
+
+  let warning = null;
+
+  if (LEAVE_TYPES.includes(newType)) {
+    const year = parseInt(monthYear.split('_')[1]);
+    const balance = await prisma.leaveBalance.findUnique({
+      where: { userId_year: { userId: user.id, year } }
+    });
+    if (balance) {
+      const usedKey = newType + 'Used';
+      const totalKey = newType + 'Total';
+      const used = balance[usedKey] || 0;
+      const total = balance[totalKey] || 0;
+      if (used >= total) {
+        warning = `${newType.toUpperCase()} balance exhausted (${used}/${total} used).`;
+      } else if (used + 1 > total) {
+        warning = `${newType.toUpperCase()} balance insufficient (${used}/${total} used, need 1 more).`;
+      }
+    }
+  }
+
+  const [mo, yr] = monthYear.split('_');
+  const date = new Date(parseInt(yr), parseInt(mo) - 1, parseInt(day));
+
+  const payload = JSON.stringify({ employeeCode, employeeName: user.name, monthYear, day: parseInt(day), currentType, newType, warning, reason });
+
+  const req = await prisma.regularizationRequest.create({
+    data: {
+      userId: user.id,
+      date,
+      type: 'attendance_change',
+      reason: payload,
+      status: isSuper || isAdmin ? 'approved' : 'pending',
+      superStatus: isSuper ? 'approved' : 'pending'
+    }
+  });
+
+  if (isSuper) {
+    const logs = await prisma.dailyLog.findMany({ where: { userId: user.id, monthYear } });
+    const t = recalcTotals(logs);
+    const numDays = t.maxDay || 31;
+    await prisma.monthRecord.upsert({
+      where: { userId_monthYear: { userId: user.id, monthYear } },
+      update: { present: t.present, absent: t.absent, halfDay: t.halfDay, late: t.late, lateHD: t.lateHD, shortShift: t.shortShift, ssHD: t.ssHD, shortLeave: t.shortLeave, rl: t.rl, holi: t.holi, numDays },
+      create: { userId: user.id, monthYear, present: t.present, absent: t.absent, halfDay: t.halfDay, late: t.late, lateHD: t.lateHD, shortShift: t.shortShift, ssHD: t.ssHD, shortLeave: t.shortLeave, rl: t.rl, holi: t.holi, numDays },
+    });
+    if (LEAVE_TYPES.includes(newType)) {
+      const year = parseInt(monthYear.split('_')[1]);
+      const usedKey = newType + 'Used';
+      const balance = await prisma.leaveBalance.findUnique({ where: { userId_year: { userId: user.id, year } } });
+      if (balance) {
+        const currentUsed = balance[usedKey] || 0;
+        await prisma.leaveBalance.update({ where: { userId_year: { userId: user.id, year } }, data: { [usedKey]: currentUsed + 1 } });
+      }
+    }
+  }
+
+  await logAction(requestedBy, 'attendance_change_requested', 'regularization_request', req.id,
+    `Requested attendance change for ${employeeCode} day ${day} ${monthYear}: ${currentType} \u2192 ${newType}${warning ? ' (warning: ' + warning + ')' : ''}${isSuper ? ' [final]' : isAdmin ? ' [admin → super]' : ''}`);
+
+  if (isSuper || isAdmin) {
+    const superIds = await getSuperAdminUserIds();
+    if (superIds.length) {
+      const msg = isSuper
+        ? `Super admin ${requester.name} directly applied an attendance change for ${user.name} day ${day}: ${currentType} → ${newType}.`
+        : `${requester.name} requested an attendance change for ${user.name} day ${day} (${currentType} → ${newType}) — pending your final approval.`;
+      await Promise.all(superIds.map(id => createNotification(id, isSuper ? 'adjustment_approved' : 'regularization_submitted',
+        isSuper ? 'Attendance Change Applied' : 'Attendance Change Pending Final Approval', msg,
+        { employeeCode, day, monthYear, currentType, newType, reason, requestId: req.id })));
+    }
+  } else {
+    const adminIds = await getAdminUserIds();
+    await Promise.all(adminIds.map(id => createNotification(id, 'regularization_submitted',
+      `New Attendance Change Request`,
+      `${user.name} requested an attendance change for day ${day} (${currentType} → ${newType}).`,
+      { employeeCode, day, monthYear, currentType, newType, reason, warning, requestId: req.id })));
+  }
+
+  revalidatePath('/');
+  return { success: true, warning, direct: isSuper };
 }
 
 function recalcTotals(logs) {
@@ -79,7 +168,8 @@ function recalcTotals(logs) {
   return { present, absent, halfDay, late, lateHD, shortShift: ss, ssHD, shortLeave: sl, rl, holi, maxDay };
 }
 
-export async function reviewAdjustment(changeId, reviewedBy, approve) {
+export async function reviewAdjustment(changeId, reviewedBy, approve, note = '') {
+  if (!approve && !note) return { error: 'A reason is required when rejecting.' };
   const auth = await requireSuperAdmin(reviewedBy);
   if (auth) return auth;
   const change = await prisma.pendingChange.findUnique({ where: { id: changeId } });
@@ -161,8 +251,8 @@ export async function reviewAdjustment(changeId, reviewedBy, approve) {
     const notifType = approve ? 'adjustment_approved' : 'adjustment_rejected';
     const notifTitle = approve ? 'Adjustment Approved' : 'Adjustment Rejected';
     await createNotification(empUser.id, notifType, notifTitle,
-      `Your attendance adjustment for day ${payload.day} (${payload.currentType} → ${payload.newType}) has been ${approve ? 'approved' : 'rejected'}.`,
-      { ...payload });
+      `Your attendance adjustment for day ${payload.day} (${payload.currentType} → ${payload.newType}) has been ${approve ? 'approved' : 'rejected'}.${note ? ' Note: ' + note : ''}`,
+      { ...payload, note });
   }
 
   revalidatePath('/');
@@ -194,4 +284,11 @@ export async function updatePunchTimes(employeeCode, monthYear, day, inTStr, out
 
   revalidatePath('/');
   return { success: true };
+}
+
+export async function getCorrectionById(id) {
+  const change = await prisma.pendingChange.findUnique({ where: { id } });
+  if (!change) return null;
+  const payload = JSON.parse(change.payload);
+  return { ...change, payload };
 }

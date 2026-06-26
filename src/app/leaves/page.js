@@ -16,17 +16,30 @@ import {
   requestLeaveDeduction, reviewLeaveDeduction
 } from '../../actions/leave';
 import { getManagedEmployees } from '../../actions/departments';
-import { getPendingChanges, getPendingChangesHistory } from '../../actions/auth';
+import { getPendingChanges, getPendingChangesHistory, reviewAdminAction } from '../../actions/auth';
 import { reviewAdjustment } from '../../actions/attendanceChanges';
 import { getManagerWfhRequests, getAllWfhRequests, reviewWfhRequest, getWfhRequestsByStage } from '../../actions/wfh';
 
-const LEAVE_LABELS = { cl: 'CL', sl: 'SL', el: 'EL', rl: 'RL', sh: 'SH' };
-const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b' };
+const LEAVE_LABELS = { cl: 'CL', sl: 'SL', el: 'EL', rl: 'RL', sh: 'SH', ewl: 'EWL' };
+const LEAVE_COLORS = { cl: '#0071e3', sl: '#ff9f0a', el: '#34c759', rl: '#af52de', sh: '#ff6b6b', ewl: '#7b2d8b' };
 const ATTENDANCE_TYPE_LABELS = {
   present: 'Present', absent: 'Absent', half: 'Half Day', holiday: 'Holiday', rl: 'Restricted Leave',
   wfh: 'WFH', wfm: 'WFM', wfo: 'WFO', wos: 'WOS',
 };
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const ADMIN_ACTION_LABELS = {
+  create_user: 'Create Employee',
+  delete_user: 'Delete Employee',
+  update_user: 'Edit Employee (dept/designation/type/email)',
+  toggle_user: 'Disable/Enable Employee',
+  promote_user: 'Promote to Admin',
+  upload_month: 'Upload Attendance CSV',
+  delete_month: 'Delete Month Record',
+  edit_month: 'Edit Month Record',
+  edit_leave_balance: 'Edit Leave Balance',
+  update_leave_policy: 'Save Leave Policy',
+  manage_org: 'Manage Departments / Designations',
+};
 const formatMonthYear = (m) => {
   if (!m) return '';
   const [mo, yr] = m.split('_');
@@ -52,13 +65,14 @@ export default function LeavesPage() {
   const balancePageSize = 20;
   const paginatedBalances = balances.slice((balancePage - 1) * balancePageSize, balancePage * balancePageSize);
   const totalBalancePages = Math.ceil(balances.length / balancePageSize);
-  const [policy, setPolicy] = useState({ cl: 12, sl: 6, el: 4, rl: 2, sh: 6 });
+  const [policy, setPolicy] = useState({ cl: 12, sl: 6, el: 4, rl: 2, sh: 6, ewl: 0 });
   const [loading, setLoading] = useState(true);
   const [managerLoading, setManagerLoading] = useState(true);
   const [reviewModal, setReviewModal] = useState(null);
   const [reviewNote, setReviewNote] = useState('');
   const [exporting, setExporting] = useState(false);
   const [pendingChanges, setPendingChanges] = useState([]);
+  const [pendingAdminActions, setPendingAdminActions] = useState([]);
   const [allRegularizations, setAllRegularizations] = useState([]);
   const [historyChanges, setHistoryChanges] = useState([]);
   const [collapsed, setCollapsed] = useState({ leaves: false, regs: false, adjustments: false, wfh: false });
@@ -66,7 +80,7 @@ export default function LeavesPage() {
   const [managerWfhRequests, setManagerWfhRequests] = useState([]);
   const [superWfhRequests, setSuperWfhRequests] = useState([]);
   const [editBalanceTarget, setEditBalanceTarget] = useState(null);
-  const [editBalanceForm, setEditBalanceForm] = useState({ clTotal: 0, slTotal: 0, elTotal: 0, rlTotal: 0, shTotal: 0 });
+  const [editBalanceForm, setEditBalanceForm] = useState({ clTotal: 0, slTotal: 0, elTotal: 0, rlTotal: 0, shTotal: 0, ewlTotal: 0 });
   const [deductModal, setDeductModal] = useState(false);
   const [deductForm, setDeductForm] = useState({ employeeCode: '', leaveType: 'cl', days: 1, reason: '' });
   const year = new Date().getFullYear();
@@ -108,12 +122,16 @@ export default function LeavesPage() {
         'SH Total': balance?.shTotal ?? 0,
         'SH Used (Period)': rangeUsed.sh,
         'SH Remaining': balance?.shRemaining ?? 0,
+        'EWL Total': balance?.ewlTotal ?? 0,
+        'EWL Used (Period)': rangeUsed.ewl ?? 0,
+        'EWL Remaining': balance?.ewlRemaining ?? 0,
         'Leave Details': leaveDetail,
       }));
 
       const ws = XLSX.utils.json_to_sheet(rows);
       ws['!cols'] = [
         { wch: 10 }, { wch: 24 },
+        { wch: 9 }, { wch: 16 }, { wch: 13 },
         { wch: 9 }, { wch: 16 }, { wch: 13 },
         { wch: 9 }, { wch: 16 }, { wch: 13 },
         { wch: 9 }, { wch: 16 }, { wch: 13 },
@@ -149,6 +167,7 @@ export default function LeavesPage() {
       elTotal: b.elTotal ?? 4,
       rlTotal: b.rlTotal ?? 2,
       shTotal: b.shTotal ?? 6,
+      ewlTotal: b.ewlTotal ?? 0,
     });
     setEditBalanceTarget(entry);
   };
@@ -206,6 +225,7 @@ export default function LeavesPage() {
           ]);
           setSuperRegularizations(supRegs);
           setPendingChanges(pcs.filter(c => c.action === 'attendance_adjustment' || c.action === 'leave_deduction'));
+          setPendingAdminActions(pcs.filter(c => c.action !== 'attendance_adjustment' && c.action !== 'leave_deduction' && c.action !== 'update_employee_name'));
         }
         if (role === 'admin') {
           const [regs, allRegs, allChanges] = await Promise.all([
@@ -217,7 +237,7 @@ export default function LeavesPage() {
           setAllRegularizations(allRegs);
           setHistoryChanges(allChanges.filter(c => c.action === 'attendance_adjustment' || c.action === 'update_employee_name' || c.action === 'leave_deduction'));
         }
-        if (pol) setPolicy({ cl: pol.cl, sl: pol.sl, el: pol.el, rl: pol.rl, sh: pol.sh ?? 6 });
+        if (pol) setPolicy({ cl: pol.cl, sl: pol.sl, el: pol.el, rl: pol.rl, sh: pol.sh ?? 6, ewl: pol.ewl ?? 0 });
       } catch {
         setLeaveRequests([]);
         setManagerLeaves([]);
@@ -243,23 +263,38 @@ export default function LeavesPage() {
   };
 
   const handleReviewReg = async (id, approve) => {
-    await reviewRegularization(id, user.username, approve);
+    const note = !approve ? prompt('Please enter a reason for rejection:') : '';
+    if (!approve && !note) return;
+    const result = await reviewRegularization(id, user.username, approve, note || '');
+    if (result?.error) return toast.error(result.error);
+    toast.success(approve ? 'Regularization approved.' : 'Regularization rejected.');
     setFetchTrigger(t => t + 1);
   };
 
   const handleSuperReviewReg = async (id, approve) => {
-    await reviewRegularizationSuper(id, user.username, approve);
+    const note = !approve ? prompt('Please enter a reason for rejection:') : '';
+    if (!approve && !note) return;
+    const result = await reviewRegularizationSuper(id, user.username, approve, note || '');
+    if (result?.error) return toast.error(result.error);
+    toast.success(approve ? 'Regularization approved.' : 'Regularization rejected.');
     setFetchTrigger(t => t + 1);
   };
 
   const handleReviewAdjustment = async (changeId, approve) => {
-    await reviewAdjustment(changeId, user.username, approve);
+    const note = !approve ? prompt('Please enter a reason for rejection:') : '';
+    if (!approve && !note) return;
+    const result = await reviewAdjustment(changeId, user.username, approve, note || '');
+    if (result?.error) return toast.error(result.error);
+    toast.success(approve ? 'Adjustment approved.' : 'Adjustment rejected.');
     setFetchTrigger(t => t + 1);
   };
 
   const handleReviewDeduction = async (changeId, approve) => {
-    await reviewLeaveDeduction(changeId, user.username, approve);
-    toast.success(approve ? 'Deduction approved' : 'Deduction rejected');
+    const note = !approve ? prompt('Please enter a reason for rejection:') : '';
+    if (!approve && !note) return;
+    const result = await reviewLeaveDeduction(changeId, user.username, approve, note || '');
+    if (result?.error) return toast.error(result.error);
+    toast.success(approve ? 'Deduction approved.' : 'Deduction rejected.');
     setFetchTrigger(t => t + 1);
   };
 
@@ -302,6 +337,7 @@ export default function LeavesPage() {
       pending_super: { bg: 'rgba(175,82,222,0.1)', color: '#7b2d8b', label: 'Awaiting Super Admin' },
       approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Approved' },
       rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' },
+      cancelled: { bg: 'rgba(142,142,147,0.1)', color: '#8e8e93', label: 'Cancelled' },
     };
     const s = map[stage] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)' };
     let label;
@@ -317,6 +353,7 @@ export default function LeavesPage() {
       pending: { bg: 'rgba(255,159,10,0.1)', color: '#b36200', label: 'Pending' },
       approved: { bg: 'rgba(52,199,89,0.1)', color: '#1a7f37', label: 'Approved' },
       rejected: { bg: 'rgba(255,59,48,0.1)', color: '#c0392b', label: 'Rejected' },
+      cancelled: { bg: 'rgba(142,142,147,0.1)', color: '#8e8e93', label: 'Cancelled' },
     };
     const s = map[status] || { bg: 'rgba(0,0,0,0.05)', color: 'var(--text2)', label: status.charAt(0).toUpperCase() + status.slice(1) };
     return <span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: '980px', fontSize: '10px', fontWeight: 600, background: s.bg, color: s.color }}>{s.label}</span>;
@@ -331,7 +368,7 @@ export default function LeavesPage() {
   return (
     <div className="page-wrapper animate-fade-in">
       <div style={{ marginBottom: '20px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '-0.04em' }}>Leave Management</h1>
+        <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '-0.04em' }}>Approvals</h1>
         <p style={{ color: 'var(--text2)', fontSize: '14px', marginTop: '4px' }}>Review requests, manage balances and configure policy.</p>
       </div>
 
@@ -346,6 +383,7 @@ export default function LeavesPage() {
           { key: 'policy', label: 'Policy' },
         ] : isSuperAdmin ? [
           { key: 'overview', label: `Pending Approvals` },
+          { key: 'admin-actions', label: `Admin Actions${pendingAdminActions.length > 0 ? ` (${pendingAdminActions.length})` : ''}` },
           { key: 'regularize', label: `Regularizations${superRegularizations.length > 0 ? ` (${superRegularizations.length})` : ''}` },
           { key: 'wfh', label: `Work Mode${superWfhRequests.length > 0 ? ` (${superWfhRequests.length})` : ''}` },
           { key: 'history', label: 'History' },
@@ -558,25 +596,36 @@ export default function LeavesPage() {
                   ({superRegularizations.length})
                 </span>
               </div>
-              {superRegularizations.map(r => (
-                <div key={r.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
-                  <div>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px' }}>
-                      <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user.name}</span>
-                      <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user.code}</span>
-                      <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+              {superRegularizations.map(r => {
+                let acPayload = {};
+                const isAc = r.type === 'attendance_change';
+                try { if (isAc) acPayload = JSON.parse(r.reason); } catch { /* */ }
+                return (
+                  <div key={r.id} className="p-14-20 border-bottom flex-between" style={{ gap: '12px' }}>
+                    <div>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '3px' }}>
+                        <span style={{ fontWeight: 600, fontSize: '13px' }}>{r.user.name}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text2)' }}>#{r.user.code}</span>
+                        {isAc ? (
+                          <span style={{ fontSize: '11px', color: 'var(--orange)', fontWeight: 600, padding: '2px 8px', borderRadius: '980px', background: 'rgba(255,159,10,0.1)' }}>Attendance Change</span>
+                        ) : (
+                          <span style={{ fontSize: '11px', color: 'var(--text2)' }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
+                        {isAc ? (
+                          <>{ATTENDANCE_TYPE_LABELS[acPayload.currentType] || acPayload.currentType} → {ATTENDANCE_TYPE_LABELS[acPayload.newType] || acPayload.newType} · Day {acPayload.day} · {formatMonthYear(acPayload.monthYear)}{acPayload.reason ? ` · ${acPayload.reason}` : ''}</>
+                        ) : (
+                          <>{r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`} · {r.reason}</>
+                        )}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '11px', color: 'var(--text2)' }}>
-                      {r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`}
-                      {' · '}{r.reason}
+                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                      <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '11px', background: 'var(--green)' }} onClick={() => handleSuperReviewReg(r.id, true)}>Final Approve</button>
+                      <button style={{ padding: '5px 12px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleSuperReviewReg(r.id, false)}>Reject</button>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                    <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '11px', background: 'var(--green)' }} onClick={() => handleSuperReviewReg(r.id, true)}>Final Approve</button>
-                    <button style={{ padding: '5px 12px', fontSize: '11px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleSuperReviewReg(r.id, false)}>Reject</button>
-                  </div>
-                </div>
-              ))}
+                );})}
             </div>
           )}
 
@@ -802,10 +851,50 @@ export default function LeavesPage() {
         </div>
       )}
 
+      {/* ── ADMIN ACTIONS (super_admin only) ── */}
+      {!loading && tab === 'admin-actions' && isSuperAdmin && (
+        <div className="card overflow-hidden p-0">
+          <div className="card-header">
+            Pending Admin Actions ({pendingAdminActions.length})
+          </div>
+          {pendingAdminActions.length === 0
+            ? <div className="p-32 text-center text-muted2 text-sm">No pending admin actions requiring your approval.</div>
+            : pendingAdminActions.map(c => (
+              <div key={c.id} className="flex-between border-bottom gap-12" style={{ padding: '14px 20px' }}>
+                <div>
+                  <div className="text-sm text-semibold">
+                    {ADMIN_ACTION_LABELS[c.action] || c.action.replace(/_/g, ' ')}
+                  </div>
+                  <div className="text-xs text-muted2" style={{ marginTop: '2px' }}>
+                    By {c.requestedBy} · {new Date(c.createdAt).toLocaleString()}
+                  </div>
+                </div>
+                <div className="flex gap-6">
+                  <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: '12px', background: 'var(--green)' }}
+                    onClick={async () => {
+                      await reviewAdminAction(c.id, user.username, true);
+                      const pcs = await getPendingChanges();
+                      setPendingAdminActions(pcs.filter(p => p.action !== 'attendance_adjustment' && p.action !== 'leave_deduction' && p.action !== 'update_employee_name'));
+                      toast.success('Action approved.');
+                    }}>Approve</button>
+                  <button className="btn border-none" style={{ padding: '6px 14px', fontSize: '12px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
+                    onClick={async () => {
+                      await reviewAdminAction(c.id, user.username, false);
+                      const pcs = await getPendingChanges();
+                      setPendingAdminActions(pcs.filter(p => p.action !== 'attendance_adjustment' && p.action !== 'leave_deduction' && p.action !== 'update_employee_name'));
+                      toast.success('Action rejected.');
+                    }}>Reject</button>
+                </div>
+              </div>
+            ))
+          }
+        </div>
+      )}
+
       {/* ── REGULARIZATIONS ── */}
       {!loading && tab === 'regularize' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Admin review */}
+          {/* Admin review — only admin sees this */}
           {role === 'admin' && (
           <div className="card overflow-hidden p-0">
             <div className="card-header">
@@ -816,17 +905,32 @@ export default function LeavesPage() {
               </div>
               {regularizations.length === 0
                 ? <div className="p-32 text-center text-muted2 text-sm">No pending regularizations.</div>
-              : regularizations.map(r => (
+              : regularizations.map(r => {
+                let acPayload = {};
+                const isAc = r.type === 'attendance_change';
+                try { if (isAc) acPayload = JSON.parse(r.reason); } catch { /* */ }
+                return (
                 <div key={r.id} className="p-16-20 border-bottom flex-between" style={{ gap: '16px' }}>
                   <div>
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px' }}>
                       <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user.name}</span>
                       <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user.code}</span>
-                      <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                      {isAc ? (
+                        <span style={{ fontSize: '11px', color: 'var(--orange)', fontWeight: 600, padding: '2px 8px', borderRadius: '980px', background: 'rgba(255,159,10,0.1)' }}>
+                          Attendance Change
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '12px', color: 'var(--text2)' }}>
+                          {new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                      )}
                     </div>
                     <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
-                      {r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`}
-                      {' · '}{r.reason}
+                      {isAc ? (
+                        <>{ATTENDANCE_TYPE_LABELS[acPayload.currentType] || acPayload.currentType} → {ATTENDANCE_TYPE_LABELS[acPayload.newType] || acPayload.newType} · Day {acPayload.day} · {formatMonthYear(acPayload.monthYear)}{acPayload.reason ? ` · ${acPayload.reason}` : ''}</>
+                      ) : (
+                        <>{r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`} · {r.reason}</>
+                      )}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '6px' }}>
@@ -834,13 +938,13 @@ export default function LeavesPage() {
                     <button style={{ padding: '6px 14px', fontSize: '12px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleReviewReg(r.id, false)}>Reject</button>
                   </div>
                 </div>
-              ))
+              );})
             }
           </div>
           )}
 
-          {/* Super admin final approval */}
-          {isSuperAdmin && superRegularizations.length > 0 && (
+          {/* Super admin final approval — only super admin sees this */}
+          {isSuperAdmin && (
             <div className="card overflow-hidden p-0">
               <div className="card-header">
                 Pending Super Admin Approval
@@ -848,17 +952,30 @@ export default function LeavesPage() {
                   ({superRegularizations.length})
                 </span>
               </div>
-              {superRegularizations.map(r => (
+              {superRegularizations.length === 0
+                ? <div className="p-32 text-center text-muted2 text-sm">No regularizations awaiting final approval.</div>
+              : superRegularizations.map(r => {
+                let acPayload = {};
+                const isAc = r.type === 'attendance_change';
+                try { if (isAc) acPayload = JSON.parse(r.reason); } catch { /* */ }
+                return (
                   <div key={r.id} className="p-16-20 border-bottom flex-between" style={{ gap: '16px' }}>
                     <div>
                       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '4px' }}>
                         <span style={{ fontWeight: 600, fontSize: '14px' }}>{r.user.name}</span>
                         <span style={{ fontSize: '12px', color: 'var(--text2)' }}>#{r.user.code}</span>
-                        <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        {isAc ? (
+                          <span style={{ fontSize: '11px', color: 'var(--orange)', fontWeight: 600, padding: '2px 8px', borderRadius: '980px', background: 'rgba(255,159,10,0.1)' }}>Attendance Change</span>
+                        ) : (
+                          <span style={{ fontSize: '12px', color: 'var(--text2)' }}>{new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        )}
                       </div>
                       <div style={{ fontSize: '12px', color: 'var(--text2)' }}>
-                        {r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`}
-                        {' · '}{r.reason}
+                        {isAc ? (
+                          <>{ATTENDANCE_TYPE_LABELS[acPayload.currentType] || acPayload.currentType} → {ATTENDANCE_TYPE_LABELS[acPayload.newType] || acPayload.newType} · Day {acPayload.day} · {formatMonthYear(acPayload.monthYear)}{acPayload.reason ? ` · ${acPayload.reason}` : ''}</>
+                        ) : (
+                          <>{r.requestedIn && `In: ${r.requestedIn}`}{r.requestedIn && r.requestedOut && ' · '}{r.requestedOut && `Out: ${r.requestedOut}`} · {r.reason}</>
+                        )}
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '6px' }}>
@@ -866,7 +983,7 @@ export default function LeavesPage() {
                       <button style={{ padding: '6px 14px', fontSize: '12px', borderRadius: '980px', border: '1px solid rgba(255,59,48,0.25)', background: 'rgba(255,59,48,0.06)', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }} onClick={() => handleSuperReviewReg(r.id, false)}>Reject</button>
                     </div>
                   </div>
-                ))
+                );})
               }
             </div>
           )}
@@ -1036,7 +1153,7 @@ export default function LeavesPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
                 <tr>
-                  {['Employee', 'CL Remaining', 'SL Remaining', 'EL Remaining', 'RL Remaining', 'SH Remaining', 'CL Used', 'SL Used', 'EL Used', 'RL Used', 'SH Used', 'Actions'].map(h => (
+                  {['Employee', 'CL Remaining', 'SL Remaining', 'EL Remaining', 'RL Remaining', 'SH Remaining', 'EWL Remaining', 'CL Used', 'SL Used', 'EL Used', 'RL Used', 'SH Used', 'EWL Used', 'Actions'].map(h => (
                     <th key={h} style={{ background: 'var(--surface2)', padding: '10px 14px', textAlign: 'left', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text2)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
@@ -1048,12 +1165,12 @@ export default function LeavesPage() {
                   return (
                     <tr key={code} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td style={{ padding: '11px 14px', fontWeight: 500 }}>{name} <span style={{ color: 'var(--text3)', fontSize: '11px' }}>#{code}</span></td>
-                      {['cl', 'sl', 'el', 'rl', 'sh'].map(t => (
+                      {['cl', 'sl', 'el', 'rl', 'sh', 'ewl'].map(t => (
                         <td key={t} style={{ padding: '11px 14px', color: (balance[`${t}Remaining`] ?? 0) <= 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>
                           {balance[`${t}Remaining`] ?? 0}
                         </td>
                       ))}
-                      {['cl', 'sl', 'el', 'rl', 'sh'].map(t => (
+                      {['cl', 'sl', 'el', 'rl', 'sh', 'ewl'].map(t => (
                         <td key={t} style={{ padding: '11px 14px', color: 'var(--text2)' }}>
                           {balance[`${t}Used`] ?? 0}
                         </td>
@@ -1098,6 +1215,7 @@ export default function LeavesPage() {
               { key: 'el', label: 'Earned Leave (EL)', hint: '4 days/yr · quarterly after 1 yr service' },
               { key: 'rl', label: 'Restricted Holiday (RH)', hint: '2 days/yr · 1 per month · 1 month advance notice' },
               { key: 'sh', label: 'Short Leave (SH)', hint: '6/yr · 2 hrs each · 1 per 2-month window' },
+              { key: 'ewl', label: 'Extra Working Leave (EWL)', hint: 'Accrued via extra work approvals' },
             ].map(({ key, label, hint }) => (
               <div key={key}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
@@ -1336,7 +1454,7 @@ export default function LeavesPage() {
             )}
 
             <div style={{ marginTop: '16px' }}>
-              <label className="input-label" style={{ marginBottom: '6px' }}>Review Note <span style={{ color: 'var(--text3)', fontWeight: 400 }}>(optional)</span></label>
+              <label className="input-label" style={{ marginBottom: '6px' }}>Review Note <span style={{ color: 'var(--red)', fontWeight: 400, fontSize: '10px' }}>(required when rejecting)</span></label>
               <input className="input-field" placeholder="Add a note for the employee…" value={reviewNote}
                 onChange={e => setReviewNote(e.target.value)} style={{ padding: '10px 14px', fontSize: '13px' }} />
             </div>
@@ -1360,8 +1478,8 @@ export default function LeavesPage() {
         {editBalanceTarget && (
           <form onSubmit={handleEditBalance}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
-              {['clTotal', 'slTotal', 'elTotal', 'rlTotal', 'shTotal'].map(k => {
-                const labels = { clTotal: 'CL (Casual Leave)', slTotal: 'SL (Sick Leave)', elTotal: 'EL (Earned Leave)', rlTotal: 'RL (Restricted Holiday)', shTotal: 'SH (Short Leave)' };
+              {['clTotal', 'slTotal', 'elTotal', 'rlTotal', 'shTotal', 'ewlTotal'].map(k => {
+                const labels = { clTotal: 'CL (Casual Leave)', slTotal: 'SL (Sick Leave)', elTotal: 'EL (Earned Leave)', rlTotal: 'RL (Restricted Holiday)', shTotal: 'SH (Short Leave)', ewlTotal: 'EWL (Extra Working Leave)' };
                 return (
                   <div key={k}>
                     <label className="input-label">{labels[k]}</label>

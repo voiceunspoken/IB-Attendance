@@ -55,7 +55,7 @@ export function analyzeDayTimes(inT, outT, policy = DEFAULT_POLICY) {
   return { isLate, isSS, isSL, isHD };
 }
 
-export function parseAndAnalyze(rows, policy = DEFAULT_POLICY, dbHolidays = []) {
+export function parseAndAnalyze(rows, policy = DEFAULT_POLICY, dbHolidays = [], dbWorkingSaturdays = []) {
   const LATE_THRESHOLD = policy.shiftStartH * 60 + policy.shiftStartM + policy.graceMinutes;
   const SL_START = policy.shortLeaveStartMin !== undefined
     ? policy.shiftStartH * 60 + policy.shortLeaveStartMin
@@ -121,21 +121,20 @@ export function parseAndAnalyze(rows, policy = DEFAULT_POLICY, dbHolidays = []) 
 
   const daysInMon = new Date(detYear, detMonth, 0).getDate();
 
-  // Build weekends: all Sundays + Saturdays except 3rd Saturday
+  // Build weekends: all Sundays + Saturdays except the configured working Saturday
+  const thirdSatDefault = (() => {
+    const sats = [];
+    for (let d = 1; d <= daysInMon; d++) {
+      if (new Date(detYear, detMonth - 1, d).getDay() === 6) sats.push(d);
+    }
+    return sats[2] || null;
+  })();
+  const workingSatDay = dbWorkingSaturdays.find(s => s.month === detMonth)?.day ?? thirdSatDefault;
   const weekends = new Set();
-  const saturdays = [];
   for (let d = 1; d <= daysInMon; d++) {
     const dow = new Date(detYear, detMonth - 1, d).getDay();
     if (dow === 0) weekends.add(d); // all Sundays off
-    if (dow === 6) saturdays.push(d); // collect Saturdays
-  }
-  // Remove 3rd Saturday from weekends (it's a working day)
-  const thirdSaturday = saturdays[2];
-  if (thirdSaturday) {
-    saturdays.forEach(d => { if (d !== thirdSaturday) weekends.add(d); });
-  } else {
-    // Less than 3 Saturdays in month — all Saturdays are off
-    saturdays.forEach(d => weekends.add(d));
+    if (dow === 6 && d !== workingSatDay) weekends.add(d); // non-working Saturdays off
   }
 
   // Build holiday set: prefer DB holidays, fall back to file header row

@@ -10,6 +10,7 @@ import { parseAndAnalyze } from '../../utils/attendanceParser';
 import { getMonths, uploadMonthData, fetchDashboardData } from '../../actions/attendance';
 import { getActiveShiftPolicy } from '../../actions/shiftPolicy';
 import { getHolidays } from '../../actions/holidays';
+import { getWorkingSaturdays } from '../../actions/workingSaturdays';
 import { getDepartments } from '../../actions/departments';
 import { FiSearch, FiDownload, FiUpload, FiChevronDown, FiX, FiCheck } from 'react-icons/fi';
 import { useToast } from '../../components/Toast';
@@ -156,18 +157,22 @@ export default function AttendancePage() {
           return;
         }
 
-        const [policy, allHolidays] = await Promise.all([
+        const [policy, allHolidays, allWorkingSats] = await Promise.all([
           getActiveShiftPolicy(),
-          getHolidays(new Date().getFullYear())
+          getHolidays(new Date().getFullYear()),
+          getWorkingSaturdays(new Date().getFullYear())
         ]);
 
-        const { currentMonth: cm, numDays: nd } = parseAndAnalyze(rows, policy, allHolidays);
+        const { currentMonth: cm, numDays: nd } = parseAndAnalyze(rows, policy, allHolidays, allWorkingSats);
         const monthYearStr = `${cm.month}_${cm.year}`;
 
         const yearHolidays = cm.year !== new Date().getFullYear()
           ? await getHolidays(cm.year)
           : allHolidays;
-        const { results: finalResults } = parseAndAnalyze(rows, policy, yearHolidays);
+        const yearWorkingSats = cm.year !== new Date().getFullYear()
+          ? await getWorkingSaturdays(cm.year)
+          : allWorkingSats;
+        const { results: finalResults } = parseAndAnalyze(rows, policy, yearHolidays, yearWorkingSats);
 
         const deptCounts = {};
         finalResults.forEach(r => {

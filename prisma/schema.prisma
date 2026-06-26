@@ -42,6 +42,7 @@ model User {
   regularizations RegularizationRequest[]
   wfhRequests     WfhRequest[]
   punchLogs       PunchLog[]
+  extraWorkRequests ExtraWorkRequest[]
   notifications   Notification[]
 
   createdAt       DateTime @default(now())
@@ -175,6 +176,7 @@ model LeavePolicy {
   el        Int    @default(15)
   rl        Int    @default(2)
   sh        Int    @default(6)
+  ewl        Int    @default(0)
   createdAt DateTime @default(now())
 }
 
@@ -198,6 +200,8 @@ model LeaveBalance {
   clAccrued    Float    @default(0)
   elAccrued    Float    @default(0)
   sandwichUsed Float    @default(0)
+  ewlTotal     Float    @default(0)
+  ewlUsed      Float    @default(0)
   updatedAt    DateTime @updatedAt
   createdAt    DateTime @default(now())
 
@@ -215,7 +219,7 @@ model LeaveRequest {
   days           Float    // 0.5 for half day, 1+ for full days
   unpaidDays     Float    @default(0)
   reason         String
-  status         String   @default("pending") // "pending" | "approved" | "rejected"
+  status         String   @default("pending") // "pending" | "approved" | "rejected" | "cancelled"
 
   // Approval stages: l2 → l1 → super → approved
   approvalStage  String   @default("pending_l2")
@@ -273,6 +277,45 @@ model RegularizationRequest {
   superReviewedBy String?
   superReviewedAt  DateTime?
   createdAt    DateTime @default(now())
+}
+
+// Extra Working Leave requests
+model ExtraWorkRequest {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date              DateTime
+  hours             Float?
+  reason            String
+  status            String   @default("pending") // "pending" | "approved" | "rejected"
+  approvalStage     String   @default("pending_mgr")
+  currentApproverId String?
+  mgrReviewedBy     String?
+  mgrReviewedAt     DateTime?
+  mgrReviewNote     String?
+  adminDecision     String?  // "half" | "full"
+  reviewedBy        String?
+  reviewedAt        DateTime?
+  reviewNote        String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// Working Saturdays — exactly one per month; admin can reassign which Saturday is working
+model WorkingSaturday {
+  id        String   @id @default(cuid())
+  date      DateTime
+  year      Int
+  month     Int
+  day       Int
+  note      String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([year, month])
+  @@map("working_saturdays")
 }
 
 // Company holiday calendar
@@ -338,6 +381,15 @@ model AttendancePolicy {
   effectiveFrom   DateTime @default(now())
   isActive        Boolean  @default(false)
   createdAt       DateTime @default(now())
+}
+
+// Per-action toggle: should admin actions require super admin approval?
+model AdminActionConfig {
+  id                String   @id @default(cuid())
+  actionType        String   @unique
+  requiresApproval  Boolean  @default(true)
+  updatedAt         DateTime @updatedAt
+  createdAt         DateTime @default(now())
 }
 
 // Super admin configuration toggles

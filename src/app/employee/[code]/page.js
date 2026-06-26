@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../components/AuthProvider';
-import { requestAdjustment, updatePunchTimes } from '../../../actions/attendanceChanges';
+import { requestRegularizationChange, updatePunchTimes } from '../../../actions/attendanceChanges';
 import EmployeeModal from '../../../components/EmployeeModal';
 import { useToast } from '../../../components/Toast';
 import { useEmployeeData } from './context';
@@ -54,10 +54,10 @@ export default function AttendancePage({ params }) {
 
   const handleAdjust = async (empCode, day, currentType, newType, reason) => {
     const monthYear = currentRecord.monthYear;
-    const result = await requestAdjustment(empCode, monthYear, day, currentType, newType, reason, user?.username);
+    const result = await requestRegularizationChange(empCode, monthYear, day, currentType, newType, reason, user?.username);
     if (result.error) return toast.error(result.error);
     if (result.warning) toast.warning(result.warning);
-    toast.success('Adjustment request submitted for super admin approval.');
+    toast.success('Attendance change request submitted for admin approval.');
     return result;
   };
 

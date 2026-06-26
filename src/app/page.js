@@ -8,6 +8,7 @@ import { getUpcomingHolidays } from '../actions/holidays';
 import { getDepartments } from '../actions/departments';
 import { getPendingPolicies } from '../actions/shiftPolicy';
 import { getPendingSuperRegularizations, getAllLeaveRequests } from '../actions/leave';
+import TodayAttendance from '../components/TodayAttendance';
 import { FiUsers, FiCalendar, FiAlertTriangle, FiArrowRight, FiGift } from 'react-icons/fi';
 
 export default function DashboardHome() {
@@ -189,6 +190,8 @@ export default function DashboardHome() {
               </div>
             </div>
           </div>
+
+          <TodayAttendance />
 
           {/* ── Upcoming Birthdays + Upcoming Holidays ── */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 'var(--gap)', alignItems: 'start' }}>
