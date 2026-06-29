@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAction } from './audit';
 
-export async function addHolidayPending(year, month, day, name, isRestricted, createdBy) {
+export async function addHolidayPending(year, month, day, name, type, createdBy) {
   const existing = await prisma.holiday.findUnique({
     where: { year_month_day: { year, month, day } }
   });
@@ -13,15 +13,15 @@ export async function addHolidayPending(year, month, day, name, isRestricted, cr
   const holiday = await prisma.holiday.create({
     data: {
       year, month, day, name,
-      type: isRestricted ? 'optional' : 'national',
-      isRestricted,
+      type,
       status: 'pending',
       createdBy
     }
   });
 
+  const label = type === 'optional' ? 'restricted ' : '';
   await logAction(createdBy, 'holiday_added_pending', 'holiday', holiday.id,
-    `Added ${isRestricted ? 'restricted ' : ''}holiday "${name}" (${day}/${month}/${year}) — pending approval`);
+    `Added ${label}holiday "${name}" (${day}/${month}/${year}) — pending approval`);
 
   revalidatePath('/');
   return { holiday };
@@ -72,7 +72,7 @@ export async function uploadHolidayXlsx(rows, year, createdBy) {
     const dateStr = String(row[0]).trim();
     const name = String(row[1]).trim();
     const typeRaw = String(row[2] || '').trim().toLowerCase();
-    const isRestricted = typeRaw === 'restricted' || typeRaw === 'rl';
+    const type = typeRaw === 'restricted' || typeRaw === 'rl' ? 'optional' : 'national';
 
     // Parse date — support DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD
     let day, month, yr;
@@ -99,8 +99,7 @@ export async function uploadHolidayXlsx(rows, year, createdBy) {
       await prisma.holiday.create({
         data: {
           year: yr, month, day, name,
-          type: isRestricted ? 'optional' : 'national',
-          isRestricted,
+          type,
           status: 'pending',
           createdBy
         }

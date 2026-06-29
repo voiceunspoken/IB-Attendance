@@ -325,8 +325,7 @@ model Holiday {
   month      Int
   day        Int
   name       String
-  type       String   @default("national") // "national" | "optional"
-  isRestricted Boolean @default(false)
+  type       String   @default("national") // "national" = gazetted, "optional" = restricted (RL-eligible)
   status     String   @default("active") // "pending" | "active" | "rejected"
   createdBy  String?
   reviewedBy String?

@@ -202,9 +202,9 @@ export default function EmployeeDashboard({ params }) {
                         {h.name}
                         <span style={{
                           fontSize: '9px', fontWeight: 600, padding: '1px 6px', borderRadius: '3px',
-                          background: (h.isRestricted || h.type === 'optional') ? 'rgba(175,82,222,0.1)' : 'rgba(0,113,227,0.1)',
-                          color: (h.isRestricted || h.type === 'optional') ? '#7b2d8b' : '#0071e3',
-                        }}>{(h.isRestricted || h.type === 'optional') ? 'RL' : 'Gazetted'}</span>
+                          background: h.type === 'optional' ? 'rgba(175,82,222,0.1)' : 'rgba(0,113,227,0.1)',
+                          color: h.type === 'optional' ? '#7b2d8b' : '#0071e3',
+                        }}>{h.type === 'optional' ? 'RL' : 'Gazetted'}</span>
                       </div>
                       <div style={{ fontSize: '11px', color: 'var(--text3)' }}>{d.toLocaleDateString('en-US', { weekday: 'long' })}</div>
                     </div>

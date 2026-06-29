@@ -11,7 +11,8 @@ import {
 } from '../../actions/holidayAdmin';
 import { getActiveShiftPolicy, saveShiftPolicy, getShiftPolicyHistory, getPendingPolicies, reviewPolicy } from '../../actions/shiftPolicy';
 
-import { getSuperAdminConfig, setRequireSuperApproval, getAllAdminActionConfigs, setAdminActionConfig, ACTION_LABELS } from '../../actions/superAdminConfig';
+import { getSuperAdminConfig, setRequireSuperApproval, getAllAdminActionConfigs, setAdminActionConfig } from '../../actions/superAdminConfig';
+import { ACTION_LABELS } from '../../constants/actionLabels';
 import { getMonths } from '../../actions/attendance';
 import { changePassword } from '../../actions/auth';
 import { sendAllMonthlyReports } from '../../actions/notifications';
@@ -51,7 +52,7 @@ export default function SettingsPage() {
   // Holidays
   const year = new Date().getFullYear();
   const [holidays, setHolidays] = useState([]);
-  const [hForm, setHForm] = useState({ month: 1, day: 1, name: '', isRestricted: false });
+  const [hForm, setHForm] = useState({ month: 1, day: 1, name: '' });
   const [hMsg, setHMsg] = useState('');
   const [hSubTab, setHSubTab] = useState('gazette'); // gazette | restricted | pending
   const [pendingHolidays, setPendingHolidays] = useState([]);
@@ -133,7 +134,8 @@ export default function SettingsPage() {
   const handleAddHoliday = async (e) => {
     e.preventDefault();
     if (!hForm.name.trim()) return setHMsg('Please enter a holiday name.');
-    const result = await addHolidayPending(year, hForm.month, hForm.day, hForm.name.trim(), hForm.isRestricted, user.username);
+    const type = hSubTab === 'restricted' ? 'optional' : 'national';
+    const result = await addHolidayPending(year, hForm.month, hForm.day, hForm.name.trim(), type, user.username);
     if (result.error) return setHMsg(result.error);
     setHMsg(`Added pending: ${hForm.name}`);
     setHForm(f => ({ ...f, name: '' }));
@@ -262,8 +264,8 @@ export default function SettingsPage() {
           {/* Sub-tabs */}
           <div className="flex gap-4 bg-surface2" style={{ borderRadius: '10px', padding: '3px', width: 'fit-content' }}>
             {[
-              { key: 'gazette', label: `Gazette (${holidays.filter(h => !h.isRestricted && h.type === 'national').length})` },
-              { key: 'restricted', label: `Restricted (${holidays.filter(h => h.isRestricted || h.type === 'optional').length})` },
+              { key: 'gazette', label: `Gazette (${holidays.filter(h => h.type === 'national').length})` },
+              { key: 'restricted', label: `Restricted (${holidays.filter(h => h.type === 'optional').length})` },
               ...(isSuperAdmin ? [{ key: 'pending', label: `Pending (${pendingHolidays.length})` }] : []),
             ].map(t => (
               <button key={t.key} onClick={() => setHSubTab(t.key)} className="btn border-none" style={{
@@ -326,17 +328,17 @@ export default function SettingsPage() {
 
               <div className="card overflow-hidden p-0">
                 <div className="card-header">
-                  {hSubTab === 'gazette' ? 'Gazette' : 'Restricted'} Holidays ({holidays.filter(h => hSubTab === 'gazette' ? (!h.isRestricted || h.type === 'national') : (h.isRestricted || h.type === 'optional')).length})
+                  {hSubTab === 'gazette' ? 'Gazette' : 'Restricted'} Holidays ({holidays.filter(h => hSubTab === 'gazette' ? h.type === 'national' : h.type === 'optional').length})
                 </div>
                 <div className="scroll-y" style={{ maxHeight: '400px' }}>
-                  {holidays.filter(h => hSubTab === 'gazette' ? (!h.isRestricted || h.type === 'national') : (h.isRestricted || h.type === 'optional')).length === 0
+                  {holidays.filter(h => hSubTab === 'gazette' ? h.type === 'national' : h.type === 'optional').length === 0
                     ? <div className="p-32 text-center">
                         <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.25, color: 'var(--text3)' }}><FiSun size={36} /></div>
                         <div className="text-md text-semibold mb-2 text-muted">No holidays added yet</div>
                         <div className="text-sm text-muted2 mb-16">Add your first holiday to get started.</div>
 <button className="btn btn-primary btn-sm" onClick={() => setHSubTab('add')}><FiPlus size={14} /> Add Your First Holiday</button>
                       </div>
-                    : holidays.filter(h => hSubTab === 'gazette' ? (!h.isRestricted || h.type === 'national') : (h.isRestricted || h.type === 'optional')).map(h => (
+                    : holidays.filter(h => hSubTab === 'gazette' ? h.type === 'national' : h.type === 'optional').map(h => (
                       <div key={h.id} className="flex-between border-bottom" style={{ padding: '12px 20px' }}>
                         <div>
                           <span className="text-sm text-medium">{h.name}</span>
@@ -370,8 +372,8 @@ export default function SettingsPage() {
                     <div>
                       <span className="text-sm text-medium">{h.name}</span>
                       <span className="text-xs text-muted" style={{ marginLeft: '8px' }}>{MONTHS[h.month - 1]} {h.day}</span>
-                      <span className="text-xs text-semibold" style={{ color: h.isRestricted ? 'var(--purple)' : 'var(--blue)', marginLeft: '6px' }}>
-                        {h.isRestricted ? 'Restricted' : 'Gazette'}
+                      <span className="text-xs text-semibold" style={{ color: h.type === 'optional' ? 'var(--purple)' : 'var(--blue)', marginLeft: '6px' }}>
+                        {h.type === 'optional' ? 'Restricted' : 'Gazette'}
                       </span>
                       <div className="text-xs text-muted2" style={{ marginTop: '2px' }}>By {h.createdBy || 'admin'} · {new Date(h.createdAt).toLocaleString()}</div>
                     </div>

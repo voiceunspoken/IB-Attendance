@@ -31,7 +31,7 @@ export function EmployeeProvider({ code, children }) {
         ]);
         if (data) {
           setEmp(data);
-          const restricted = allHolidays.filter(h => h.isRestricted || h.type === 'optional');
+          const restricted = allHolidays.filter(h => h.type === 'optional');
           const empBirthday = data.birthday
             ? { month: new Date(data.birthday).getMonth() + 1, day: new Date(data.birthday).getDate() }
             : null;
