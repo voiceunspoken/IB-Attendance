@@ -10,7 +10,7 @@ import { getDepartments, addDepartment, deleteDepartment, addSubDepartment, dele
 import Modal from '../../components/Modal';
 import ConfirmModal from '../../components/ConfirmModal';
 import { useToast } from '../../components/Toast';
-import { FiPlus, FiTrash2, FiSearch, FiUser, FiX, FiCheck } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiSearch, FiUser, FiX, FiCheck, FiDownload } from 'react-icons/fi';
 import { getWorkingSaturdays, upsertWorkingSaturday, removeWorkingSaturday, seedWorkingSaturdays } from '../../actions/workingSaturdays';
 
 const EMPLOYEE_TYPE_LABELS = { regular: 'Regular', hybrid: 'Hybrid' };
@@ -495,6 +495,33 @@ export default function TeamPage() {
     });
   };
 
+  const exportEmployeeDirectory = async () => {
+    try {
+      const XLSX = await import('xlsx');
+      const headers = ['Emp Code', 'Name', 'Email', 'Role', 'Type', 'Department', 'Sub-Department', 'Designation', 'Status', 'Birthday', 'Joining Date', 'Work Anniversary'];
+      const rows = displayPeople.map(p => [
+        p.code || '',
+        p.name || '',
+        p.email || '',
+        p.role || 'employee',
+        p.employeeType || 'regular',
+        p.department?.name || '',
+        p.subDepartment?.name || '',
+        p.designation?.name || '',
+        p.disabled ? 'Disabled' : 'Active',
+        p.birthday ? new Date(p.birthday).toLocaleDateString('en-IN') : '',
+        p.joiningDate ? new Date(p.joiningDate).toLocaleDateString('en-IN') : '',
+        p.workAnniversary ? new Date(p.workAnniversary).toLocaleDateString('en-IN') : '',
+      ]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([headers, ...rows]), 'Employees');
+      XLSX.writeFile(wb, `Employee_Directory_${new Date().toISOString().split('T')[0]}.xlsx`);
+      toast.success('Employee directory exported.');
+    } catch (err) {
+      toast.error('Export failed: ' + err.message);
+    }
+  };
+
   const formatMonth = (m) => {
     const [mo, yr] = m.split('_');
     return new Date(yr, parseInt(mo) - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
@@ -559,6 +586,9 @@ export default function TeamPage() {
                   </button>
                   <button className="btn btn-secondary btn-sm" onClick={() => { setPromoteUserId(''); setPromoteRole('admin'); setShowPromoteModal(true); }}>
                     + Promote
+                  </button>
+                  <button className="btn btn-secondary btn-sm" onClick={exportEmployeeDirectory}>
+                    <FiDownload size={12} style={{ marginRight: '4px' }} /> Export
                   </button>
                   <SearchBar value={userSearch} onChange={v => { setUserSearch(v); setUserPage(1); }} placeholder="Search employees…" count={filteredUsers.length} />
                 </div>
